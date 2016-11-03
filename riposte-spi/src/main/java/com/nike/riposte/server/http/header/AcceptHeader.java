@@ -9,6 +9,8 @@ import java.util.stream.Collectors;
 
 /**
  * Models an RFC-2616 14.1 Accept Header, which is a list of MediaRange instances, sorted most-significant-first.
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings("WeakerAccess")
 public class AcceptHeader implements Iterable<MediaRange> {

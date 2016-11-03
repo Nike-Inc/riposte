@@ -78,6 +78,8 @@ import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.success
  *    - the SubType's Name is nike.runningcoach-v3.1
  *    - the Parameter Map contains one parameter if 'charset' with a value of 'UTF-8'
  * </pre>
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings("WeakerAccess")
 public class MimeTypeParser {

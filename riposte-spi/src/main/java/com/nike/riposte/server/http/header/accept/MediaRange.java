@@ -13,6 +13,8 @@ import java.util.stream.Collectors;
  * accept-params.
  * Quality factors allow the user or user agent to indicate the relative degree of preference for that media-range,
  * using the qvalue scale from 0 to 1 (RFC-2616 section 3.9). The default value is q=1.
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings("WeakerAccess")
 public class MediaRange implements Comparable<MediaRange> {

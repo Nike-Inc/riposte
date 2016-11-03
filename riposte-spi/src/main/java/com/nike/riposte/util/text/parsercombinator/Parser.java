@@ -29,6 +29,8 @@ import java.util.stream.Stream;
  * see: https://hackage.haskell.org/package/parsec
  * see: http://www.ahnfelt.net/a-parser-combinator-for-java-8-2/
  * see: https://github.com/jparsec/jparsec
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings({"unused", "WeakerAccess"})
 public interface Parser<T> {

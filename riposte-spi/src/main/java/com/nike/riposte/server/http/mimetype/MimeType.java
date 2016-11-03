@@ -12,6 +12,8 @@ import java.util.stream.Stream;
 
 /**
  * Models an RFC-6838 Mime Type.
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings("WeakerAccess")
 public class MimeType {

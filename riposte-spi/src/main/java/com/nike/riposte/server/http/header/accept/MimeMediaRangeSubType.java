@@ -6,6 +6,8 @@ import java.util.Objects;
 
 /**
  * Models a subtype that is a specific mime subtype, rather than a wildcard subtype.
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings("WeakerAccess")
 public class MimeMediaRangeSubType implements MediaRangeSubType {
