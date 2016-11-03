@@ -1,37 +1,28 @@
 package com.nike.riposte.util.text.parsercombinator;
 
-import java.util.function.Supplier;
-import java.util.regex.MatchResult;
-import java.util.Optional;
-import java.util.List;
-import java.util.regex.Pattern;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import com.nike.internal.util.Pair;
+import com.nike.riposte.util.text.parsercombinator.Parser.ParserFailure;
 
 import org.junit.Test;
 
-import com.nike.riposte.util.text.parsercombinator.Parser.ParserFailure;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 
-import static com.nike.riposte.util.text.parsercombinator.Parser.ParserInput;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.regex;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.begin;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.skip;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.then;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.string;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.oneOf;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.zeroOrMore;
-import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.oneOrMore;
 import static com.nike.riposte.util.text.parsercombinator.Parser.Apply.match;
 import static com.nike.riposte.util.text.parsercombinator.Parser.Apply.test;
-
-
-import com.nike.internal.util.Pair;
+import static com.nike.riposte.util.text.parsercombinator.Parser.ParserInput;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.begin;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.oneOrMore;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.regex;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.skip;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.string;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.then;
+import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.zeroOrMore;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 
 public class ParserTest {

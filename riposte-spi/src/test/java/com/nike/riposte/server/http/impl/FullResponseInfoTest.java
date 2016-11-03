@@ -1,17 +1,20 @@
 package com.nike.riposte.server.http.impl;
 
-import com.google.common.collect.Sets;
 import com.nike.riposte.server.http.ResponseInfo;
-import io.netty.handler.codec.http.DefaultHttpHeaders;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.cookie.Cookie;
-import io.netty.handler.codec.http.cookie.DefaultCookie;
-import io.netty.util.CharsetUtil;
+
+import com.google.common.collect.Sets;
+
 import org.junit.Test;
 
 import java.nio.charset.Charset;
 import java.util.Set;
 import java.util.UUID;
+
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.cookie.Cookie;
+import io.netty.handler.codec.http.cookie.DefaultCookie;
+import io.netty.util.CharsetUtil;
 
 import static junit.framework.TestCase.fail;
 import static org.hamcrest.CoreMatchers.is;

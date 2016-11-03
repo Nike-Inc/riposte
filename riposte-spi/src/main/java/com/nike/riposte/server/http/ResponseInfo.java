@@ -3,13 +3,13 @@ package com.nike.riposte.server.http;
 import com.nike.riposte.server.http.impl.ChunkedResponseInfo.ChunkedResponseInfoBuilder;
 import com.nike.riposte.server.http.impl.FullResponseInfo.FullResponseInfoBuilder;
 
+import java.nio.charset.Charset;
+import java.util.Set;
+
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.util.CharsetUtil;
-
-import java.nio.charset.Charset;
-import java.util.Set;
 
 /**
  * Represents an outgoing response. See the javadocs on the individual methods for details on usage. It's recommended

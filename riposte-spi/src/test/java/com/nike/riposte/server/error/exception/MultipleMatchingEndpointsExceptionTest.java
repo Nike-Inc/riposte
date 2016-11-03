@@ -2,6 +2,7 @@ package com.nike.riposte.server.error.exception;
 
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.util.Matcher;
+
 import org.junit.Test;
 
 import java.util.Arrays;

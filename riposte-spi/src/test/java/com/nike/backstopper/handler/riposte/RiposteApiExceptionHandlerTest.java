@@ -1,6 +1,5 @@
 package com.nike.backstopper.handler.riposte;
 
-import com.nike.backstopper.handler.riposte.listener.impl.BackstopperRiposteFrameworkErrorHandlerListener;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
 import com.nike.backstopper.apierror.testutil.ProjectApiErrorsForTesting;
 import com.nike.backstopper.handler.ApiExceptionHandlerUtils;
@@ -9,6 +8,7 @@ import com.nike.backstopper.handler.RequestInfoForLogging;
 import com.nike.backstopper.handler.UnexpectedMajorExceptionHandlingError;
 import com.nike.backstopper.handler.listener.ApiExceptionHandlerListener;
 import com.nike.backstopper.handler.listener.impl.GenericApiExceptionHandlerListener;
+import com.nike.backstopper.handler.riposte.listener.impl.BackstopperRiposteFrameworkErrorHandlerListener;
 import com.nike.backstopper.model.DefaultErrorContractDTO;
 import com.nike.backstopper.model.riposte.ErrorResponseBodyImpl;
 import com.nike.backstopper.model.riposte.ErrorResponseInfoImpl;

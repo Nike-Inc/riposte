@@ -1,15 +1,15 @@
 package com.nike.backstopper.handler.riposte.config.guice;
 
-import com.nike.backstopper.handler.riposte.RiposteApiExceptionHandler;
-import com.nike.backstopper.handler.riposte.RiposteUnhandledExceptionHandler;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
 import com.nike.backstopper.apierror.testutil.ProjectApiErrorsForTesting;
 import com.nike.backstopper.handler.listener.ApiExceptionHandlerListener;
 import com.nike.backstopper.handler.listener.impl.ClientDataValidationErrorHandlerListener;
 import com.nike.backstopper.handler.listener.impl.DownstreamNetworkExceptionHandlerListener;
 import com.nike.backstopper.handler.listener.impl.GenericApiExceptionHandlerListener;
-import com.nike.backstopper.handler.riposte.listener.impl.BackstopperRiposteFrameworkErrorHandlerListener;
 import com.nike.backstopper.handler.listener.impl.ServersideValidationErrorHandlerListener;
+import com.nike.backstopper.handler.riposte.RiposteApiExceptionHandler;
+import com.nike.backstopper.handler.riposte.RiposteUnhandledExceptionHandler;
+import com.nike.backstopper.handler.riposte.listener.impl.BackstopperRiposteFrameworkErrorHandlerListener;
 import com.nike.backstopper.service.riposte.BackstopperRiposteValidatorAdapter;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;

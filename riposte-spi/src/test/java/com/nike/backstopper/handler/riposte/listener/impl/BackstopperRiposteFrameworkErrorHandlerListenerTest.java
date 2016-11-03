@@ -6,6 +6,9 @@ import com.nike.backstopper.apierror.SortedApiErrorSet;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
 import com.nike.backstopper.apierror.testutil.ProjectApiErrorsForTesting;
 import com.nike.backstopper.handler.listener.ApiExceptionHandlerListenerResult;
+import com.nike.fastbreak.exception.CircuitBreakerException;
+import com.nike.fastbreak.exception.CircuitBreakerOpenException;
+import com.nike.fastbreak.exception.CircuitBreakerTimeoutException;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
@@ -21,9 +24,6 @@ import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
-import com.nike.fastbreak.exception.CircuitBreakerException;
-import com.nike.fastbreak.exception.CircuitBreakerOpenException;
-import com.nike.fastbreak.exception.CircuitBreakerTimeoutException;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 

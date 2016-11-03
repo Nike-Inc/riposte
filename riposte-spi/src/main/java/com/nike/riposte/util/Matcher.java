@@ -2,10 +2,10 @@ package com.nike.riposte.util;
 
 import com.nike.riposte.server.http.RequestInfo;
 
-import io.netty.handler.codec.http.HttpMethod;
-
 import java.util.Collection;
 import java.util.Optional;
+
+import io.netty.handler.codec.http.HttpMethod;
 
 /**
  * Interface for determining whether a request should be matched to a given endpoint or not. You can call {@link
