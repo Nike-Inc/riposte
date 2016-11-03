@@ -30,6 +30,8 @@ import static com.nike.riposte.util.text.parsercombinator.Parser.Parsers.zeroOrM
 
 /**
  * Offers a set of Parser instances for parsing the components of an RFC-2616 14.1 Accept Header.
+ *
+ * @author Kirk Peterson
  */
 @SuppressWarnings("WeakerAccess")
 public class AcceptHeaderParser {

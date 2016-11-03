@@ -7,6 +7,8 @@ import java.util.Objects;
 
 /**
  * Models a type that is a specific mime type, rather than a wildcard type.
+ *
+ * @author Kirk Peterson
  */
 public class MimeMediaRangeType implements MediaRangeType {
 
