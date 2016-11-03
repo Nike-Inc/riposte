@@ -1,0 +1,146 @@
+// ========== GRADLE PLUGINS / REPOSITORIES SETUP
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        // STUFF FOR JACOCO
+        classpath 'com.palantir:jacoco-coverage:0.3.0'
+        // jacoco-coverage blows up unless you specify guava dependency
+        classpath 'com.google.guava:guava:18.0'
+        // Plugin for spitting out coverage numbers to the console
+        classpath 'com.github.ksoichiro:gradle-console-reporter:0.4.0'
+
+        // STUFF FOR BINTRAY
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.6'
+    }
+}
+
+allprojects {
+    apply plugin: 'idea'
+    apply plugin: 'java'
+    apply plugin: 'maven'
+    apply plugin: 'groovy'
+    apply plugin: 'project-report'
+
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    task javadocJar(type: Jar, dependsOn: classes) {
+        classifier = 'javadoc'
+        from javadoc
+    }
+
+    javadoc {
+        failOnError = false
+    }
+
+    artifacts {
+        archives sourcesJar, javadocJar
+    }
+
+    repositories {
+        jcenter()
+    }
+
+    idea {
+        module {
+            downloadSources = true
+        }
+    }
+
+    //http://www.gradle.org/docs/current/userguide/java_plugin.html
+    sourceCompatibility = org.gradle.api.JavaVersion.VERSION_1_8
+    targetCompatibility = org.gradle.api.JavaVersion.VERSION_1_8
+}
+
+// Disable jar, sourcesJar, and javadoc tasks for the root project - we only want them to run for submodules
+jar.enabled = false
+sourcesJar.enabled = false
+javadocJar.enabled = false
+
+// ========== PROPERTIES FOR GRADLE BUILD - DEPENDENCY VERSIONS / ETC
+ext {
+    // DEPENDENCY VERSIONS
+    slf4jVersion = '1.7.21'
+    logbackVersion = '1.1.7'
+    javaxInjectVersion = '1'
+
+    wingtipsVersion = '0.11.2'
+    backstopperVersion = '0.9.1.1'
+    fastbreakVersion = '0.9.0'
+    spockVersion = '0.7-groovy-2.0'
+    cgLibVersion = '3.1'
+    objenesisVersion = '2.1'
+    javassistVersion = '3.18.2-GA'
+    jacksonVersion = '2.4.4'
+    ningAsyncHttpClientVersion = '1.9.38'
+    guiceVersion = '4.0'
+
+    jodaTimeVersion = '2.9.2'
+
+    servletApiVersion = '3.1.0'
+
+    nettyVersion = '4.0.36.Final'
+    hamcrestVersion = '1.3'
+    junitVersion = '4.12'
+    junitDataproviderVersion = '1.9.3'
+    assertJVersion = '3.5.2'
+    mockitoVersion = '1.10.8'
+    slf4jTestVersion = '1.1.0'
+    guiceVersion = '4.0'
+
+    groovyVersion = '2.3.9'
+
+    restAssuredVersion = '2.9.0'
+
+    codahaleMetricsVersion = '3.1.1'
+
+    eurekaClientVersion = '1.3.4'
+
+    archaiusVersion = '0.6.5'
+    typesafeConfigVersion = '1.3.0'
+    apacheCommonsIoVersion = '2.4'
+    apacheCommonsCodecVersion = '1.10'
+
+    jzlibVersion = '1.1.3'
+
+    aaaLibVersion = '2.1.8'
+    awsS3libVersion = '1.9.40'
+
+    // JACOCO PROPERTIES
+    jacocoToolVersion = '0.7.6.201602180812'
+    // Anything in this jacocoExclusions list will be excluded from coverage reports.
+    jacocoExclusions = []
+    jacocoCoverageThresholdSetup = {
+        configure(subprojects.findAll { !it.name.startsWith("sample") }) {
+            jacocoCoverage {
+                // Enforce minimum code coverage. See https://github.com/palantir/gradle-jacoco-coverage for the full list of options.
+                reportThreshold 0.8, INSTRUCTION
+                reportThreshold 0.5, BRANCH
+            }
+        }
+    }
+
+    // BINTRAY STUFF
+    bintrayUser = project.hasProperty('bintrayUser') ? property('bintrayUser') : 'UNDEFINED'
+    bintrayKey = project.hasProperty('bintrayKey') ? property('bintrayKey') : 'UNDEFINED'
+    bintrayVersion = "$version"
+}
+
+// ========== COMBO TEST REPORT - View the combined/merged report at: [project_root]/build/reports/tests/index.html
+apply from: file(rootProject.projectDir.getAbsolutePath() + '/gradle/junitComboTestReport.gradle')
+
+// ========== JACOCO SETUP - View the combined/merged report at: [project_root]/build/reports/jacoco/jacocoRootReport/html/index.html.
+//                           Individual reports for each submodule can be found at: [project_root]/[submodule]/build/reports/jacoco/test/html/index.html
+apply from: file(rootProject.projectDir.getAbsolutePath() + '/gradle/jacoco.gradle')
+
+// ========== BINTRAY PUBLISHING
+apply from: file(rootProject.projectDir.getAbsolutePath() + '/gradle/bintrayPublishing.gradle')
+
+// ========== MISCELLANEOUS BUILD STUFF
+allprojects {
+    group = groupId // Necessary for the maven install task to function correctly
+}

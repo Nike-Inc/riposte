@@ -1,0 +1,22 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-core"),
+            "com.netflix.eureka:eureka-client:$eurekaClientVersion"
+    )
+
+    testCompile (
+            project(":riposte-guice"),
+            project(":riposte-core").sourceSets.test.output,
+            "org.assertj:assertj-core:$assertJVersion",
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "com.jayway.restassured:rest-assured:$restAssuredVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion",
+            "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
+            "com.fasterxml.jackson.core:jackson-annotations:$jacksonVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+    )
+}

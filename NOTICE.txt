@@ -1,0 +1,18 @@
+
+Riposte
+=======
+
+Licenses for individual components of this project can be found in a
+LICENSE.<component>.txt file, located in the 'license' directory at the
+root of the project. See those files for the terms of the license for
+each component.
+
+-------------------------------------------------------------------------------
+
+This product contains a modified portion of 'Spring Framework', a Java
+library, which can be obtained at:
+
+  * LICENSE:
+    * license/LICENSE.springframework.txt (Apache License 2.0)
+  * HOMEPAGE:
+    * https://github.com/spring-projects/spring-framework/

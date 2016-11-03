@@ -1,0 +1,18 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-core"),
+            "com.typesafe:config:$typesafeConfigVersion"
+    )
+
+    testCompile (
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "com.jayway.restassured:rest-assured:$restAssuredVersion",
+            "org.assertj:assertj-core:$assertJVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion"
+    )
+}

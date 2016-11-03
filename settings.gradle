@@ -1,0 +1,13 @@
+rootProject.name = 'riposte'
+include "riposte-spi",
+        "riposte-core",
+        "riposte-guice",
+        "riposte-typesafe-config",
+        "riposte-guice-typesafe-config",
+        "riposte-archaius",
+        "riposte-servlet-api-adapter",
+        "riposte-auth",
+        "riposte-metrics-codahale",
+        "riposte-async-http-client",
+        "riposte-service-registration-eureka",
+        "samples:sample-1-helloworld"

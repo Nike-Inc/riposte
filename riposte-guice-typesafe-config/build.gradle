@@ -1,0 +1,15 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-guice"),
+            "com.typesafe:config:$typesafeConfigVersion"
+    )
+
+    testCompile (
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "org.assertj:assertj-core:$assertJVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion"
+    )
+}

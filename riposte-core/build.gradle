@@ -1,0 +1,32 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-spi"),
+            "io.netty:netty-all:$nettyVersion",
+            // We pull in the native epoll transport dependency here so that if you are running on linux x86_64 you'll get the maximum performance possible from Netty.
+            // If you're not on linux x86_64 then it will gracefully fall back to the standard java NIO transports.
+            "io.netty:netty-transport-native-epoll:$nettyVersion:linux-x86_64",
+            "com.nike.wingtips:wingtips-core:$wingtipsVersion",
+            "com.nike.backstopper:backstopper-jackson:$backstopperVersion",
+            "org.slf4j:slf4j-api:$slf4jVersion",
+            "org.slf4j:jcl-over-slf4j:$slf4jVersion",
+            "org.slf4j:log4j-over-slf4j:$slf4jVersion",
+            "org.javassist:javassist:$javassistVersion",
+            "com.jcraft:jzlib:$jzlibVersion"
+    )
+
+    testCompile (
+            "org.assertj:assertj-core:$assertJVersion",
+            "org.spockframework:spock-core:$spockVersion",
+            "org.codehaus.groovy:groovy-all:$groovyVersion",
+            "cglib:cglib:$cgLibVersion", //For Spock mocks
+            "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "com.jayway.restassured:rest-assured:$restAssuredVersion",
+            "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+            "commons-io:commons-io:$apacheCommonsIoVersion",
+    )
+}

@@ -1,0 +1,24 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-core"),
+            "io.dropwizard.metrics:metrics-core:$codahaleMetricsVersion",
+            "io.dropwizard.metrics:metrics-jvm:$codahaleMetricsVersion",
+            "io.dropwizard.metrics:metrics-graphite:$codahaleMetricsVersion"
+    )
+
+    testCompile (
+            project(":riposte-guice"),
+            project(":riposte-core").sourceSets.test.output,
+            "org.spockframework:spock-core:$spockVersion",
+            "org.codehaus.groovy:groovy-all:$groovyVersion",
+            "cglib:cglib:$cgLibVersion", //For Spock mocks
+            "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "com.jayway.restassured:rest-assured:$restAssuredVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion"
+    )
+}

@@ -1,0 +1,14 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-core"),
+            "com.google.inject:guice:$guiceVersion"
+    )
+
+    testCompile (
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "com.nike.backstopper:backstopper-reusable-tests:$backstopperVersion"
+    )
+}

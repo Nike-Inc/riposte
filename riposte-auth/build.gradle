@@ -1,0 +1,18 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-spi"),
+            project(":riposte-core")
+    )
+
+    testCompile (
+            "org.assertj:assertj-core:$assertJVersion",
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "commons-codec:commons-codec:$apacheCommonsCodecVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion"
+    )
+}

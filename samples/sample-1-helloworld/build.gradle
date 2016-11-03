@@ -1,0 +1,22 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-core"),
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion"
+    )
+
+    testCompile (
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "com.jayway.restassured:rest-assured:$restAssuredVersion"
+    )
+}
+
+apply plugin: "application"
+mainClassName = "com.nike.Main"
+
+run {
+    systemProperties = System.getProperties()
+}

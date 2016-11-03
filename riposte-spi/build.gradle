@@ -1,0 +1,26 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            "io.netty:netty-all:$nettyVersion",
+            "com.nike.fastbreak:fastbreak:$fastbreakVersion",
+            "com.nike.backstopper:backstopper-core:$backstopperVersion",
+            "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
+            "org.slf4j:slf4j-api:$slf4jVersion",
+            "org.slf4j:jcl-over-slf4j:$slf4jVersion",
+            "org.slf4j:log4j-over-slf4j:$slf4jVersion"
+    )
+
+    testCompile (
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "org.assertj:assertj-core:$assertJVersion",
+            "com.nike.backstopper:backstopper-reusable-tests:$backstopperVersion",
+            "org.spockframework:spock-core:$spockVersion",
+            "org.codehaus.groovy:groovy-all:$groovyVersion",
+            "cglib:cglib:$cgLibVersion", //For Spock mocks
+            "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
+            "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion"
+    )
+}
