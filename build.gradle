@@ -51,6 +51,12 @@ allprojects {
         }
     }
 
+    test {
+        // Travis CI appears to have some resource constraint issues. Make sure tests have enough memory.
+        maxHeapSize = "1024m"
+        maxParallelForks = 1
+    }
+
     //http://www.gradle.org/docs/current/userguide/java_plugin.html
     sourceCompatibility = org.gradle.api.JavaVersion.VERSION_1_8
     targetCompatibility = org.gradle.api.JavaVersion.VERSION_1_8
