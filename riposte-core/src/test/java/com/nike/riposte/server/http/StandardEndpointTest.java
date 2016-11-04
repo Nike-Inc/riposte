@@ -1,6 +1,7 @@
 package com.nike.riposte.server.http;
 
 import com.nike.riposte.util.Matcher;
+
 import org.junit.Test;
 
 import java.io.IOException;

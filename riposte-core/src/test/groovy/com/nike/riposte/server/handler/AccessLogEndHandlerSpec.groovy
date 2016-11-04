@@ -10,7 +10,10 @@ import com.nike.riposte.server.logging.AccessLogger
 import io.netty.channel.Channel
 import io.netty.channel.ChannelFuture
 import io.netty.channel.ChannelHandlerContext
-import io.netty.handler.codec.http.*
+import io.netty.handler.codec.http.DefaultHttpHeaders
+import io.netty.handler.codec.http.HttpMethod
+import io.netty.handler.codec.http.HttpResponse
+import io.netty.handler.codec.http.HttpVersion
 import io.netty.util.Attribute
 import io.netty.util.AttributeKey
 import io.netty.util.concurrent.GenericFutureListener

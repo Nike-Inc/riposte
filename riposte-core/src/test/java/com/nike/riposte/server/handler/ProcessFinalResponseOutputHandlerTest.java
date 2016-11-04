@@ -4,6 +4,10 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.impl.FullResponseInfo;
+
+import org.junit.Before;
+import org.junit.Test;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -11,8 +15,6 @@ import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.util.Attribute;
-import org.junit.Before;
-import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doReturn;

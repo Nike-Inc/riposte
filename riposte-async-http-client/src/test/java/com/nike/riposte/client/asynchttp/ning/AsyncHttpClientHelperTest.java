@@ -1,13 +1,13 @@
 package com.nike.riposte.client.asynchttp.ning;
 
-import com.nike.internal.util.Pair;
-import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.MultiIpAwareNameResolver;
-import com.nike.riposte.server.channelpipeline.ChannelAttributes;
-import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreakerDelegate;
 import com.nike.fastbreak.CircuitBreakerForHttpStatusCode;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
+import com.nike.internal.util.Pair;
+import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.MultiIpAwareNameResolver;
+import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;

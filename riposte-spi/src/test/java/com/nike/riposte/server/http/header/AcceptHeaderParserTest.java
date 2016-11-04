@@ -1,8 +1,8 @@
 package com.nike.riposte.server.http.header;
 
-import com.nike.riposte.util.text.parsercombinator.Parser;
 import com.nike.riposte.server.http.header.accept.MediaRange;
 import com.nike.riposte.server.http.header.accept.MediaRangeFixture;
+import com.nike.riposte.util.text.parsercombinator.Parser;
 
 import org.junit.Test;
 
@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /**
  * Created by dpet22 on 8/2/16.

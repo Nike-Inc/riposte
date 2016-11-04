@@ -1,9 +1,10 @@
 package com.nike.riposte.server.error.exception;
 
-import io.netty.channel.Channel;
 import org.junit.Test;
 
 import java.util.UUID;
+
+import io.netty.channel.Channel;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;

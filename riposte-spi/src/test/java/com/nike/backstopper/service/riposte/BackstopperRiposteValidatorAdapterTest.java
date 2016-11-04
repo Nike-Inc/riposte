@@ -2,6 +2,7 @@ package com.nike.backstopper.service.riposte;
 
 import com.nike.backstopper.service.ClientDataValidationService;
 import com.nike.riposte.server.http.RequestInfo;
+
 import org.junit.Before;
 import org.junit.Test;
 

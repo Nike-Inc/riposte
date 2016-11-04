@@ -1,9 +1,9 @@
 package com.nike.riposte.server.logging
 
+import com.nike.internal.util.Pair
 import com.nike.riposte.server.http.RequestInfo
 import com.nike.riposte.server.http.ResponseInfo
 import com.nike.riposte.server.http.impl.FullResponseInfo
-import com.nike.internal.util.Pair
 import io.netty.handler.codec.http.*
 import spock.lang.Specification
 import spock.lang.Unroll

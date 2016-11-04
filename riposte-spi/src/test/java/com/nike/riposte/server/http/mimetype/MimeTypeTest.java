@@ -1,14 +1,14 @@
 package com.nike.riposte.server.http.mimetype;
 
+import com.nike.riposte.server.http.mimetype.MimeType.Facet;
+
 import org.junit.Test;
 
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-import com.nike.riposte.server.http.mimetype.MimeType.Facet;
 
 public class MimeTypeTest {
 

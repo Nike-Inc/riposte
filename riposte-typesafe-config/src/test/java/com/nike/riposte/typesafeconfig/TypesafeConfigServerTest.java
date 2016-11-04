@@ -1,9 +1,9 @@
 package com.nike.riposte.typesafeconfig;
 
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
-import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.util.MainClassUtils;
 import com.nike.riposte.util.Matcher;
