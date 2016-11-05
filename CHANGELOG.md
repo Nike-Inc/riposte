@@ -8,11 +8,20 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.8.x` Releases - [0.8.0](#080)
+- `0.8.x` Releases - [0.8.1](#081), [0.8.0](#080)
+
+## [0.8.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.1)
+
+Released on 2016-09-04.
+
+### Updated
+
+- Updated Backstopper dependency version to 0.9.2.
+	- Updated by [Nic Munroe][contrib_nicmunroe].
 
 ## [0.8.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.0)
 
-Released on 2016-09-03 (TBD).
+Released on 2016-09-03.
 
 ### Added
 
