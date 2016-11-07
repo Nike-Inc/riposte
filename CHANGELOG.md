@@ -12,7 +12,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 ## [0.8.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.1)
 
-Released on 2016-09-04.
+Released on 2016-11-04.
 
 ### Updated
 
@@ -21,7 +21,7 @@ Released on 2016-09-04.
 
 ## [0.8.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.0)
 
-Released on 2016-09-03.
+Released on 2016-11-03.
 
 ### Added
 
