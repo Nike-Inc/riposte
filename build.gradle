@@ -117,7 +117,7 @@ ext {
     awsS3libVersion = '1.9.40'
 
     // JACOCO PROPERTIES
-    jacocoToolVersion = '0.7.6.201602180812'
+    jacocoToolVersion = '0.7.7.201606060606'
     // Anything in this jacocoExclusions list will be excluded from coverage reports.
     jacocoExclusions = []
     jacocoCoverageThresholdSetup = {
