@@ -9,13 +9,13 @@ import org.junit.Test;
 
 public class Forbidden403ExceptionTest {
 
-	@Before
-	public void setUp() throws Exception {
-	}
+    @Before
+    public void setUp() throws Exception {
+    }
 
-	@Test
-	public void should_honor_constructor_params() {
-		//given
+    @Test
+    public void should_honor_constructor_params() {
+        //given
         String requestPath = UUID.randomUUID().toString();
         String authorizationHeader = UUID.randomUUID().toString();
         String message = UUID.randomUUID().toString();
@@ -27,6 +27,6 @@ public class Forbidden403ExceptionTest {
         assertThat(ex.getMessage(), is(message));
         assertThat(ex.requestPath, is(requestPath));
         assertThat(ex.authorizationHeader, is(authorizationHeader));
-	}
+    }
 
 }

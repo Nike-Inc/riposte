@@ -147,7 +147,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     
     @Test
     public void should_handle_Forbidden403Exception() {
-    	verifyExceptionHandled(new Forbidden403Exception("foo", "/bar", "blah"), singletonError(testProjectApiErrors.getForbiddenApiError()));
+        verifyExceptionHandled(new Forbidden403Exception("foo", "/bar", "blah"), singletonError(testProjectApiErrors.getForbiddenApiError()));
     }
 
     @Test

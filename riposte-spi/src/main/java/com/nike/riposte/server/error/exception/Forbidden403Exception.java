@@ -32,6 +32,6 @@ public class Forbidden403Exception extends RuntimeException {
         this.authorizationHeader = authorizationHeader;
         this.extraDetailsForLogging = extraDetailsForLogging;
     }
-	private static final long serialVersionUID = 4921880566299500314L;
+    private static final long serialVersionUID = 4921880566299500314L;
 
 }
