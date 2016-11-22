@@ -11,6 +11,7 @@ import com.nike.fastbreak.exception.CircuitBreakerOpenException;
 import com.nike.fastbreak.exception.CircuitBreakerTimeoutException;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
+import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
@@ -142,6 +143,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     @Test
     public void should_handle_Unauthorized401Exception() {
         verifyExceptionHandled(new Unauthorized401Exception("foo", "/bar", "blah"), singletonError(testProjectApiErrors.getUnauthorizedApiError()));
+    }
+    
+    @Test
+    public void should_handle_Forbidden403Exception() {
+    	verifyExceptionHandled(new Forbidden403Exception("foo", "/bar", "blah"), singletonError(testProjectApiErrors.getForbiddenApiError()));
     }
 
     @Test

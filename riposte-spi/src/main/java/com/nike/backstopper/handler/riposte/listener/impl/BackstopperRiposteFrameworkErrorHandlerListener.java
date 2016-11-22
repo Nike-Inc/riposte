@@ -13,6 +13,7 @@ import com.nike.internal.util.Pair;
 import com.nike.internal.util.StringUtils;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
+import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
@@ -168,6 +169,19 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             extraDetails.addAll((theEx).extraDetailsForLogging);
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(projectApiErrors.getUnauthorizedApiError()),
+                extraDetails
+            );
+        }
+        
+        if (ex instanceof Forbidden403Exception) {
+            Forbidden403Exception theEx = (Forbidden403Exception) ex;
+            List<Pair<String, String>> extraDetails = new ArrayList<>();
+            extraDetails.add(Pair.of("message", ex.getMessage()));
+            extraDetails.add(Pair.of("incoming_request_path", theEx.requestPath));
+            extraDetails.add(Pair.of("authorization_header", theEx.authorizationHeader));
+            extraDetails.addAll((theEx).extraDetailsForLogging);
+            return ApiExceptionHandlerListenerResult.handleResponse(
+                singletonError(projectApiErrors.getForbiddenApiError()),
                 extraDetails
             );
         }
