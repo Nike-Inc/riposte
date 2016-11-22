@@ -11,3 +11,8 @@ gradle-app.setting
 out/
 classes/
 .idea_modules/
+
+### Eclipse stuff
+.project
+.settings
+.classpath
