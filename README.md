@@ -99,6 +99,8 @@ See the [test environment and setup notes](#perf_test_notes) section for more de
 
 This test measures the simplest "hello world" type API, with a single endpoint that immediately returns a 200 HTTP response with a static string for the response payload.
 
+**NOTE: Spring Boot was using the Undertow embedded container for maximum performance in these tests. The default Tomcat container was significantly worse than the numbers shown here.**
+
 | Concurrent Call Spammers | Stack | Realized Requests Per Second | Avg latency (millis) | 50% latency (millis) | 90% latency (millis) | 99% latency (millis) | CPU Usage |
 | -------------: | :------------- | :------------- | :------------- | :------------- | :------------- | :------------- | :------------- |
 | 1 | Riposte | 7532 | 0.138 | 0.131 | 0.135 | 0.148 | 36% |
@@ -126,6 +128,8 @@ This test measures the simplest "hello world" type API, with a single endpoint t
 This test measures how well the stacks perform when executing asynchronous non-blocking tasks. For a real service this might mean using a NIO client for database or HTTP calls (e.g. Riposte's [`AsyncHttpClientHelper`](https://github.com/Nike-Inc/riposte/blob/master/riposte-async-http-client/src/main/java/com/nike/riposte/client/asynchttp/ning/AsyncHttpClientHelper.java)) to do the vast majority of the endpoint's work, where the endpoint is just waiting for data from an outside process (and therefore NIO allows us to wait without using a blocking thread). 
 
 For these tests we simulate that scenario by returning `CompletableFutures` that are completed with a "hello world" payload after a 130 millisecond delay using a scheduler. In the case of Riposte we can reuse the built-in Netty scheduler via `ctx.executor().schedule(...)` calls, and for Spring Boot we reuse a scheduler created via `Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors() * 2)` to match the Netty scheduler as closely as possible. In both cases the thread count on the application remains small and stable even when handling thousands of concurrent requests. 
+
+**NOTE: Spring Boot was using the Undertow embedded container for maximum performance in these tests. The default Tomcat container was significantly worse than the numbers shown here.**
 
 *Each call in the tests below has a 130 millisecond scheduled delay before being completed and returned to the spammer, so 130 millis is the ideal latency.*
  
