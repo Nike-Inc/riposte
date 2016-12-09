@@ -40,14 +40,20 @@ public interface RequestInfo<T> {
     public static final Charset DEFAULT_CONTENT_CHARSET = CharsetUtil.UTF_8;
 
     /**
-     * The full URI associated with this request. May include the query string (use {@link #getPath()} if you don't want
-     * the query string). Will never be null - the empty string will be used if no URI information was provided.
+     * The full URI associated with this request. This will be the raw, potentially encoded, value sent to the server.
+     * It may include the query string (use {@link #getPath()} if you don't want the query string).
+     *
+     * Will never be null - the empty string will be used if no URI information was provided.
      */
     public String getUri();
 
     /**
      * The path-only portion of the URI. Will *not* include the query string (use {@link #getUri()} if you want the
-     * query string). Will never be null - the empty string will be used if no path information could be extracted.
+     * query string).
+     *
+     * The path value returned will be URL decoded before being returned.
+     *
+     * Will never be null - the empty string will be used if no path information could be extracted.
      */
     public String getPath();
 

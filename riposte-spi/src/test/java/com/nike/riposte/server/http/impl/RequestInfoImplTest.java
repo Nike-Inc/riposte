@@ -76,7 +76,7 @@ public class RequestInfoImplTest {
     @Test
     public void uber_constructor_works_for_valid_values() {
         // given
-        String uri = "/some/uri/path/foo/bar?notused=blah";
+        String uri = "/some/uri/path/%24foobar%26?notused=blah";
         HttpMethod method = HttpMethod.PATCH;
         Charset contentCharset = CharsetUtil.US_ASCII;
         HttpHeaders headers = new DefaultHttpHeaders().add("header1", "val1").add(HttpHeaders.Names.CONTENT_TYPE, "text/text charset=" + contentCharset.displayName());
@@ -97,8 +97,8 @@ public class RequestInfoImplTest {
         RequestInfoImpl<?> requestInfo = new RequestInfoImpl<>(uri, method, headers, chunk.trailingHeaders(), queryParams, cookies, pathParams, contentChunks, protocolVersion, keepAlive, fullRequest, isMultipart);
 
         // then
-        assertThat(requestInfo.getUri(), is(uri));
-        assertThat(requestInfo.getPath(), is(HttpUtils.extractPath(uri)));
+        assertThat("getUri should return passed in value", requestInfo.getUri(), is(uri));
+        assertThat("getPath did not decode as expected", requestInfo.getPath(), is("/some/uri/path/$foobar&"));
         assertThat(requestInfo.getMethod(), is(method));
         assertThat(requestInfo.getHeaders(), is(headers));
         assertThat(requestInfo.getTrailingHeaders(), is(chunk.trailingHeaders()));
@@ -143,7 +143,7 @@ public class RequestInfoImplTest {
     @Test
     public void netty_helper_constructor_populates_request_info_appropriately() {
         // given
-        String uri = "/some/uri/path/foo/bar?foo=bar&secondparam=secondvalue";
+        String uri = "/some/uri/path/%24foobar%26?foo=bar&secondparam=secondvalue";
         Map<String, List<String>> expectedQueryParamMap = new HashMap<>();
         expectedQueryParamMap.put("foo", Arrays.asList("bar"));
         expectedQueryParamMap.put("secondparam", Arrays.asList("secondvalue"));
@@ -174,8 +174,8 @@ public class RequestInfoImplTest {
         RequestInfoImpl<?> requestInfo = new RequestInfoImpl<>(nettyRequestMock);
 
         // then
-        assertThat(requestInfo.getUri(), is(uri));
-        assertThat(requestInfo.getPath(), is(HttpUtils.extractPath(uri)));
+        assertThat("getUri was not the same value sent in", requestInfo.getUri(), is(uri));
+        assertThat("getPath did not decode as expected", requestInfo.getPath(), is("/some/uri/path/$foobar&"));
         assertThat(requestInfo.getMethod(), is(method));
         assertThat(requestInfo.getHeaders(), is(headers));
         assertThat(requestInfo.getTrailingHeaders(), is(trailingHeaders));
@@ -433,12 +433,12 @@ public class RequestInfoImplTest {
             "/some/path/foo/bar/ | /some/path/{param1}/{param2}  | foo | bar",
             "/some/path/foo/bar  | /some/path/{param1}/{param2}/ | foo | bar",
             "/some/path/foo/bar/ | /some/path/{param1}/{param2}/ | foo | bar",
+            "/some/path/foo%26bar/%24test%26 | /some/path/{param1}/{param2} | foo&bar | $test&",
             "/stuff/foo/pre.bar.post | /stuff/{param1}/pre.{param2}.post | foo | bar"
     }, splitBy = "\\|")
     public void setPathParamsBasedOnPathTemplate_works_as_expected(String path, String pathTemplate, String expectedParam1, String expectedParam2) {
         // given
-        RequestInfo<TestContentObject> requestInfo = (RequestInfo<TestContentObject>) RequestInfoImpl.dummyInstanceForUnknownRequests();
-        Whitebox.setInternalState(requestInfo, "path", path);
+        RequestInfo<TestContentObject> requestInfo = new RequestInfoImpl<>(path, null, null, null, null, null, null, null, null, false, true, false);
 
         // when
         requestInfo.setPathParamsBasedOnPathTemplate(pathTemplate);
