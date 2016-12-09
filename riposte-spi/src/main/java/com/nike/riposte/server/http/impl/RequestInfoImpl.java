@@ -96,7 +96,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
             cookies = new HashSet<>();
 
         this.uri = uri;
-        this.path = HttpUtils.extractPath(uri);
+        this.path = QueryStringDecoder.decodeComponent(HttpUtils.extractPath(uri));
         this.method = method;
         this.headers = headers;
         this.trailingHeaders = trailingHeaders;
