@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
  * Typesafe-Config-based app. It Sets up Typesafe Config and initializes a new {@link Server} with the application's
  * {@link ServerConfig} (provided by {@link #getServerConfig(Config)}).
  * <p/>
- * INTENDED USAGE: Create a {@code com.nike.Main} class that looks like the following:
+ * INTENDED USAGE: Create a {@code Main} class that looks like the following:
  * <pre>
  *  public class Main extends TypesafeConfigServer {
  *      &#64;Override

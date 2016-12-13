@@ -11,6 +11,8 @@ dependencies {
     testCompile (
             project(":riposte-guice"),
             project(":riposte-core").sourceSets.test.output,
+            "org.assertj:assertj-core:$assertJVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
             "org.spockframework:spock-core:$spockVersion",
             "org.codehaus.groovy:groovy-all:$groovyVersion",
             "cglib:cglib:$cgLibVersion", //For Spock mocks

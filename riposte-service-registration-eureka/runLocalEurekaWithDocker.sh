@@ -1,0 +1,1 @@
+docker run -p 7080:8080 netflixoss/eureka:1.3.1

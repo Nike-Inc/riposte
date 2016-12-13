@@ -16,3 +16,6 @@ classes/
 .project
 .settings
 .classpath
+
+### Misc stuff
+.vagrant

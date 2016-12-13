@@ -40,35 +40,36 @@ public class CodahaleMetricsListener implements MetricsListener {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    private final String prefix = this.getClass().getSimpleName();
+    protected final String prefix = this.getClass().getSimpleName();
 
-    private final CodahaleMetricsCollector metricsCollector;
+    protected final CodahaleMetricsCollector metricsCollector;
 
     //from RxNetty
-    private Counter inflightRequests;
-    private Counter processedRequests;
-    private Counter failedRequests;
-    private Counter responseWriteFailed;
-    private Histogram responseSizes;
-    private Histogram requestSizes;
+    protected Counter inflightRequests;
+    protected Counter processedRequests;
+    protected Counter failedRequests;
+    protected Counter responseWriteFailed;
+    protected Histogram responseSizes;
+    protected Histogram requestSizes;
 
     //from Codahale
-    private Timer getRequests;
-    private Timer postRequests;
-    private Timer putRequests;
-    private Timer deleteRequests;
-    private Timer otherRequests;
+    protected Timer getRequests;
+    protected Timer postRequests;
+    protected Timer putRequests;
+    protected Timer deleteRequests;
+    protected Timer otherRequests;
 
     // the requests handled by this handler, excluding active
-    private Timer requests;
+    protected Timer requests;
 
-    private Meter[] responses;
+    protected Meter[] responses;
 
-    private static final String ROUTING_ERROR_MAP_KEY = "500-routing-error";
-    private static final String METHOD_NOT_ALLOWED_MAP_KEY = "405-method-not-allowed";
-    private static final String ENDPOINT_NOT_FOUND_MAP_KEY = "404-not-found";
-    private Map<String, Timer> endpointRequestsTimers = new HashMap<>();
-    private Map<String, Meter[]> endpointResponsesMeters = new HashMap<>();
+    protected static final String ROUTING_ERROR_MAP_KEY = "500-routing-error";
+    protected static final String METHOD_NOT_ALLOWED_MAP_KEY = "405-method-not-allowed";
+    protected static final String ENDPOINT_NOT_FOUND_MAP_KEY = "404-not-found";
+    protected static final String NO_ENDPOINT_SHORT_CIRCUIT_KEY = "short-circuit";
+    protected Map<String, Timer> endpointRequestsTimers = new HashMap<>();
+    protected Map<String, Meter[]> endpointResponsesMeters = new HashMap<>();
 
 
     /**
@@ -88,7 +89,6 @@ public class CodahaleMetricsListener implements MetricsListener {
 
 
     public void initServerConfigMetrics(ServerConfig config) {
-
         addServerConfigMetrics(config);
         addEndpointsMetrics(config);
     }
@@ -155,6 +155,20 @@ public class CodahaleMetricsListener implements MetricsListener {
             endpointResponsesMeters.put(ROUTING_ERROR_MAP_KEY, new Meter[]{
                 metricsCollector.getMetricRegistry().meter(name(routingErrorNameId, "5xx-responses"))});
         }
+
+        // Add stuff for miscellaneous short circuits
+        {
+            String shortCircuitNameId = name(prefix, "endpoints." + NO_ENDPOINT_SHORT_CIRCUIT_KEY);
+            endpointRequestsTimers
+                .put(NO_ENDPOINT_SHORT_CIRCUIT_KEY, metricsCollector.getMetricRegistry().timer(shortCircuitNameId));
+            endpointResponsesMeters.put(NO_ENDPOINT_SHORT_CIRCUIT_KEY, new Meter[]{
+                metricsCollector.getMetricRegistry().meter(name(shortCircuitNameId, "1xx-responses")), // 1xx
+                metricsCollector.getMetricRegistry().meter(name(shortCircuitNameId, "2xx-responses")), // 2xx
+                metricsCollector.getMetricRegistry().meter(name(shortCircuitNameId, "3xx-responses")), // 3xx
+                metricsCollector.getMetricRegistry().meter(name(shortCircuitNameId, "4xx-responses")), // 4xx
+                metricsCollector.getMetricRegistry().meter(name(shortCircuitNameId, "5xx-responses"))  // 5xx
+            });
+        }
     }
 
     private void addCodahaleMetrics() {
@@ -219,8 +233,10 @@ public class CodahaleMetricsListener implements MetricsListener {
         try {
             if (ServerMetricsEvent.REQUEST_RECEIVED.equals(event)) {
                 inflightRequests.inc();
-                logger.debug("inflightRequests incremented {} - thread {}", inflightRequests.getCount(),
-                             Thread.currentThread().toString());
+                if (logger.isDebugEnabled()) {
+                    logger.debug("inflightRequests incremented {} - thread {}", inflightRequests.getCount(),
+                                 Thread.currentThread().toString());
+                }
             }
             else if (ServerMetricsEvent.RESPONSE_WRITE_FAILED.equals(event)) {
                 responseWriteFailed.inc();
@@ -237,8 +253,10 @@ public class CodahaleMetricsListener implements MetricsListener {
 
                 inflightRequests.dec();
                 RequestInfo<?> requestInfo = httpState.getRequestInfo();
-                logger.debug("inflightRequests decremented {} - URI {} - Thread {}", inflightRequests.getCount(),
-                             requestInfo.getUri(), Thread.currentThread().toString());
+                if (logger.isDebugEnabled()) {
+                    logger.debug("inflightRequests decremented {} - URI {} - Thread {}", inflightRequests.getCount(),
+                                 requestInfo.getUri(), Thread.currentThread().toString());
+                }
                 processedRequests.inc();
 
                 // check state is populated
@@ -276,10 +294,8 @@ public class CodahaleMetricsListener implements MetricsListener {
                 else if (is404NotFound)
                     endpointMapKey = ENDPOINT_NOT_FOUND_MAP_KEY;
                 else {
-                    throw new IllegalStateException(
-                        "Unable to find appropriate endpoint timer. httpState.getEndpointForExecution() is null but "
-                        + "it's not a 5xx routing error, 405 method not allowed, or 404 not found. Actual status code: "
-                        + responseHttpStatusCode);
+                    // Throw it into the catch-all short circuit bucket
+                    endpointMapKey = NO_ENDPOINT_SHORT_CIRCUIT_KEY;
                 }
 
                 endpointRequestsTimers.get(endpointMapKey).update(elapsedTimeMillis, TimeUnit.MILLISECONDS);
@@ -290,7 +306,9 @@ public class CodahaleMetricsListener implements MetricsListener {
                     responses[httpStatusCodeXXValue - 1].mark();
                     Meter[] responseMeterArray = endpointResponsesMeters.get(endpointMapKey);
                     Meter responseMeter =
-                        (endpoint == null) ? responseMeterArray[0] : responseMeterArray[httpStatusCodeXXValue - 1];
+                        (endpoint == null && !NO_ENDPOINT_SHORT_CIRCUIT_KEY.equals(endpointMapKey))
+                        ? responseMeterArray[0]
+                        : responseMeterArray[httpStatusCodeXXValue - 1];
                     responseMeter.mark();
                 }
 
