@@ -8,7 +8,28 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.8.x` Releases - [0.8.1](#081), [0.8.0](#080)
+- `0.8.x` Releases - [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.8.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.2)
+
+Released on 2016-12-12.
+
+### Added
+
+- Added `Forbidden403Exception` typed exception for 403/forbidden responses.
+    - Added by [Paul Evans][contrib_palemorningdun] in pull request [#7](https://github.com/Nike-Inc/riposte/pull/7).
+    
+### Fixed
+    
+- Fixed request path to be URL decoded by default. This also fixes path parameters so they are URL decoded by default as well.
+    - Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#12](https://github.com/Nike-Inc/riposte/pull/12). For issue [#11](https://github.com/Nike-Inc/riposte/issues/11).
+- Fixed `CodahaleMetricsListener` to support short circuiting non-endpoint calls (e.g. short circuiting request filters).
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#13](https://github.com/Nike-Inc/riposte/pull/13).
+
+### Updated
+
+- Updated Backstopper dependency version to 0.11.0 ([backstopper changelog](https://github.com/Nike-Inc/backstopper/blob/master/CHANGELOG.md)).
+	- Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#13](https://github.com/Nike-Inc/riposte/pull/13).
 
 ## [0.8.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.1)
 
@@ -30,3 +51,5 @@ Released on 2016-11-03.
 	
 
 [contrib_nicmunroe]: https://github.com/nicmunroe
+[contrib_palemorningdun]: https://github.com/palemorningdun
+[contrib_rabeyta]: https://github.com/rabeyta
