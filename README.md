@@ -7,7 +7,7 @@
 [![Code Coverage](https://img.shields.io/codecov/c/github/Nike-Inc/riposte/master.svg)](https://codecov.io/github/Nike-Inc/riposte?branch=master)
 [![][license img]][license]
 
-**Riposte is a Netty-based microservice framework for rapid development of production-ready HTTP APIs.** It includes robust features baked in like distributed tracing (provided by the Zipkin-compatible [Wingtips](https://github.com/Nike-Inc/wingtips)), error handling and validation (pluggable implementation with the default provided by [Backstopper](https://github.com/Nike-Inc/backstopper)), and circuit breaking (provided by [Fastbreak](https://github.com/Nike-Inc/fastbreak)). It works equally well as a fully-features microservice by itself (see the [template microservice project](https://github.com/Nike-Inc/riposte-microservice-template)), or as an embedded HTTP server inside another application. 
+**Riposte is a Netty-based microservice framework for rapid development of production-ready HTTP APIs.** It includes robust features baked in like distributed tracing (provided by the Zipkin-compatible [Wingtips](https://github.com/Nike-Inc/wingtips)), error handling and validation (pluggable implementation with the default provided by [Backstopper](https://github.com/Nike-Inc/backstopper)), and circuit breaking (provided by [Fastbreak](https://github.com/Nike-Inc/fastbreak)). It works equally well as a fully-featured microservice by itself (see the [template microservice project](https://github.com/Nike-Inc/riposte-microservice-template)), or as an embedded HTTP server inside another application. 
 
 ## Quickstart
 
