@@ -18,7 +18,6 @@ import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.restassured.response.ExtractableResponse;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
@@ -38,8 +37,8 @@ import java.util.concurrent.Executor;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
+import io.restassured.response.ExtractableResponse;
 
-import static com.jayway.restassured.RestAssured.given;
 import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilteringComponentTest.FirstFilterNormal.FIRST_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilteringComponentTest.FirstFilterNormal.FIRST_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_VALUE;
 import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilteringComponentTest.FirstFilterNormal.FIRST_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_KEY;
@@ -72,6 +71,7 @@ import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilt
 import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilteringComponentTest.ThirdFilterNormal.THIRD_FILTER_REQUEST_LAST_CHUNK_CUMULATIVE_HEADER_VALUE;
 import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilteringComponentTest.ThirdFilterNormal.THIRD_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_VALUE;
 import static com.nike.riposte.server.componenttest.VerifyRequestAndResponseFilteringComponentTest.ThirdFilterNormal.THIRD_FILTER_RESPONSE_CUMULATIVE_HEADER_KEY;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;

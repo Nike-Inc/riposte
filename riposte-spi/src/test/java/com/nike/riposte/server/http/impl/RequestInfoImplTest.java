@@ -4,7 +4,6 @@ import com.nike.internal.util.Pair;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
 import com.nike.riposte.server.http.RequestInfo;
-import com.nike.riposte.util.HttpUtils;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -8,8 +8,6 @@ import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.util.MainClassUtils;
 import com.nike.riposte.util.Matcher;
 
-import com.jayway.restassured.response.ExtractableResponse;
-import com.jayway.restassured.response.Response;
 import com.netflix.config.ConfigurationManager;
 
 import org.junit.After;
@@ -25,8 +23,10 @@ import java.util.concurrent.Executor;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.ResourceLeakDetector;
+import io.restassured.response.ExtractableResponse;
+import io.restassured.response.Response;
 
-import static com.jayway.restassured.RestAssured.given;
+import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 

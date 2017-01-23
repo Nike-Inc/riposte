@@ -9,9 +9,6 @@ import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
 
-import com.jayway.restassured.config.RestAssuredConfig;
-import com.jayway.restassured.config.SSLConfig;
-
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -23,8 +20,10 @@ import java.util.concurrent.Executor;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
+import io.restassured.config.RestAssuredConfig;
+import io.restassured.config.SSLConfig;
 
-import static com.jayway.restassured.RestAssured.given;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 

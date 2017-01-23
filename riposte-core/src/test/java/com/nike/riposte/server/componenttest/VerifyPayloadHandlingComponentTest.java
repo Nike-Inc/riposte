@@ -17,7 +17,6 @@ import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
-import com.jayway.restassured.response.ExtractableResponse;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -36,8 +35,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.CharsetUtil;
+import io.restassured.response.ExtractableResponse;
 
-import static com.jayway.restassured.RestAssured.given;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 

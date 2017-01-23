@@ -1,11 +1,12 @@
 package com.nike.riposte.server.error.exception;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import java.util.UUID;
-
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.UUID;
+
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class Forbidden403ExceptionTest {
 

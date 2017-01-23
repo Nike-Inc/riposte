@@ -3,10 +3,10 @@
  */
 package com.nike.riposte.server.error.exception;
 
+import com.nike.internal.util.Pair;
+
 import java.util.ArrayList;
 import java.util.List;
-
-import com.nike.internal.util.Pair;
 
 /**
  * Thrown when a request does not have a valid authorization header. Represents a HTTP 403 response code.
