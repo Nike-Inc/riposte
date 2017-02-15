@@ -62,10 +62,10 @@ class AsyncCompletionHandlerWithTracingAndMdcSupport<O> extends AsyncCompletionH
      */
     protected final Map<String, String> mdcContextToUse;
     /**
-     * The circuit breaker to notify of response events or exceptions, or empty if circuit breaking has been disabled
-     * for this call.
+     * The circuit breaker manual mode task to notify of response events or exceptions, or empty if circuit breaking has
+     * been disabled for this call.
      */
-    protected final Optional<CircuitBreaker<Response>> circuitBreaker;
+    protected final Optional<CircuitBreaker.ManualModeTask<Response>> circuitBreakerManualTask;
 
     /**
      * @param completableFutureResponse
@@ -83,9 +83,9 @@ class AsyncCompletionHandlerWithTracingAndMdcSupport<O> extends AsyncCompletionH
      * @param url
      *     The URL for the downstream call. Used by {@link #getSubspanSpanName(String, String)} to create the subspan's
      *     span name if {@code performSubSpanAroundDownstreamCalls} is true.
-     * @param circuitBreaker
-     *     The circuit breaker to notify of response events or exceptions, or empty if circuit breaking has been
-     *     disabled for this call.
+     * @param circuitBreakerManualTask
+     *     The circuit breaker manual mode task to notify of response events or exceptions, or empty if circuit breaking
+     *     has been disabled for this call.
      * @param distributedTraceStackToUse
      *     The distributed trace stack to use for the downstream call. If {@code performSubSpanAroundDownstreamCalls} is
      *     true then a new subspan will be placed on top of this, otherwise it will be used as-is.
@@ -97,13 +97,13 @@ class AsyncCompletionHandlerWithTracingAndMdcSupport<O> extends AsyncCompletionH
                                                    boolean performSubSpanAroundDownstreamCalls,
                                                    String httpMethod,
                                                    String url,
-                                                   Optional<CircuitBreaker<Response>> circuitBreaker,
+                                                   Optional<CircuitBreaker.ManualModeTask<Response>> circuitBreakerManualTask,
                                                    Deque<Span> distributedTraceStackToUse,
                                                    Map<String, String> mdcContextToUse) {
         this.completableFutureResponse = completableFutureResponse;
         this.responseHandlerFunction = responseHandlerFunction;
         this.performSubSpanAroundDownstreamCalls = performSubSpanAroundDownstreamCalls;
-        this.circuitBreaker = circuitBreaker;
+        this.circuitBreakerManualTask = circuitBreakerManualTask;
 
         // Grab the calling thread's dtrace stack and MDC info so we can set it back when this constructor completes.
         Pair<Deque<Span>, Map<String, String>> originalThreadInfo = null;
@@ -172,7 +172,7 @@ class AsyncCompletionHandlerWithTracingAndMdcSupport<O> extends AsyncCompletionH
 
             // Notify the circuit breaker of an event.
             try {
-                circuitBreaker.ifPresent(cb -> cb.handleEvent(response));
+                circuitBreakerManualTask.ifPresent(cb -> cb.handleEvent(response));
             }
             catch (Throwable t) {
                 logger.error(
@@ -223,7 +223,7 @@ class AsyncCompletionHandlerWithTracingAndMdcSupport<O> extends AsyncCompletionH
 
             // Notify the circuit breaker of an exception.
             try {
-                circuitBreaker.ifPresent(cb -> cb.handleException(t));
+                circuitBreakerManualTask.ifPresent(cb -> cb.handleException(t));
             }
             catch (Throwable cbError) {
                 logger.error(

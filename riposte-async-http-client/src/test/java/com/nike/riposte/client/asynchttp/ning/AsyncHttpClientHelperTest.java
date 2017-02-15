@@ -1,6 +1,7 @@
 package com.nike.riposte.client.asynchttp.ning;
 
 import com.nike.fastbreak.CircuitBreaker;
+import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.fastbreak.CircuitBreakerDelegate;
 import com.nike.fastbreak.CircuitBreakerForHttpStatusCode;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
@@ -362,6 +363,8 @@ public class AsyncHttpClientHelperTest {
 
         CircuitBreaker<Response> circuitBreakerMock = mock(CircuitBreaker.class);
         doReturn(Optional.of(circuitBreakerMock)).when(helperSpy).getCircuitBreaker(any(RequestBuilderWrapper.class));
+        ManualModeTask<Response> cbManualTaskMock = mock(ManualModeTask.class);
+        doReturn(cbManualTaskMock).when(circuitBreakerMock).newManualModeTask();
 
         String url = "http://localhost/some/path";
         String method = "GET";
@@ -385,7 +388,7 @@ public class AsyncHttpClientHelperTest {
         // Verify that the circuit breaker came from the getCircuitBreaker helper method and that its
         //      throwExceptionIfCircuitBreakerIsOpen() method was called.
         verify(helperSpy).getCircuitBreaker(rbw);
-        verify(circuitBreakerMock).throwExceptionIfCircuitBreakerIsOpen();
+        verify(cbManualTaskMock).throwExceptionIfCircuitBreakerIsOpen();
 
         // Verify that the inner request's execute method was called with a
         //      AsyncCompletionHandlerWithTracingAndMdcSupport for the handler.
@@ -400,7 +403,7 @@ public class AsyncHttpClientHelperTest {
         assertThat(achwtams.completableFutureResponse).isSameAs(resultFuture);
         assertThat(achwtams.responseHandlerFunction).isSameAs(responseHandlerMock);
         assertThat(achwtams.performSubSpanAroundDownstreamCalls).isEqualTo(performSubspan);
-        assertThat(achwtams.circuitBreaker).isEqualTo(Optional.of(circuitBreakerMock));
+        assertThat(achwtams.circuitBreakerManualTask).isEqualTo(Optional.of(cbManualTaskMock));
         if (performSubspan) {
             int initialSpanStackSize = (initialSpanStack == null) ? 0 : initialSpanStack.size();
             assertThat(achwtams.distributedTraceStackToUse).hasSize(initialSpanStackSize + 1);

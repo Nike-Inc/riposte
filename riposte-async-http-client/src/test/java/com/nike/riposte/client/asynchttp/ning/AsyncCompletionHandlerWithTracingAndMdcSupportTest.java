@@ -1,6 +1,7 @@
 package com.nike.riposte.client.asynchttp.ning;
 
 import com.nike.fastbreak.CircuitBreaker;
+import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.internal.util.Pair;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
@@ -51,7 +52,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
     private String responseHandlerResult;
     private String downstreamMethod;
     private String downstreamUrl;
-    private CircuitBreaker<Response> circuitBreakerMock;
+    private ManualModeTask<Response> circuitBreakerManualTaskMock;
     private Deque<Span> initialSpanStack;
     private Map<String, String> initialMdcInfo;
     private AsyncCompletionHandlerWithTracingAndMdcSupport<String> handlerSpy;
@@ -64,7 +65,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         responseHandlerFunctionMock = mock(AsyncResponseHandler.class);
         downstreamMethod = "method-" + UUID.randomUUID().toString();
         downstreamUrl = "url-" + UUID.randomUUID().toString();
-        circuitBreakerMock = mock(CircuitBreaker.class);
+        circuitBreakerManualTaskMock = mock(ManualModeTask.class);
 
         responseMock = mock(Response.class);
         responseHandlerResult = "result-" + UUID.randomUUID().toString();
@@ -76,7 +77,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
         handlerSpy = spy(new AsyncCompletionHandlerWithTracingAndMdcSupport<>(
             completableFutureResponse, responseHandlerFunctionMock, true, downstreamMethod, downstreamUrl,
-            Optional.of(circuitBreakerMock), initialSpanStack, initialMdcInfo
+            Optional.of(circuitBreakerManualTaskMock), initialSpanStack, initialMdcInfo
         ));
 
         resetTracingAndMdc();
@@ -115,7 +116,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         assertThat(instance.completableFutureResponse).isSameAs(cfResponse);
         assertThat(instance.responseHandlerFunction).isSameAs(responseHandlerFunc);
         assertThat(instance.performSubSpanAroundDownstreamCalls).isEqualTo(false);
-        assertThat(instance.circuitBreaker).isSameAs(circuitBreaker);
+        assertThat(instance.circuitBreakerManualTask).isSameAs(circuitBreaker);
         assertThat(instance.distributedTraceStackToUse).isSameAs(spanStack);
         assertThat(instance.mdcContextToUse).isSameAs(mdcInfo);
 
@@ -172,7 +173,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         assertThat(instance.completableFutureResponse).isSameAs(cfResponse);
         assertThat(instance.responseHandlerFunction).isSameAs(responseHandlerFunc);
         assertThat(instance.performSubSpanAroundDownstreamCalls).isEqualTo(true);
-        assertThat(instance.circuitBreaker).isSameAs(circuitBreaker);
+        assertThat(instance.circuitBreakerManualTask).isSameAs(circuitBreaker);
 
         int initialSpanStackSize = (spanStack == null) ? 0 : spanStack.size();
         assertThat(instance.distributedTraceStackToUse).hasSize(initialSpanStackSize + 1);
@@ -277,13 +278,13 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         // given
         RuntimeException ex = new RuntimeException("kaboom");
         if (throwException)
-            doThrow(ex).when(circuitBreakerMock).handleEvent(responseMock);
+            doThrow(ex).when(circuitBreakerManualTaskMock).handleEvent(responseMock);
 
         // when
         handlerSpy.onCompleted(responseMock);
 
         // then
-        verify(circuitBreakerMock).handleEvent(responseMock);
+        verify(circuitBreakerManualTaskMock).handleEvent(responseMock);
         assertThat(completableFutureResponse).isCompleted();
         assertThat(completableFutureResponse.get()).isEqualTo(responseHandlerResult);
     }
@@ -300,7 +301,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         Response ignoredResult = handlerSpy.onCompleted(responseMock);
 
         // then
-        verify(circuitBreakerMock).handleEvent(responseMock);
+        verify(circuitBreakerManualTaskMock).handleEvent(responseMock);
 
         verify(cfMock).isDone();
         verifyNoMoreInteractions(cfMock);
@@ -346,7 +347,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         doAnswer(invocation -> {
             before.setObj(Tracer.getInstance().getCurrentSpan());
             return invocation.callRealMethod();
-        }).when(circuitBreakerMock).handleEvent(responseMock);
+        }).when(circuitBreakerManualTaskMock).handleEvent(responseMock);
 
         doAnswer(invocation -> {
             after.setObj(Tracer.getInstance().getCurrentSpan());
@@ -376,7 +377,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         handlerSpy.onCompleted(responseMock);
 
         // then
-        verify(circuitBreakerMock).handleEvent(responseMock);
+        verify(circuitBreakerManualTaskMock).handleEvent(responseMock);
         verify(responseHandlerFunctionMock).handleResponse(responseMock);
 
         assertThat(actualBeforeAndAfterSpanHolders.getLeft().objSet).isTrue();
@@ -406,7 +407,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         handlerSpy.onCompleted(responseMock);
 
         // then
-        verify(circuitBreakerMock).handleEvent(responseMock);
+        verify(circuitBreakerManualTaskMock).handleEvent(responseMock);
         verify(responseHandlerFunctionMock).handleResponse(responseMock);
 
         assertThat(actualBeforeAndAfterSpanHolders.getLeft().objSet).isTrue();
@@ -439,13 +440,13 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         Exception ex = new Exception("kaboom");
         RuntimeException circuitBreakerEx = new RuntimeException("circuit breaker kaboom");
         if (throwException)
-            doThrow(circuitBreakerEx).when(circuitBreakerMock).handleException(ex);
+            doThrow(circuitBreakerEx).when(circuitBreakerManualTaskMock).handleException(ex);
 
         // when
         handlerSpy.onThrowable(ex);
 
         // then
-        verify(circuitBreakerMock).handleException(ex);
+        verify(circuitBreakerManualTaskMock).handleException(ex);
         assertThat(completableFutureResponse).isCompletedExceptionally();
         assertThat(completableFutureResponse).hasFailedWithThrowableThat().isEqualTo(ex);
     }
@@ -463,7 +464,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         handlerSpy.onThrowable(ex);
 
         // then
-        verify(circuitBreakerMock).handleException(ex);
+        verify(circuitBreakerManualTaskMock).handleException(ex);
 
         verify(cfMock).isDone();
         verifyNoMoreInteractions(cfMock);
@@ -477,7 +478,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         doAnswer(invocation -> {
             before.setObj(Tracer.getInstance().getCurrentSpan());
             return invocation.callRealMethod();
-        }).when(circuitBreakerMock).handleException(any(Throwable.class));
+        }).when(circuitBreakerManualTaskMock).handleException(any(Throwable.class));
 
         doAnswer(invocation -> {
             after.setObj(Tracer.getInstance().getCurrentSpan());
@@ -512,7 +513,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         handlerSpy.onThrowable(ex);
 
         // then
-        verify(circuitBreakerMock).handleException(ex);
+        verify(circuitBreakerManualTaskMock).handleException(ex);
         verify(cfMock).completeExceptionally(ex);
 
         assertThat(actualBeforeAndAfterSpanHolders.getLeft().objSet).isTrue();
@@ -547,7 +548,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         handlerSpy.onThrowable(ex);
 
         // then
-        verify(circuitBreakerMock).handleException(ex);
+        verify(circuitBreakerManualTaskMock).handleException(ex);
         verify(cfMock).completeExceptionally(ex);
 
         assertThat(actualBeforeAndAfterSpanHolders.getLeft().objSet).isTrue();
