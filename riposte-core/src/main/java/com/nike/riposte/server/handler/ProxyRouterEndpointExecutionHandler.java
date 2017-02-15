@@ -2,6 +2,7 @@ package com.nike.riposte.server.handler;
 
 import com.nike.backstopper.exception.WrapperException;
 import com.nike.fastbreak.CircuitBreaker;
+import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.fastbreak.CircuitBreakerDelegate;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
@@ -130,11 +131,12 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
 
                 // When the first chunk is ready, stream it downstream and set up what happens afterward.
                 firstChunkFuture.whenComplete((downstreamRequestFirstChunkInfo, throwable) -> {
-                    Optional<CircuitBreaker<HttpResponse>> circuitBreaker =
-                        getCircuitBreaker(downstreamRequestFirstChunkInfo, ctx);
+
+                    Optional<ManualModeTask<HttpResponse>> circuitBreakerManualTask =
+                        getCircuitBreaker(downstreamRequestFirstChunkInfo, ctx).map(CircuitBreaker::newManualModeTask);
 
                     StreamingCallback callback = new StreamingCallbackForCtx(
-                        ctx, circuitBreaker, endpointProxyRouter, requestInfo, proxyRouterState
+                        ctx, circuitBreakerManualTask, endpointProxyRouter, requestInfo, proxyRouterState
                     );
                     if (throwable != null) {
                         // Something blew up trying to determine the first chunk info.
@@ -158,7 +160,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             // Try our circuit breaker (if we have one).
                             Throwable circuitBreakerException = null;
                             try {
-                                circuitBreaker.ifPresent(CircuitBreaker::throwExceptionIfCircuitBreakerIsOpen);
+                                circuitBreakerManualTask.ifPresent(ManualModeTask::throwExceptionIfCircuitBreakerIsOpen);
                             }
                             catch (Throwable t) {
                                 circuitBreakerException = t;
@@ -411,7 +413,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
     protected static class StreamingCallbackForCtx implements StreamingCallback {
 
         public final ChannelHandlerContext ctx;
-        private final Optional<CircuitBreaker<HttpResponse>> circuitBreaker;
+        private final Optional<ManualModeTask<HttpResponse>> circuitBreakerManualModeTask;
         private final ProxyRouterEndpoint endpoint;
         private final RequestInfo<?> requestInfo;
         private final ProxyRouterProcessingState proxyRouterProcessingState;
@@ -421,11 +423,15 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
 
         private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-        StreamingCallbackForCtx(ChannelHandlerContext ctx, Optional<CircuitBreaker<HttpResponse>> circuitBreaker,
-                                ProxyRouterEndpoint endpoint, RequestInfo<?> requestInfo,
-                                ProxyRouterProcessingState proxyRouterProcessingState) {
+        StreamingCallbackForCtx(
+            ChannelHandlerContext ctx,
+            Optional<ManualModeTask<HttpResponse>> circuitBreakerManualModeTask,
+            ProxyRouterEndpoint endpoint,
+            RequestInfo<?> requestInfo,
+            ProxyRouterProcessingState proxyRouterProcessingState
+        ) {
             this.ctx = ctx;
-            this.circuitBreaker = circuitBreaker;
+            this.circuitBreakerManualModeTask = circuitBreakerManualModeTask;
             this.endpoint = endpoint;
             this.requestInfo = requestInfo;
             this.proxyRouterProcessingState = proxyRouterProcessingState;
@@ -507,7 +513,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
 
                             try {
                                 // Notify the circuit breaker of the response event.
-                                circuitBreaker.ifPresent(cb -> cb.handleEvent(httpResponse));
+                                circuitBreakerManualModeTask.ifPresent(cb -> cb.handleEvent(httpResponse));
                             }
                             catch (Throwable t) {
                                 logger.error(
@@ -582,7 +588,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                         else {
                             try {
                                 // Notify the circuit breaker of the error
-                                circuitBreaker.ifPresent(cb -> cb.handleException(error));
+                                circuitBreakerManualModeTask.ifPresent(cb -> cb.handleException(error));
                             }
                             catch (Throwable t) {
                                 logger.error(

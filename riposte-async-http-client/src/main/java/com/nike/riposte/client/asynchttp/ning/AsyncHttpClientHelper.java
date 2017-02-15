@@ -1,6 +1,7 @@
 package com.nike.riposte.client.asynchttp.ning;
 
 import com.nike.fastbreak.CircuitBreaker;
+import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.fastbreak.CircuitBreakerDelegate;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
@@ -325,16 +326,18 @@ public class AsyncHttpClientHelper {
         CompletableFuture<O> completableFutureResponse = new CompletableFuture<>();
 
         try {
-            Optional<CircuitBreaker<Response>> circuitBreaker = getCircuitBreaker(requestBuilderWrapper);
+            Optional<ManualModeTask<Response>> circuitBreakerManualTask =
+                getCircuitBreaker(requestBuilderWrapper).map(CircuitBreaker::newManualModeTask);
+
             // If we have a circuit breaker, give it a chance to throw an exception if the circuit is open/tripped
-            circuitBreaker.ifPresent(CircuitBreaker::throwExceptionIfCircuitBreakerIsOpen);
+            circuitBreakerManualTask.ifPresent(ManualModeTask::throwExceptionIfCircuitBreakerIsOpen);
 
             // Setup the async completion handler for the call.
             AsyncCompletionHandlerWithTracingAndMdcSupport<O> asyncCompletionHandler =
                 new AsyncCompletionHandlerWithTracingAndMdcSupport<>(
                     completableFutureResponse, responseHandlerFunction, performSubSpanAroundDownstreamCalls,
                     requestBuilderWrapper.httpMethod,
-                    requestBuilderWrapper.url, circuitBreaker, distributedTraceStackForCall, mdcContextForCall);
+                    requestBuilderWrapper.url, circuitBreakerManualTask, distributedTraceStackForCall, mdcContextForCall);
 
             // Add distributed trace headers to the downstream call if we have a span.
             Span spanForCall = asyncCompletionHandler.getSpanForCall();
