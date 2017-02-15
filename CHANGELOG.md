@@ -8,7 +8,16 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.8.x` Releases - [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+- `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.8.3](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.3)
+
+Released on 2017-02-15.
+
+### Updated
+
+- Updated Fastbreak dependency version to 0.10.0. This should be an invisible update for most users, however it might require a minor refactor if you used Fastbreak's manual/callback mode in your code. Now, instead of calling `throwExceptionIfCircuitBreakerIsOpen()`, `handleEvent(...)`, and `handleException(...)` directly on `CircuitBreaker` you must first call `CircuitBreaker.newManualModeTask()` which will return a `ManualModeTask` interface. That `ManualModeTask` interface now contains the methods that were moved out of `CircuitBreaker`.
+	- Updated by [Nic Munroe][contrib_nicmunroe].
 
 ## [0.8.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.2)
 
