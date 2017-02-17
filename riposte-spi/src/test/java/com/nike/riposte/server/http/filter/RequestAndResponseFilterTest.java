@@ -56,6 +56,9 @@ public class RequestAndResponseFilterTest {
         assertThat(lastChunkShortCircuitEx)
             .isNotNull()
             .isInstanceOf(UnsupportedOperationException.class);
+
+        assertThat(defaultImpl.shouldExecuteBeforeSecurityValidation())
+                .isTrue();
     }
 
 }
