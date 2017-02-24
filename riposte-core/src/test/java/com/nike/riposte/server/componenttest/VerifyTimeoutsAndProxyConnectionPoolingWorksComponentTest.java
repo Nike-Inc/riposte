@@ -1,8 +1,12 @@
 package com.nike.riposte.server.componenttest;
 
+import com.nike.backstopper.apierror.ApiError;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
 import com.nike.backstopper.apierror.sample.SampleCoreApiError;
 import com.nike.backstopper.model.DefaultErrorContractDTO;
+import com.nike.backstopper.model.DefaultErrorDTO;
+import com.nike.internal.util.MapBuilder;
+import com.nike.internal.util.Pair;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
@@ -22,15 +26,37 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpClientCodec;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.CharsetUtil;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 /**
  * Test class verifying the following:
@@ -47,6 +73,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *     <li>
  *         When a proxy routing endpoint is called repeatedly, connection pooling is used to reuse channels and minimize connection time.
  *     </li>
+ *     <li>
+ *         When a call is started but not finished (i.e. we've received the first chunk but not the last), and no
+ *         further bytes are received for {@link ServerConfig#incompleteHttpCallTimeoutMillis()}, then a {@link
+ *         ProjectApiErrors#getTemporaryServiceProblemApiError()} is returned.
+ *     </li>
  * </ul>
  */
 public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
@@ -62,17 +93,25 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
 
     private static ObjectMapper objectMapper = new ObjectMapper();
 
+    private static long incompleteCallTimeoutMillis = 200;
+
     @BeforeClass
     public static void setUpClass() throws Exception {
-        proxyServerShortCallTimeoutConfig = new TimeoutsAndProxyTestServerConfig(60 * 1000, 150);
+        proxyServerShortCallTimeoutConfig = new TimeoutsAndProxyTestServerConfig(60 * 1000,
+                                                                                 150,
+                                                                                 incompleteCallTimeoutMillis);
         proxyServerShortCallTimeout = new Server(proxyServerShortCallTimeoutConfig);
         proxyServerShortCallTimeout.startup();
 
-        proxyServerLongTimeoutValuesConfig = new TimeoutsAndProxyTestServerConfig(60 * 1000, 60 * 1000);
+        proxyServerLongTimeoutValuesConfig = new TimeoutsAndProxyTestServerConfig(60 * 1000,
+                                                                                  60 * 1000,
+                                                                                  incompleteCallTimeoutMillis);
         proxyServerLongTimeoutValues = new Server(proxyServerLongTimeoutValuesConfig);
         proxyServerLongTimeoutValues.startup();
 
-        downstreamServerConfig = new TimeoutsAndProxyTestServerConfig(300, 60 * 1000);
+        downstreamServerConfig = new TimeoutsAndProxyTestServerConfig(300,
+                                                                      60 * 1000,
+                                                                      incompleteCallTimeoutMillis);
         downstreamServer = new Server(downstreamServerConfig);
         downstreamServer.startup();
     }
@@ -169,10 +208,109 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         assertThat(afterTimeoutCallChannelInfo).isNotEqualTo(initialCallChannelInfo);
     }
 
+    @Test
+    public void verify_incomplete_call_is_timed_out() throws InterruptedException, TimeoutException,
+                                                             ExecutionException, IOException {
+        Bootstrap bootstrap = new Bootstrap();
+        EventLoopGroup eventLoopGroup = new NioEventLoopGroup();
+        try {
+            CompletableFuture<Pair<String, String>> responseFromServer = new CompletableFuture<>();
+
+            // Create a raw netty HTTP client so we can fiddle with headers and intentionally create a bad request
+            //      that should trigger the bad call timeout.
+            bootstrap.group(eventLoopGroup)
+                     .channel(NioSocketChannel.class)
+                     .handler(new ChannelInitializer<SocketChannel>() {
+                         @Override
+                         protected void initChannel(SocketChannel ch) throws Exception {
+                             ChannelPipeline p = ch.pipeline();
+                             p.addLast(new HttpClientCodec());
+                             p.addLast(new HttpObjectAggregator(Integer.MAX_VALUE));
+                             p.addLast(new SimpleChannelInboundHandler<HttpObject>() {
+                                 @Override
+                                 protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg)
+                                     throws Exception {
+                                     if (msg instanceof FullHttpResponse) {
+                                         // Store the server response for asserting on later.
+                                         FullHttpResponse responseMsg = (FullHttpResponse)msg;
+                                         responseFromServer.complete(
+                                             Pair.of(responseMsg.content().toString(CharsetUtil.UTF_8),
+                                                     responseMsg.headers().get(HttpHeaders.Names.CONNECTION))
+                                         );
+                                     }
+                                     else {
+                                         // Should never happen.
+                                         throw new RuntimeException(
+                                             "Received unexpected message type: " + msg.getClass());
+                                     }
+                                 }
+                             });
+                         }
+                     });
+
+            // Connect to the server.
+            Channel ch = bootstrap.connect("localhost", downstreamServerConfig.endpointsPort()).sync().channel();
+
+            // Create a bad HTTP request. This one will be bad because it has a non-zero content-length header,
+            //      but we're sending no payload. The server should (correctly) sit and wait for payload bytes to
+            //      arrive until it hits the timeout, at which point it should return the correct error response.
+            HttpRequest request = new DefaultFullHttpRequest(
+                HttpVersion.HTTP_1_1, HttpMethod.POST, LongDelayTestEndpoint.MATCHING_PATH
+            );
+            request.headers().set(HttpHeaders.Names.HOST, "localhost");
+            request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
+
+            request.headers().set(HttpHeaders.Names.CONTENT_LENGTH, "100");
+
+            long beforeCallTimeNanos = System.nanoTime();
+            // Send the bad request.
+            ch.writeAndFlush(request);
+            // Wait for the response to be received and the connection to be closed.
+            try {
+                ch.closeFuture().get(incompleteCallTimeoutMillis * 10, TimeUnit.MILLISECONDS);
+                responseFromServer.get(incompleteCallTimeoutMillis * 10, TimeUnit.MILLISECONDS);
+            }
+            catch (TimeoutException ex) {
+                fail("The call took much longer than expected without receiving a response. "
+                     + "Cancelling this test - it's not working properly", ex);
+            }
+            // If we reach here then the call should be complete.
+            long totalCallTimeMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beforeCallTimeNanos);
+
+            // Verify that we got back the correct error response.
+            //      It should be a MALFORMED_REQUEST with extra metadata explaining that the call was bad.
+            Pair<String, String> responseInfo = responseFromServer.get();
+            DefaultErrorContractDTO errorContract = objectMapper.readValue(responseInfo.getLeft(),
+                                                                           DefaultErrorContractDTO.class);
+            assertThat(errorContract).isNotNull();
+            assertThat(errorContract.errors.size()).isEqualTo(1);
+            DefaultErrorDTO error = errorContract.errors.get(0);
+            ApiError expectedApiError = SampleCoreApiError.MALFORMED_REQUEST;
+            Map<String, Object> expectedMetadata =
+                MapBuilder.builder("cause", (Object)"Unfinished/invalid HTTP request").build();
+            assertThat(error.code).isEqualTo(expectedApiError.getErrorCode());
+            assertThat(error.message).isEqualTo(expectedApiError.getMessage());
+            assertThat(error.metadata).isEqualTo(expectedMetadata);
+
+            // The server should have closed the connection even though we asked for keep-alive.
+            assertThat(responseInfo.getRight()).isEqualTo(HttpHeaders.Values.CLOSE);
+
+            // Total call time should be pretty close to incompleteCallTimeoutMillis give or take a few
+            //      milliseconds, but due to the inability to account for slow machines running the unit tests,
+            //      a server that isn't warmed up, etc, we can't put a ceiling on the wiggle room we'd need, so
+            //      we'll just verify it took at least the minimum necessary amount of time.
+            assertThat(totalCallTimeMillis).isGreaterThanOrEqualTo(incompleteCallTimeoutMillis);
+        }
+        finally {
+            eventLoopGroup.shutdownGracefully();
+        }
+    }
+
     public static class TimeoutsAndProxyTestServerConfig implements ServerConfig {
         private final int port;
         private final long workerChannelIdleTimeoutMillis;
         private final long cfTimeoutMillis;
+        private final long incompleteCallTimeoutMillis;
         private final Collection<Endpoint<?>> endpoints = Arrays.asList(
             new LongDelayTestEndpoint(),
             new ProxyLongDelayTestEndpoint(),
@@ -180,7 +318,9 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
             new ProxyChannelInfoTestEndpoint()
         );
 
-        public TimeoutsAndProxyTestServerConfig(long workerChannelIdleTimeoutMillis, long cfTimeoutMillis) {
+        public TimeoutsAndProxyTestServerConfig(long workerChannelIdleTimeoutMillis,
+                                                long cfTimeoutMillis,
+                                                long incompleteCallTimeoutMillis) {
             try {
                 port = ComponentTestUtils.findFreePort();
             } catch (IOException e) {
@@ -189,6 +329,7 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
 
             this.workerChannelIdleTimeoutMillis = workerChannelIdleTimeoutMillis;
             this.cfTimeoutMillis = cfTimeoutMillis;
+            this.incompleteCallTimeoutMillis = incompleteCallTimeoutMillis;
         }
 
         @Override
@@ -209,6 +350,11 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         @Override
         public long defaultCompletableFutureTimeoutInMillisForNonblockingEndpoints() {
             return cfTimeoutMillis;
+        }
+
+        @Override
+        public long incompleteHttpCallTimeoutMillis() {
+            return incompleteCallTimeoutMillis;
         }
     }
 
@@ -231,7 +377,7 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
 
         @Override
         public Matcher requestMatcher() {
-            return Matcher.match(MATCHING_PATH, HttpMethod.GET);
+            return Matcher.match(MATCHING_PATH);
         }
 
     }

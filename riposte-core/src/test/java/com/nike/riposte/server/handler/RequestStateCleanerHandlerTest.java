@@ -2,21 +2,31 @@ package com.nike.riposte.server.handler;
 
 import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
-import com.nike.riposte.server.channelpipeline.HttpChannelInitializer;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 
+import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME;
+import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -24,12 +34,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 /**
  * Tests the functionality of {@link RequestStateCleanerHandler}
  *
  * @author Nic Munroe
  */
+@RunWith(DataProviderRunner.class)
 public class RequestStateCleanerHandlerTest {
 
     private RequestStateCleanerHandler handler;
@@ -40,8 +52,11 @@ public class RequestStateCleanerHandlerTest {
     private Attribute<HttpProcessingState> stateAttrMock;
     private Attribute<ProxyRouterProcessingState> proxyRouterProcessingStateAttrMock;
     private MetricsListener metricsListenerMock;
-    private HttpRequest msgMock;
+    private HttpRequest msgMockFirstChunkOnly;
+    private FullHttpRequest msgMockFullRequest;
+    private LastHttpContent msgMockLastChunkOnly;
     private IdleChannelTimeoutHandler idleChannelTimeoutHandlerMock;
+    private long incompleteHttpCallTimeoutMillis = 4242;
 
     @Before
     public void beforeMethod() {
@@ -52,41 +67,53 @@ public class RequestStateCleanerHandlerTest {
         stateAttrMock = mock(Attribute.class);
         proxyRouterProcessingStateAttrMock = mock(Attribute.class);
         metricsListenerMock = mock(MetricsListener.class);
-        msgMock = mock(HttpRequest.class);
+        msgMockFirstChunkOnly = mock(HttpRequest.class);
+        msgMockFullRequest = mock(FullHttpRequest.class);
+        msgMockLastChunkOnly = mock(LastHttpContent.class);
         idleChannelTimeoutHandlerMock = mock(IdleChannelTimeoutHandler.class);
 
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(pipelineMock).when(ctxMock).pipeline();
-        doReturn(idleChannelTimeoutHandlerMock).when(pipelineMock).get(HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+        doReturn(idleChannelTimeoutHandlerMock).when(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
         doReturn(stateAttrMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(stateMock).when(stateAttrMock).get();
         doReturn(proxyRouterProcessingStateAttrMock).when(channelMock).attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY);
 
-        handler = new RequestStateCleanerHandler(metricsListenerMock);
+        handler = new RequestStateCleanerHandler(metricsListenerMock, incompleteHttpCallTimeoutMillis);
+    }
+
+    @Test
+    public void constructor_sets_fields_as_expected() {
+        // when
+        RequestStateCleanerHandler handler = new RequestStateCleanerHandler(metricsListenerMock, incompleteHttpCallTimeoutMillis);
+
+        // then
+        assertThat(handler.metricsListener).isSameAs(metricsListenerMock);
+        assertThat(handler.incompleteHttpCallTimeoutMillis).isEqualTo(incompleteHttpCallTimeoutMillis);
     }
 
     @Test
     public void channelRead_cleans_the_state_and_starts_metrics_request_and_removes_any_existing_IdleChannelTimeoutHandler() throws Exception {
         // when
-        handler.channelRead(ctxMock, msgMock);
+        handler.channelRead(ctxMock, msgMockFirstChunkOnly);
 
         // then
         verify(stateMock).cleanStateForNewRequest();
         verify(metricsListenerMock).onEvent(ServerMetricsEvent.REQUEST_RECEIVED, stateMock);
-        verify(pipelineMock).get(HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+        verify(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
         verify(pipelineMock).remove(idleChannelTimeoutHandlerMock);
     }
 
     @Test
     public void channelRead_does_not_remove_IdleChannelTimeoutHandler_if_it_is_not_in_the_pipeline() throws Exception {
         // given
-        doReturn(null).when(pipelineMock).get(HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+        doReturn(null).when(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
 
         // when
-        handler.channelRead(ctxMock, msgMock);
+        handler.channelRead(ctxMock, msgMockFirstChunkOnly);
 
         // then
-        verify(pipelineMock).get(HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+        verify(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
         verify(pipelineMock, never()).remove(idleChannelTimeoutHandlerMock);
     }
 
@@ -96,28 +123,114 @@ public class RequestStateCleanerHandlerTest {
         doReturn(null).when(stateAttrMock).get();
 
         // when
-        handler.channelRead(ctxMock, msgMock);
+        handler.channelRead(ctxMock, msgMockFirstChunkOnly);
 
         // then
-        verifyNoMoreInteractions(stateMock);
+        verifyZeroInteractions(stateMock);
         verify(metricsListenerMock).onEvent(eq(ServerMetricsEvent.REQUEST_RECEIVED), any(HttpProcessingState.class));
     }
 
     @Test
     public void channelRead_does_not_explode_if_metricsListener_is_null() throws Exception {
         // given
-        RequestStateCleanerHandler handlerNoMetrics = new RequestStateCleanerHandler(null);
+        RequestStateCleanerHandler handlerNoMetrics = new RequestStateCleanerHandler(null,
+                                                                                     incompleteHttpCallTimeoutMillis);
 
         // when
-        handlerNoMetrics.channelRead(ctxMock, msgMock);
+        handlerNoMetrics.channelRead(ctxMock, msgMockFirstChunkOnly);
 
         // then
         verify(stateMock).cleanStateForNewRequest();
-        verifyNoMoreInteractions(metricsListenerMock);
+        verifyZeroInteractions(metricsListenerMock);
+    }
+
+    @DataProvider(value = {
+        // the *ONLY* time the handler is added is if the timeout is non-zero *and* it's the first chunk *only*
+        "true   |   true    |   true",
+        "true   |   false   |   false",
+        "false  |   true    |   false",
+        "false  |   false   |   false",
+    }, splitBy = "\\|")
+    @Test
+    public void channelRead_adds_IncompleteHttpCallTimeoutHandler_if_appropriate_and_handler_does_not_already_exist(
+        boolean timeoutMillisGreaterThanZero, boolean isFirstChunkOnly, boolean expectIncompleteTimeoutHandlerAdded
+    ) throws Exception {
+        // given
+        long timeoutMillis = (timeoutMillisGreaterThanZero) ? 42 : 0;
+        Object msg = (isFirstChunkOnly) ? msgMockFirstChunkOnly : msgMockFullRequest;
+        RequestStateCleanerHandler handlerToUse = new RequestStateCleanerHandler(null, timeoutMillis);
+        doReturn(null).when(pipelineMock).get(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+        doReturn(null).when(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+
+        // when
+        handlerToUse.channelRead(ctxMock, msg);
+
+        // then
+        if (expectIncompleteTimeoutHandlerAdded) {
+            ArgumentCaptor<ChannelHandler> handlerArgCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
+            verify(pipelineMock).addFirst(eq(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME), handlerArgCaptor.capture());
+            assertThat(handlerArgCaptor.getValue()).isInstanceOf(IncompleteHttpCallTimeoutHandler.class);
+            IncompleteHttpCallTimeoutHandler handlerAdded = (IncompleteHttpCallTimeoutHandler)handlerArgCaptor.getValue();
+            assertThat(handlerAdded.idleTimeoutMillis).isEqualTo(timeoutMillis);
+        }
+        else {
+            verify(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+            verifyNoMoreInteractions(pipelineMock);
+        }
     }
 
     @Test
-    public void channelRead_does_nothing_if_msg_is_not_HttpRequest() throws Exception {
+    public void channelRead_replaces_IncompleteHttpCallTimeoutHandler_if_one_already_exists() throws Exception {
+        // given
+        long timeoutMillis = 42;
+        RequestStateCleanerHandler handlerToUse = new RequestStateCleanerHandler(null, timeoutMillis);
+        IncompleteHttpCallTimeoutHandler alreadyExistingHandler = mock(IncompleteHttpCallTimeoutHandler.class);
+        doReturn(alreadyExistingHandler).when(pipelineMock).get(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+        doReturn(null).when(pipelineMock).get(IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
+
+        // when
+        handlerToUse.channelRead(ctxMock, msgMockFirstChunkOnly);
+
+        // then
+        // The normal happy path addition of the timeout handler should not have occurred.
+        verify(pipelineMock, never()).addFirst(eq(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME), any(ChannelHandler.class));
+
+        // Instead, the existing handler should have been replaced.
+        ArgumentCaptor<ChannelHandler> handlerArgCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
+        verify(pipelineMock).replace(eq(alreadyExistingHandler), eq(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME), handlerArgCaptor.capture());
+        assertThat(handlerArgCaptor.getValue()).isInstanceOf(IncompleteHttpCallTimeoutHandler.class);
+        IncompleteHttpCallTimeoutHandler handlerAdded = (IncompleteHttpCallTimeoutHandler)handlerArgCaptor.getValue();
+        assertThat(handlerAdded.idleTimeoutMillis).isEqualTo(timeoutMillis);
+    }
+
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
+    @Test
+    public void channelRead_removes_IncompleteHttpCallTimeoutHandler_gracefully_on_last_chunk_only_messages(
+        boolean handlerExistsInPipeline
+    ) throws Exception {
+        // given
+        IncompleteHttpCallTimeoutHandler existingHandler = (handlerExistsInPipeline)
+                                                           ? mock(IncompleteHttpCallTimeoutHandler.class)
+                                                           : null;
+        doReturn(existingHandler).when(pipelineMock).get(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+
+        // when
+        handler.channelRead(ctxMock, msgMockLastChunkOnly);
+
+        // then
+        verify(pipelineMock).get(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+
+        if (handlerExistsInPipeline)
+            verify(pipelineMock).remove(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+        else
+            verifyNoMoreInteractions(pipelineMock);
+    }
+
+    @Test
+    public void channelRead_does_nothing_if_msg_is_not_HttpRequest_or_LastHttpContent() throws Exception {
         // given
         HttpMessage ignoredMsgMock = mock(HttpMessage.class);
 
@@ -125,8 +238,10 @@ public class RequestStateCleanerHandlerTest {
         handler.channelRead(ctxMock, ignoredMsgMock);
 
         // then
-        verifyNoMoreInteractions(stateMock);
-        verifyNoMoreInteractions(metricsListenerMock);
+        verify(ctxMock).fireChannelRead(ignoredMsgMock); // the normal continuation behavior from the super class.
+        verifyNoMoreInteractions(ctxMock); // nothing else should have happened related to the ctx.
+        verifyZeroInteractions(stateMock);
+        verifyZeroInteractions(metricsListenerMock);
     }
 
 }

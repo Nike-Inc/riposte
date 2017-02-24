@@ -13,6 +13,7 @@ import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpected
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
+import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
@@ -183,6 +184,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     @Test
     public void shouldHandleErrorDataDecoderException() {
         verifyExceptionHandled(new ErrorDataDecoderException(), singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+    }
+
+    @Test
+    public void should_handle_IncompleteHttpCallTimeoutException() {
+        verifyExceptionHandled(new IncompleteHttpCallTimeoutException(4242), singletonError(testProjectApiErrors.getMalformedRequestApiError()));
     }
 
     @Test

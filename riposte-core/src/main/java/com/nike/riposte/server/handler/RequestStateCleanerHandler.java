@@ -7,15 +7,20 @@ import com.nike.riposte.server.channelpipeline.HttpChannelInitializer;
 import com.nike.riposte.server.http.ProcessingState;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 
 import static com.nike.riposte.server.channelpipeline.ChannelAttributes.PROCESSING_STATE_ATTRIBUTE_KEYS;
+import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME;
 
 /**
  * Handler that makes sure the channel has a clean instance of {@link com.nike.riposte.server.http.HttpProcessingState}
@@ -27,10 +32,14 @@ import static com.nike.riposte.server.channelpipeline.ChannelAttributes.PROCESSI
  */
 public class RequestStateCleanerHandler extends ChannelInboundHandlerAdapter {
 
-    private final MetricsListener metricsListener;
+    private static final Logger logger = LoggerFactory.getLogger(RequestStateCleanerHandler.class);
 
-    public RequestStateCleanerHandler(MetricsListener metricsListener) {
+    protected final MetricsListener metricsListener;
+    protected final long incompleteHttpCallTimeoutMillis;
+
+    public RequestStateCleanerHandler(MetricsListener metricsListener, long incompleteHttpCallTimeoutMillis) {
         this.metricsListener = metricsListener;
+        this.incompleteHttpCallTimeoutMillis = incompleteHttpCallTimeoutMillis;
     }
 
     @Override
@@ -69,6 +78,35 @@ public class RequestStateCleanerHandler extends ChannelInboundHandlerAdapter {
                 pipeline.get(HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME);
             if (idleChannelTimeoutHandler != null)
                 pipeline.remove(idleChannelTimeoutHandler);
+
+            // Add the incomplete-call-timeout-handler (if desired) so that incomplete calls don't hang forever and
+            //      essentially become memory leaks. Unlike the idleChannelTimeoutHandler above, *this* timeout handler
+            //      is for timing out HTTP calls where we've received the first chunk, but are still waiting for the
+            //      last chunk when the timeout hits.
+            if (incompleteHttpCallTimeoutMillis > 0 && !(msg instanceof LastHttpContent)) {
+                IncompleteHttpCallTimeoutHandler newHandler = new IncompleteHttpCallTimeoutHandler(
+                    incompleteHttpCallTimeoutMillis
+                );
+
+                ChannelHandler existingHandler = pipeline.get(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+                if (existingHandler == null) {
+                    pipeline.addFirst(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME, newHandler);
+                }
+                else {
+                    logger.error("Handling HttpRequest for new request and found an IncompleteHttpCallTimeoutHandler "
+                                 + "already in the pipeline. This should not be possible. A new "
+                                 + "IncompleteHttpCallTimeoutHandler will replace the old one. worker_channel_id={}",
+                                 ctx.channel().toString());
+                    pipeline.replace(existingHandler, INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME, newHandler);
+                }
+            }
+        }
+        else if (msg instanceof LastHttpContent) {
+            // The HTTP call is complete, so we can remove the IncompleteHttpCallTimeoutHandler.
+            ChannelPipeline pipeline = ctx.pipeline();
+            ChannelHandler existingHandler = pipeline.get(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
+            if (existingHandler != null)
+                pipeline.remove(INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME);
         }
 
         // Continue on the pipeline processing.

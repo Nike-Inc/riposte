@@ -1,6 +1,7 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidRipostePipelineException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.handler.ErrorResponseBody;
@@ -217,7 +218,8 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
     }
 
     protected boolean shouldForceConnectionCloseAfterResponseSent(Throwable cause) {
-        return (cause instanceof TooManyOpenChannelsException);
+        return (cause instanceof TooManyOpenChannelsException)
+            || (cause instanceof IncompleteHttpCallTimeoutException);
 
     }
 }
