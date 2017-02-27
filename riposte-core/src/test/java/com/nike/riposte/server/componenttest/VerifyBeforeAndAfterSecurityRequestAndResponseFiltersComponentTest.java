@@ -1,9 +1,5 @@
 package com.nike.riposte.server.componenttest;
 
-import com.jayway.restassured.response.ExtractableResponse;
-import com.nike.backstopper.apierror.ApiError;
-import com.nike.backstopper.apierror.ApiErrorBase;
-import com.nike.backstopper.exception.ApiException;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
@@ -15,9 +11,10 @@ import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.http.filter.RequestAndResponseFilter;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
+
+import com.jayway.restassured.response.ExtractableResponse;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpMethod;
+
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -31,9 +28,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpMethod;
+
 import static com.jayway.restassured.RestAssured.given;
-import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.AfterSecurityRequestFilter.*;
-import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.BeforeSecurityRequestFilter.*;
+import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.TestRequestSecurityValidator.FORCE_SECURITY_ERROR_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.TestRequestSecurityValidator.SECURITY_VALIDATOR_EXECUTED_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.TestRequestSecurityValidator.SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY;
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,73 +59,95 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
     @Test
     public void shouldExecuteBeforeAndAfterRequestAndResponseFilters() {
         ExtractableResponse response =
-                given()
-                        .baseUri("http://127.0.0.1")
-                        .port(serverConfig.endpointsPort())
-                        .basePath(BasicEndpoint.MATCHING_PATH)
-                        .header("force-security-error", "false")
-                        .log().all()
-                        .when()
-                        .get()
-                        .then()
-                        .log().headers()
-                        .extract();
+            given()
+                .baseUri("http://127.0.0.1")
+                .port(serverConfig.endpointsPort())
+                .basePath(BasicEndpoint.MATCHING_PATH)
+                .header(FORCE_SECURITY_ERROR_HEADER_KEY, "false")
+                .log().all()
+            .when()
+                .get()
+            .then()
+                .log().headers()
+                .extract();
 
+        // Validate that the security validator was called and that it did not throw an exception.
         assertThat(response.statusCode())
                 .isEqualTo(200);
-        //validate request was called
-        assertThat(response.header(BEFORE_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED))
+        assertThat(response.header(SECURITY_VALIDATOR_EXECUTED_HEADER_KEY))
+            .isEqualTo("true");
+        assertThat(response.header(SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY))
+            .isEqualTo("false");
+
+        // Validate request filter methods were called.
+        assertThat(response.header(BEFORE_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("true");
-        assertThat(response.header(BEFORE_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED))
+        assertThat(response.header(BEFORE_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("true");
-        assertThat(response.header(AFTER_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED))
+        assertThat(response.header(AFTER_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("true");
-        assertThat(response.header(AFTER_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED))
+        assertThat(response.header(AFTER_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("true");
-        //validate response filters
-        assertThat(response.header(BEFORE_SECURITY_FILTER_RESPONSE_HEADER_KEY))
-                .isEqualTo(BEFORE_SECURITY_FILTER_RESPONSE_HEADER_VALUE);
-        assertThat(response.header(AFTER_SECURITY_FILTER_RESPONSE_HEADER_KEY))
-                .isEqualTo(AFTER_SECURITY_FILTER_RESPONSE_HEADER_VALUE);
+        // Validate response filter method was called.
+        assertThat(response.header(BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY))
+                .isEqualTo(BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD);
+        assertThat(response.header(AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY))
+                .isEqualTo(AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD);
     }
 
     @Test
     public void shouldOnlyExecuteBeforeSecurityRequestFilterWhenSecurityErrorThrown() {
         ExtractableResponse response =
-                given()
-                        .baseUri("http://127.0.0.1")
-                        .port(serverConfig.endpointsPort())
-                        .basePath(BasicEndpoint.MATCHING_PATH)
-                        .header("force-security-error", "true")
-                        .log().all()
-                        .when()
-                        .get()
-                        .then()
-                        .log().headers()
-                        .extract();
+            given()
+                .baseUri("http://127.0.0.1")
+                .port(serverConfig.endpointsPort())
+                .basePath(BasicEndpoint.MATCHING_PATH)
+                .header(FORCE_SECURITY_ERROR_HEADER_KEY, "true")
+                .log().all()
+            .when()
+                .get()
+            .then()
+                .log().headers()
+                .extract();
 
+        // Validate that the security validator was called and that it threw an exception.
         assertThat(response.statusCode())
                 .isEqualTo(401);
+        assertThat(response.header(SECURITY_VALIDATOR_EXECUTED_HEADER_KEY))
+            .isEqualTo("true");
+        assertThat(response.header(SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY))
+            .isEqualTo("true");
 
-        //validate request filters
-        assertThat(response.header(BEFORE_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED))
+        // Validate request filter methods were called.
+        assertThat(response.header(BEFORE_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("true");
-        assertThat(response.header(BEFORE_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED))
+        assertThat(response.header(BEFORE_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("false");
-        assertThat(response.header(AFTER_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED))
+        assertThat(response.header(AFTER_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("false");
-        assertThat(response.header(AFTER_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED))
+        assertThat(response.header(AFTER_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY))
                 .isEqualTo("false");
-        //validate both response filters ran
-        assertThat(response.header(BEFORE_SECURITY_FILTER_RESPONSE_HEADER_KEY))
-                .isEqualTo(BEFORE_SECURITY_FILTER_RESPONSE_HEADER_VALUE);
-        assertThat(response.header(AFTER_SECURITY_FILTER_RESPONSE_HEADER_KEY))
-                .isEqualTo(AFTER_SECURITY_FILTER_RESPONSE_HEADER_VALUE);
+        // Validate response filter method was called.
+        assertThat(response.header(BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY))
+            .isEqualTo(BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD);
+        assertThat(response.header(AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY))
+            .isEqualTo(AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD);
     }
 
     public static class RequestAndResponseFilterTestConfig implements ServerConfig {
         private final int port;
-        private final List<RequestAndResponseFilter> filters = Arrays.asList(new BeforeSecurityRequestFilter(), new AfterSecurityRequestFilter());
+        private final List<RequestAndResponseFilter> filters = Arrays.asList(
+            new ExecutionInfoRequestFilter(true,
+                                           BEFORE_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY,
+                                           BEFORE_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY,
+                                           BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY,
+                                           BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD),
+            new ExecutionInfoRequestFilter(false,
+                                           AFTER_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY,
+                                           AFTER_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY,
+                                           AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY,
+                                           AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD)
+        );
         private final Collection<Endpoint<?>> appEndpoints = singleton(new BasicEndpoint());
 
         public RequestAndResponseFilterTestConfig() {
@@ -159,6 +182,9 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
     protected static class TestRequestSecurityValidator implements RequestSecurityValidator {
 
         private final Collection<Endpoint<?>> endpointsToValidate;
+        public static final String FORCE_SECURITY_ERROR_HEADER_KEY = "force-security-error";
+        public static final String SECURITY_VALIDATOR_EXECUTED_HEADER_KEY = "security-validator-executed";
+        public static final String SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY = "security-validator-threw-error";
 
         public TestRequestSecurityValidator(Collection<Endpoint<?>> endpointsToValidate) {
             this.endpointsToValidate = endpointsToValidate;
@@ -166,9 +192,14 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
 
         @Override
         public void validateSecureRequestForEndpoint(RequestInfo<?> requestInfo, Endpoint<?> endpoint) {
-            if ("true".equals(requestInfo.getHeaders().get("force-security-error"))) {
+            requestInfo.addRequestAttribute(SECURITY_VALIDATOR_EXECUTED_HEADER_KEY, true);
+
+            if ("true".equals(requestInfo.getHeaders().get(FORCE_SECURITY_ERROR_HEADER_KEY))) {
+                requestInfo.addRequestAttribute(SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY, true);
                 throw new Unauthorized401Exception("Forcing Security Error.", requestInfo.getPath(), null);
             }
+            else
+                requestInfo.addRequestAttribute(SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY, false);
         }
 
         @Override
@@ -177,21 +208,13 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         }
     }
 
-    private static class BasicEndpoint extends StandardEndpoint<Void, String> {
+    private static class BasicEndpoint extends StandardEndpoint<Void, Void> {
 
         public static final String MATCHING_PATH = "/basicEndpoint";
-        public static final String RESPONSE_PAYLOAD = "basic-endpoint-" + UUID.randomUUID().toString();
-        public static final String FORCE_ERROR_HEADER_KEY = "force-error";
-        public static final ApiError FORCED_ERROR = new ApiErrorBase("FORCED_ERROR", 42, "forced error", 542);
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
-            if ("true".equals(request.getHeaders().get(FORCE_ERROR_HEADER_KEY)))
-                throw ApiException.newBuilder().withApiErrors(FORCED_ERROR).build();
-
-            return CompletableFuture.completedFuture(
-                    ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build()
-            );
+        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+            return CompletableFuture.completedFuture(ResponseInfo.<Void>newBuilder().build());
         }
 
         @Override
@@ -201,105 +224,87 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
 
     }
 
-    protected static class BeforeSecurityRequestFilter implements RequestAndResponseFilter {
+    public static final String BEFORE_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY = "BEFORE-security-FIRST-chunk-filter-request-method-executed";
+    public static final String BEFORE_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY = "BEFORE-security-LAST-chunk-filter-request-method-executed";
+    public static final String BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY = "BEFORE-security-RESPONSE-filter-method-executed";
+    public static final String BEFORE_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD = UUID.randomUUID().toString();
 
-        public static final String BEFORE_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_KEY = "req-header-BEFORE-SECURITY-filter-first-chunk";
-        public static final String BEFORE_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_VALUE = UUID.randomUUID().toString();
-        public static final String BEFORE_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED = "BEFORE_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED";
+    public static final String AFTER_SECURITY_FIRST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY = "AFTER-security-FIRST-chunk-filter-request-method-executed";
+    public static final String AFTER_SECURITY_LAST_CHUNK_FILTER_REQUEST_METHOD_EXECUTED_KEY = "AFTER-security-LAST-chunk-filter-request-method-executed";
+    public static final String AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_KEY = "AFTER-security-RESPONSE-filter-method-executed";
+    public static final String AFTER_SECURITY_RESPONSE_FILTER_METHOD_EXECUTED_PAYLOAD = UUID.randomUUID().toString();
 
-        public static final String BEFORE_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_KEY = "req-header-BEFORE-SECURITY-filter-last-chunk";
-        public static final String BEFORE_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_VALUE = UUID.randomUUID().toString();
-        public static final String BEFORE_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED = "BEFORE_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED";
+    protected static class ExecutionInfoRequestFilter implements RequestAndResponseFilter {
 
-        public static final String BEFORE_SECURITY_FILTER_RESPONSE_HEADER_KEY = "response-header-BEFORE-SECURITY-filter";
-        public static final String BEFORE_SECURITY_FILTER_RESPONSE_HEADER_VALUE = UUID.randomUUID().toString();
+        private final boolean shouldExecuteBeforeSecurityValidation;
 
-        @Override
-        public <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
-            currentRequestInfo.getRequestAttributes().put(BEFORE_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_KEY, BEFORE_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_VALUE);
-            return currentRequestInfo;
-        }
+        private final String firstChunkReqMethodExecutedKey;
+        private final String lastChunkReqMethodExecutedKey;
 
-        @Override
-        public <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
-            currentRequestInfo.getRequestAttributes().put(BEFORE_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_KEY, BEFORE_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_VALUE);
-            return currentRequestInfo;
-        }
+        private final String responseMethodExecutedKey;
+        private final String responseMethodExecutedPayload;
 
-        @Override
-        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> responseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
-            //assert request methods were called
-            if (requestAttributeExists(requestInfo, BEFORE_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_KEY)) {
-                setHeader(responseInfo, BEFORE_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED, "true");
-            } else {
-                setHeader(responseInfo, BEFORE_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED, "false");
-            }
-            if (requestAttributeExists(requestInfo, BEFORE_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_KEY)) {
-                setHeader(responseInfo, BEFORE_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED, "true");
-            } else {
-                setHeader(responseInfo, BEFORE_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED, "false");
-            }
-            //set value to assert from client
-            setHeader(responseInfo, BEFORE_SECURITY_FILTER_RESPONSE_HEADER_KEY, BEFORE_SECURITY_FILTER_RESPONSE_HEADER_VALUE);
-            return responseInfo;
-        }
-
-    }
-
-    protected static class AfterSecurityRequestFilter implements RequestAndResponseFilter {
-
-        public static final String AFTER_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_KEY = "req-header-AFTER-SECURITY-filter-first-chunk";
-        public static final String AFTER_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_VALUE = UUID.randomUUID().toString();
-        public static final String AFTER_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED = "AFTER_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED";
-
-        public static final String AFTER_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_KEY = "req-header-AFTER-SECURITY-filter-last-chunk";
-        public static final String AFTER_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_VALUE = UUID.randomUUID().toString();
-        public static final String AFTER_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED = "AFTER_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED";
-
-        public static final String AFTER_SECURITY_FILTER_RESPONSE_HEADER_KEY = "response-header-AFTER-SECURITY-filter";
-        public static final String AFTER_SECURITY_FILTER_RESPONSE_HEADER_VALUE = UUID.randomUUID().toString();
-
-        @Override
-        public <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
-            currentRequestInfo.getRequestAttributes().put(AFTER_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_KEY, AFTER_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_VALUE);
-            return currentRequestInfo;
-        }
-
-        @Override
-        public <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
-            currentRequestInfo.getRequestAttributes().put(AFTER_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_KEY, AFTER_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_VALUE);
-            return currentRequestInfo;
-        }
-
-        @Override
-        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> responseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
-            //assert request methods were called
-            if (requestAttributeExists(requestInfo, AFTER_SECURITY_FILTER_FIRST_CHUNK_REQ_HEADER_KEY)) {
-                setHeader(responseInfo, AFTER_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED, "true");
-            } else {
-                setHeader(responseInfo, AFTER_SECURITY_FILTER_REQUEST_FIRST_CHUNK_EXECUTED, "false");
-            }
-            if (requestAttributeExists(requestInfo, AFTER_SECURITY_FILTER_LAST_CHUNK_REQ_HEADER_KEY)) {
-                setHeader(responseInfo, AFTER_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED, "true");
-            } else {
-                setHeader(responseInfo, AFTER_SECURITY_FILTER_REQUEST_LAST_CHUNK_EXECUTED, "false");
-            }
-            //set value to assert from client
-            setHeader(responseInfo, AFTER_SECURITY_FILTER_RESPONSE_HEADER_KEY, AFTER_SECURITY_FILTER_RESPONSE_HEADER_VALUE);
-            return responseInfo;
+        public ExecutionInfoRequestFilter(boolean shouldExecuteBeforeSecurityValidation,
+                                          String firstChunkReqMethodExecutedKey,
+                                          String lastChunkReqMethodExecutedKey,
+                                          String responseMethodExecutedKey,
+                                          String responseMethodExecutedPayload) {
+            this.shouldExecuteBeforeSecurityValidation = shouldExecuteBeforeSecurityValidation;
+            this.firstChunkReqMethodExecutedKey = firstChunkReqMethodExecutedKey;
+            this.lastChunkReqMethodExecutedKey = lastChunkReqMethodExecutedKey;
+            this.responseMethodExecutedKey = responseMethodExecutedKey;
+            this.responseMethodExecutedPayload = responseMethodExecutedPayload;
         }
 
         @Override
         public boolean shouldExecuteBeforeSecurityValidation() {
-            return false;
+            return shouldExecuteBeforeSecurityValidation;
         }
+
+        @Override
+        public <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+            currentRequestInfo.getRequestAttributes().put(firstChunkReqMethodExecutedKey, true);
+            return currentRequestInfo;
+        }
+
+        @Override
+        public <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+            currentRequestInfo.getRequestAttributes().put(lastChunkReqMethodExecutedKey, true);
+            return currentRequestInfo;
+        }
+
+        @Override
+        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> responseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
+            // Indicate whether or not the first/last chunk request methods were executed for this filter
+            //      so that the caller can assert based on what it expects.
+            setHeader(responseInfo,
+                      firstChunkReqMethodExecutedKey,
+                      requestAttributeIsSetToTrue(requestInfo, firstChunkReqMethodExecutedKey));
+
+            setHeader(responseInfo,
+                      lastChunkReqMethodExecutedKey,
+                      requestAttributeIsSetToTrue(requestInfo, lastChunkReqMethodExecutedKey));
+
+            // Indicate whether or not the security validator was called, and whether or not it threw an exception.
+            setHeader(responseInfo,
+                      SECURITY_VALIDATOR_EXECUTED_HEADER_KEY,
+                      requestAttributeIsSetToTrue(requestInfo, SECURITY_VALIDATOR_EXECUTED_HEADER_KEY));
+            setHeader(responseInfo,
+                      SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY,
+                      requestAttributeIsSetToTrue(requestInfo, SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY));
+
+            // Add a header so the caller knows the response method for this filter was executed.
+            setHeader(responseInfo, responseMethodExecutedKey, responseMethodExecutedPayload);
+            return responseInfo;
+        }
+
     }
 
-    private static boolean requestAttributeExists(RequestInfo<?> requestInfo, String attributeName) {
-        return requestInfo.getRequestAttributes().get(attributeName) != null;
+    private static boolean requestAttributeIsSetToTrue(RequestInfo<?> requestInfo, String attributeName) {
+        return Boolean.TRUE.equals(requestInfo.getRequestAttributes().get(attributeName));
     }
 
-    private static void setHeader(ResponseInfo<?> currentResponseInfo, String headerName, String headerValue) {
+    private static void setHeader(ResponseInfo<?> currentResponseInfo, String headerName, Object headerValue) {
         currentResponseInfo.getHeaders().set(headerName, headerValue);
     }
     
