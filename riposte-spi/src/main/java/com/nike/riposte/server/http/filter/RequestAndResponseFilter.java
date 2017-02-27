@@ -33,6 +33,10 @@ import io.netty.channel.ChannelHandlerContext;
  * implementing a request and/or response filter. Hook them up to your application by having {@link
  * ServerConfig#requestAndResponseFilters()} return them.
  *
+ * <p>Finally, there are some use cases where request filters should run before security validation, and other use cases
+ * where they should run after. You can choose on a per-filter basis whether it runs before or after security
+ * validation - see {@link #shouldExecuteBeforeSecurityValidation()} for details.
+ *
  * @author Nic Munroe
  */
 @SuppressWarnings("UnusedParameters")
@@ -73,8 +77,13 @@ public interface RequestAndResponseFilter {
      * short circuiting filter then {@link #filterRequestLastChunkWithOptionalShortCircuitResponse(RequestInfo,
      * ChannelHandlerContext)} will be called instead. Furthermore since a 404 can be detected after the first chunk is
      * fully processed, this method will not be called when a 404 is thrown (the first chunk filter method will always
-     * be called, so if you have logic that must run even for a 404 request then you need to put it in that method
-     * instead).
+     * be called, so if you have logic that must run even for a 404 request then you need to put it in the first chunk
+     * filter method instead).
+     *
+     * <p>Similarly, a security exception thrown by your application's {@link ServerConfig#requestSecurityValidator()}
+     * may occur after the first chunk, so if you have filter logic that must run even for a failed-security request
+     * then you must put it in the first chunk filter method, *and* {@link #shouldExecuteBeforeSecurityValidation()}
+     * must be true so that it executes before the security validator runs.
      *
      * @param currentRequestInfo
      *     The current request info, now fully populated including payload.
@@ -188,8 +197,14 @@ public interface RequestAndResponseFilter {
      * a short circuiting filter then {@link #filterRequestLastChunkWithFullPayload(RequestInfo, ChannelHandlerContext)}
      * will be called instead. Furthermore since a 404 can be detected after the first chunk is fully processed, this
      * method will not be called when a 404 is thrown (the first chunk filter method will always be called, so if you
-     * have logic that must run even for a 404 request then you need to put it in that method instead).
+     * have logic that must run even for a 404 request then you need to put it in the first chunk filter method
+     * instead).
      *
+     * <p>Similarly, a security exception thrown by your application's {@link ServerConfig#requestSecurityValidator()}
+     * may occur after the first chunk, so if you have filter logic that must run even for a failed-security request
+     * then you must put it in the first chunk filter method, *and* {@link #shouldExecuteBeforeSecurityValidation()}
+     * must be true so that it executes before the security validator runs.
+     * 
      * @param currentRequestInfo
      *     The current request info, now fully populated including payload.
      * @param ctx
@@ -219,16 +234,22 @@ public interface RequestAndResponseFilter {
     }
 
     /**
-     * This method determines whether the filter should be executed before or after any security
-     * validation provided by the {@link RequestSecurityValidator} from the application's
-     * {@link ServerConfig#requestSecurityValidator()}. If configured to execute before security
-     * validation then *all* requests will be run through this filter. If configured to execute after
-     * security validation then only requests that pass the security validation will be run through
-     * this filter.
+     * This method determines whether the filter should be executed before or after any security validation provided by
+     * the {@link RequestSecurityValidator} from the application's {@link ServerConfig#requestSecurityValidator()}. If
+     * configured to execute before security validation then *all* requests will be run through this filter's
+     * filter-the-first-chunk-of-the-request method ({@link
+     * #filterRequestFirstChunkNoPayload(RequestInfo, ChannelHandlerContext)} or {@link
+     * #filterRequestFirstChunkWithOptionalShortCircuitResponse(RequestInfo, ChannelHandlerContext)} depending on
+     * whether this is a short-circuiting filter or not). If configured to execute after security validation then only
+     * requests that pass the security validation will be run through this filter.
      *
-     * @return true if this filter should execute before any
-     * {@link ServerConfig#requestSecurityValidator()} configured for this application, false if it
-     * should execute after {@link ServerConfig#requestSecurityValidator()}.
+     * <p>To put it another way, a security exception thrown by your application's {@link
+     * ServerConfig#requestSecurityValidator()} may occur after the first chunk, so if you have filter logic that must
+     * run even for a failed-security request then you must put it in the first chunk filter method, *and* this method
+     * must return true so that it executes before the security validator runs.
+     *
+     * @return true if this filter should execute before any {@link ServerConfig#requestSecurityValidator()} configured
+     * for this application, false if it should execute after {@link ServerConfig#requestSecurityValidator()}.
      */
     default boolean shouldExecuteBeforeSecurityValidation() {
         return true;
