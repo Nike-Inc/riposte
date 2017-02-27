@@ -42,6 +42,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -128,9 +129,13 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
      */
     public static final String OPEN_CHANNEL_LIMIT_HANDLER_NAME = "OpenChannelLimitHandler";
     /**
-     * The name of the {@link RequestFilterHandler} handler in the pipeline.
+     * The name of the {@link RequestFilterHandler} before security handler in the pipeline.
      */
-    public static final String REQUEST_FILTER_HANDLER_NAME = "RequestFilterHandler";
+    public static final String REQUEST_FILTER_BEFORE_SECURITY_HANDLER_NAME = "BeforeSecurityRequestFilterHandler";
+    /**
+     * The name of the {@link RequestFilterHandler} after security handler in the pipeline.
+     */
+    public static final String REQUEST_FILTER_AFTER_SECURITY_HANDLER_NAME = "AfterSecurityRequestFilterHandler";
     /**
      * The name of the {@link RoutingHandler} handler in the pipeline.
      */
@@ -218,7 +223,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
     private final StreamingAsyncHttpClient streamingAsyncHttpClientForProxyRouterEndpoints;
 
-    private final RequestFilterHandler cachedRequestFilterHandler;
+    private final RequestFilterHandler beforeSecurityRequestFilterHandler;
+    private final RequestFilterHandler afterSecurityRequestFilterHandler;
     private final ResponseFilterHandler cachedResponseFilterHandler;
 
     private final List<String> userIdHeaderKeys;
@@ -367,7 +373,26 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         );
 
         boolean hasReqResFilters = requestAndResponseFilters != null && !requestAndResponseFilters.isEmpty();
-        cachedRequestFilterHandler = (hasReqResFilters) ? new RequestFilterHandler(requestAndResponseFilters) : null;
+
+        if (hasReqResFilters) {
+            List<RequestAndResponseFilter> beforeSecurityFilters = new ArrayList<>();
+            List<RequestAndResponseFilter> afterSecurityFilters = new ArrayList<>();
+
+            requestAndResponseFilters.forEach(requestAndResponseFilter -> {
+                if (requestAndResponseFilter.shouldExecuteBeforeSecurityValidation()) {
+                    beforeSecurityFilters.add(requestAndResponseFilter);
+                } else {
+                    afterSecurityFilters.add(requestAndResponseFilter);
+                }
+            });
+
+            beforeSecurityRequestFilterHandler = beforeSecurityFilters.isEmpty()? null : new RequestFilterHandler(beforeSecurityFilters);
+            afterSecurityRequestFilterHandler = afterSecurityFilters.isEmpty()? null : new RequestFilterHandler(afterSecurityFilters);
+        } else {
+            beforeSecurityRequestFilterHandler = null;
+            afterSecurityRequestFilterHandler = null;
+        }
+
         cachedResponseFilterHandler = (hasReqResFilters) ? new ResponseFilterHandler(requestAndResponseFilters) : null;
         this.userIdHeaderKeys = userIdHeaderKeys;
     }
@@ -430,9 +455,9 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
                       new OpenChannelLimitHandler(openChannelsGroup, maxOpenChannelsThreshold));
         }
 
-        // INBOUND - Add the RequestFilterHandler (if we have any filters to apply).
-        if (cachedRequestFilterHandler != null)
-            p.addLast(REQUEST_FILTER_HANDLER_NAME, cachedRequestFilterHandler);
+        // INBOUND - Add the RequestFilterHandler for before security (if we have any filters to apply).
+        if (beforeSecurityRequestFilterHandler != null)
+            p.addLast(REQUEST_FILTER_BEFORE_SECURITY_HANDLER_NAME, beforeSecurityRequestFilterHandler);
 
         // INBOUND - Add RoutingHandler to figure out which endpoint should handle the request and set it on our request
         //           state for later execution
@@ -440,6 +465,10 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         // INBOUND - Add SecurityValidationHandler to validate the RequestInfo object for the matching endpoint
         p.addLast(SECURITY_VALIDATION_HANDLER_NAME, new SecurityValidationHandler(requestSecurityValidator));
+
+        // INBOUND - Add the RequestFilterHandler for after security (if we have any filters to apply).
+        if (afterSecurityRequestFilterHandler != null)
+            p.addLast(REQUEST_FILTER_AFTER_SECURITY_HANDLER_NAME, afterSecurityRequestFilterHandler);
 
         // INBOUND - Now that the request state knows which endpoint will be called we can try to deserialize the
         //           request content (if desired by the endpoint)

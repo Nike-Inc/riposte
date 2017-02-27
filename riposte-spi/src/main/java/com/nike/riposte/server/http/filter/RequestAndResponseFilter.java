@@ -2,6 +2,7 @@ package com.nike.riposte.server.http.filter;
 
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.error.validation.RequestSecurityValidator;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.impl.ChunkedResponseInfo;
@@ -216,4 +217,21 @@ public interface RequestAndResponseFilter {
         throw new UnsupportedOperationException(
             "Not implemented - should only be called if isShortCircuitRequestFilter() is true");
     }
+
+    /**
+     * This method determines whether the filter should be executed before or after any security
+     * validation provided by the {@link RequestSecurityValidator} from the application's
+     * {@link ServerConfig#requestSecurityValidator()}. If configured to execute before security
+     * validation then *all* requests will be run through this filter. If configured to execute after
+     * security validation then only requests that pass the security validation will be run through
+     * this filter.
+     *
+     * @return true if this filter should execute before any
+     * {@link ServerConfig#requestSecurityValidator()} configured for this application, false if it
+     * should execute after {@link ServerConfig#requestSecurityValidator()}.
+     */
+    default boolean shouldExecuteBeforeSecurityValidation() {
+        return true;
+    }
+
 }

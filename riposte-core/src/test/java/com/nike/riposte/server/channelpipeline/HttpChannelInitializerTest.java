@@ -86,7 +86,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-
 /**
  * Tests the functionality of {@link HttpChannelInitializer}
  */
@@ -128,7 +127,13 @@ public class HttpChannelInitializerTest {
         SslContext sslCtx = mock(SslContext.class);
         int maxRequestSizeInBytes = 42;
         Collection<Endpoint<?>> endpoints = Arrays.asList(getMockEndpoint("/some/path", HttpMethod.GET));
-        List<RequestAndResponseFilter> reqResFilters = Arrays.asList(mock(RequestAndResponseFilter.class), mock(RequestAndResponseFilter.class));
+
+        RequestAndResponseFilter beforeSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(true).when(beforeSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        RequestAndResponseFilter afterSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(false).when(afterSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        List<RequestAndResponseFilter> reqResFilters = Arrays.asList(beforeSecurityRequestFilter, afterSecurityRequestFilter);
+
         Executor longRunningTaskExecutor = mock(Executor.class);
         RiposteErrorHandler riposteErrorHandler = mock(RiposteErrorHandler.class);
         RiposteUnhandledErrorHandler riposteUnhandledErrorHandler = mock(RiposteUnhandledErrorHandler.class);
@@ -180,8 +185,11 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(sahc, "downstreamConnectionTimeoutMillis"), is((int)proxyRouterConnectTimeoutMillis));
         assertThat(extractField(sahc, "debugChannelLifecycleLoggingEnabled"), is(debugChannelLifecycleLoggingEnabled));
 
-        RequestFilterHandler reqFH = extractField(hci, "cachedRequestFilterHandler");
-        assertThat(extractField(reqFH, "filters"), is(reqResFilters));
+        RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
+        assertThat(extractField(beforeSecReqFH, "filters"), is(Collections.singletonList(beforeSecurityRequestFilter)));
+
+        RequestFilterHandler afterSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
+        assertThat(extractField(afterSecReqFH, "filters"), is(Collections.singletonList(afterSecurityRequestFilter)));
 
         ResponseFilterHandler resFH = extractField(hci, "cachedResponseFilterHandler");
         List<RequestAndResponseFilter> reversedFilters = new ArrayList<>(reqResFilters);
@@ -208,9 +216,56 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(hci, "requestContentDeserializer"), nullValue());
         assertThat(extractField(hci, "metricsListener"), nullValue());
         assertThat(extractField(hci, "accessLogger"), nullValue());
-        assertThat(extractField(hci, "cachedRequestFilterHandler"), nullValue());
+        assertThat(extractField(hci, "beforeSecurityRequestFilterHandler"), nullValue());
+        assertThat(extractField(hci, "afterSecurityRequestFilterHandler"), nullValue());
         assertThat(extractField(hci, "cachedResponseFilterHandler"), nullValue());
         assertThat(extractField(hci, "userIdHeaderKeys"), nullValue());
+    }
+
+    @Test
+    public void constructor_handles_empty_after_security_request_handlers() {
+        // given
+        RequestAndResponseFilter beforeSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(true).when(beforeSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        List<RequestAndResponseFilter> reqResFilters = Arrays.asList(beforeSecurityRequestFilter);
+
+        // when
+        HttpChannelInitializer hci = new HttpChannelInitializer(
+                null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
+                null, null, mock(ResponseSender.class), null, 4242L, null,
+                null, null, 121, 42, 100, false, null);
+
+        // then
+        RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
+        assertThat(extractField(beforeSecReqFH, "filters"), is(Collections.singletonList(beforeSecurityRequestFilter)));
+
+        assertThat(extractField(hci, "afterSecurityRequestFilterHandler"), nullValue());
+
+        ResponseFilterHandler responseFilterHandler = extractField(hci, "cachedResponseFilterHandler");
+        assertThat(extractField(responseFilterHandler, "filtersInResponseProcessingOrder"), is(reqResFilters));
+    }
+
+    @Test
+    public void constructor_handles_empty_before_security_request_handlers() {
+        // given
+        RequestAndResponseFilter afterSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(false).when(afterSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        List<RequestAndResponseFilter> reqResFilters = Arrays.asList(afterSecurityRequestFilter);
+
+        // when
+        HttpChannelInitializer hci = new HttpChannelInitializer(
+                null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
+                null, null, mock(ResponseSender.class), null, 4242L, null,
+                null, null, 121, 42, 100, false, null);
+
+        // then
+        RequestFilterHandler beforeSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
+        assertThat(extractField(beforeSecReqFH, "filters"), is(Collections.singletonList(afterSecurityRequestFilter)));
+
+        assertThat(extractField(hci, "beforeSecurityRequestFilterHandler"), nullValue());
+
+        ResponseFilterHandler responseFilterHandler = extractField(hci, "cachedResponseFilterHandler");
+        assertThat(extractField(responseFilterHandler, "filtersInResponseProcessingOrder"), is(reqResFilters));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -258,14 +313,24 @@ public class HttpChannelInitializerTest {
             null, null, 121, 42, 100, false, null);
     }
 
-    private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind) {
+    private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind, boolean findLast) {
+        Pair<Integer, T> channelHandlerPair = null;
+
         for (int i = 0; i < channelHandlers.size(); i++) {
             ChannelHandler ch = channelHandlers.get(i);
-            if (classToFind.isInstance(ch))
-                return Pair.of(i, classToFind.cast(ch));
+            if (classToFind.isInstance(ch)) {
+                channelHandlerPair = Pair.of(i, classToFind.cast(ch));
+                if (!findLast) {
+                    return channelHandlerPair;
+                }
+            }
         }
 
-        return null;
+        return channelHandlerPair;
+    }
+
+    private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind) {
+        return findChannelHandler(channelHandlers, classToFind, false);
     }
 
     private HttpChannelInitializer basicHttpChannelInitializerNoUtilityHandlers() {
@@ -284,10 +349,17 @@ public class HttpChannelInitializerTest {
 
     @Test
     public void initChannel_adds_all_handlers_with_correct_names() throws SSLException {
+        RequestAndResponseFilter beforeSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(true).when(beforeSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        
+        RequestAndResponseFilter afterSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(false).when(afterSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+
+        List<RequestAndResponseFilter> reqResFilters = Arrays.asList(beforeSecurityRequestFilter, afterSecurityRequestFilter);
+
         // given
         HttpChannelInitializer
-            hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, true, mock(RequestValidator.class),
-                                              Arrays.asList(mock(RequestAndResponseFilter.class)));
+            hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, true, mock(RequestValidator.class), reqResFilters);
 
         // when
         hci.initChannel(socketChannelMock);
@@ -304,9 +376,10 @@ public class HttpChannelInitializerTest {
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME), any(SmartHttpContentCompressor.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_INFO_SETTER_HANDLER_NAME), any(RequestInfoSetterHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.OPEN_CHANNEL_LIMIT_HANDLER_NAME), any(OpenChannelLimitHandler.class));
-        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_FILTER_HANDLER_NAME), any(RequestFilterHandler.class));
+        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_FILTER_BEFORE_SECURITY_HANDLER_NAME), any(RequestFilterHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.ROUTING_HANDLER_NAME), any(RoutingHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SECURITY_VALIDATION_HANDLER_NAME), any(SecurityValidationHandler.class));
+        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_FILTER_AFTER_SECURITY_HANDLER_NAME), any(RequestFilterHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_CONTENT_DESERIALIZER_HANDLER_NAME), any(RequestContentDeserializerHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_CONTENT_VALIDATION_HANDLER_NAME), any(RequestContentValidationHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.NONBLOCKING_ENDPOINT_EXECUTION_HANDLER_NAME), any(NonblockingEndpointExecutionHandler.class));
@@ -319,6 +392,12 @@ public class HttpChannelInitializerTest {
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.DTRACE_END_HANDLER_NAME), any(DTraceEndHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.CHANNEL_PIPELINE_FINALIZER_HANDLER_NAME), any(ChannelPipelineFinalizerHandler.class));
         verifyNoMoreInteractions(channelPipelineMock);
+
+        RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
+        assertThat(extractField(beforeSecReqFH, "filters"), is(Collections.singletonList(beforeSecurityRequestFilter)));
+
+        RequestFilterHandler afterSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
+        assertThat(extractField(afterSecReqFH, "filters"), is(Collections.singletonList(afterSecurityRequestFilter)));
     }
 
     @Test
@@ -326,7 +405,7 @@ public class HttpChannelInitializerTest {
         // given
         HttpChannelInitializer
             hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, true, mock(RequestValidator.class),
-                                              Arrays.asList(mock(RequestAndResponseFilter.class)));
+                                              createRequestAndResponseFilterMock());
 
         // when
         hci.initChannel(socketChannelMock);
@@ -343,7 +422,7 @@ public class HttpChannelInitializerTest {
         // given
         HttpChannelInitializer
             hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, false, mock(RequestValidator.class),
-                                              Arrays.asList(mock(RequestAndResponseFilter.class)));
+                                                createRequestAndResponseFilterMock());
 
         // when
         hci.initChannel(socketChannelMock);
@@ -360,7 +439,7 @@ public class HttpChannelInitializerTest {
         // given
         SslContext sslCtx = new JdkSslClientContext();
         HttpChannelInitializer hci = basicHttpChannelInitializer(sslCtx, 0, 100, false, mock(RequestValidator.class),
-                                                                 Arrays.asList(mock(RequestAndResponseFilter.class)));
+                                                                 createRequestAndResponseFilterMock());
 
         // when
         hci.initChannel(socketChannelMock);
@@ -579,9 +658,15 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_RequestFilterHandler_after_RequestInfoSetterHandler_and_before_RoutingHandler_and_uses_cached_handler() {
+    public void initChannel_adds_before_and_after_RequestFilterHandler_appropriately_before_and_after_security_filter() {
         // given
-        HttpChannelInitializer hci = basicHttpChannelInitializer(null, 0, 42, false, null, Collections.singletonList(mock(RequestAndResponseFilter.class)));
+        RequestAndResponseFilter beforeSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(true).when(beforeSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        RequestAndResponseFilter afterSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(false).when(afterSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        List<RequestAndResponseFilter> requestAndResponseFilters = Arrays.asList(beforeSecurityRequestFilter, afterSecurityRequestFilter);
+
+        HttpChannelInitializer hci = basicHttpChannelInitializer(null, 0, 42, false, null, requestAndResponseFilters);
 
         // when
         hci.initChannel(socketChannelMock);
@@ -591,19 +676,31 @@ public class HttpChannelInitializerTest {
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
         Pair<Integer, RequestInfoSetterHandler> requestInfoSetterHandler = findChannelHandler(handlers, RequestInfoSetterHandler.class);
-        Pair<Integer, RequestFilterHandler> requestFilterHandler = findChannelHandler(handlers, RequestFilterHandler.class);
+        Pair<Integer, RequestFilterHandler> beforeSecurityRequestFilterHandler = findChannelHandler(handlers, RequestFilterHandler.class);
+        Pair<Integer, RequestFilterHandler> afterSecurityRequestFilterHandler = findChannelHandler(handlers, RequestFilterHandler.class, true);
         Pair<Integer, RoutingHandler> routingHandler = findChannelHandler(handlers, RoutingHandler.class);
+        Pair<Integer, SecurityValidationHandler> securityValidationHandler = findChannelHandler(handlers, SecurityValidationHandler.class);
+        Pair<Integer, RequestContentDeserializerHandler> requestContentDeserializerHandler = findChannelHandler(handlers, RequestContentDeserializerHandler.class);
 
         assertThat(requestInfoSetterHandler, notNullValue());
-        assertThat(requestFilterHandler, notNullValue());
+        assertThat(beforeSecurityRequestFilterHandler, notNullValue());
         assertThat(routingHandler, notNullValue());
+        assertThat(afterSecurityRequestFilterHandler, notNullValue());
+        assertThat(securityValidationHandler, notNullValue());
+        assertThat(requestContentDeserializerHandler, notNullValue());
 
-        Assertions.assertThat(requestFilterHandler.getLeft()).isGreaterThan(requestInfoSetterHandler.getLeft());
-        Assertions.assertThat(requestFilterHandler.getLeft()).isLessThan(routingHandler.getLeft());
+        Assertions.assertThat(beforeSecurityRequestFilterHandler.getLeft()).isGreaterThan(requestInfoSetterHandler.getLeft());
+        Assertions.assertThat(beforeSecurityRequestFilterHandler.getLeft()).isLessThan(routingHandler.getLeft());
+
+        Assertions.assertThat(afterSecurityRequestFilterHandler.getLeft()).isGreaterThan(securityValidationHandler.getLeft());
+        Assertions.assertThat(afterSecurityRequestFilterHandler.getLeft()).isLessThan(requestContentDeserializerHandler.getLeft());
 
         // and then
-        RequestFilterHandler cachedHandler = extractField(hci, "cachedRequestFilterHandler");
-        Assertions.assertThat(requestFilterHandler.getRight()).isSameAs(cachedHandler);
+        RequestFilterHandler beforeSecurityCachedHandler = extractField(hci, "beforeSecurityRequestFilterHandler");
+        Assertions.assertThat(beforeSecurityRequestFilterHandler.getRight()).isSameAs(beforeSecurityCachedHandler);
+
+        RequestFilterHandler afterSecurityCachedHandler = extractField(hci, "afterSecurityRequestFilterHandler");
+        Assertions.assertThat(afterSecurityRequestFilterHandler.getRight()).isSameAs(afterSecurityCachedHandler);
     }
 
     @Test
@@ -743,7 +840,7 @@ public class HttpChannelInitializerTest {
     @Test
     public void initChannel_adds_ResponseFilterHandler_after_ExceptionHandlingHandler_and_before_ResponseSenderHandler_and_uses_cached_handler() {
         // given
-        HttpChannelInitializer hci = basicHttpChannelInitializer(null, 0, 42, false, null, Collections.singletonList(mock(RequestAndResponseFilter.class)));
+        HttpChannelInitializer hci = basicHttpChannelInitializer(null, 0, 42, false, null, createRequestAndResponseFilterMock());
 
         // when
         hci.initChannel(socketChannelMock);
@@ -947,5 +1044,11 @@ public class HttpChannelInitializerTest {
 
         // then
         hooks.forEach(hook -> verify(hook).executePipelineCreateHook(channelPipelineMock));
+    }
+
+    private List<RequestAndResponseFilter> createRequestAndResponseFilterMock() {
+        RequestAndResponseFilter beforeSecurityRequestFilter = mock(RequestAndResponseFilter.class);
+        doReturn(true).when(beforeSecurityRequestFilter).shouldExecuteBeforeSecurityValidation();
+        return Arrays.asList(beforeSecurityRequestFilter);
     }
 }
