@@ -12,7 +12,6 @@ import com.nike.riposte.server.http.filter.RequestAndResponseFilter;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
 
-import com.jayway.restassured.response.ExtractableResponse;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
 import org.junit.AfterClass;
@@ -30,11 +29,12 @@ import java.util.concurrent.Executor;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
+import io.restassured.response.ExtractableResponse;
 
-import static com.jayway.restassured.RestAssured.given;
 import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.TestRequestSecurityValidator.FORCE_SECURITY_ERROR_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.TestRequestSecurityValidator.SECURITY_VALIDATOR_EXECUTED_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest.TestRequestSecurityValidator.SECURITY_VALIDATOR_THREW_ERROR_HEADER_KEY;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 

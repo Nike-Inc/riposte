@@ -24,7 +24,7 @@ dependencies {
             "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
-            "com.jayway.restassured:rest-assured:$restAssuredVersion",
+            "io.rest-assured:rest-assured:$restAssuredVersion",
             "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
             "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
             "commons-io:commons-io:$apacheCommonsIoVersion",

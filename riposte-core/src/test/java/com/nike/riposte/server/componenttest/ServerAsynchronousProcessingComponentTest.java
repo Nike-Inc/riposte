@@ -10,8 +10,6 @@ import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.restassured.response.ExtractableResponse;
-import com.jayway.restassured.response.Response;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -35,8 +33,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.restassured.response.ExtractableResponse;
+import io.restassured.response.Response;
 
-import static com.jayway.restassured.RestAssured.given;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;

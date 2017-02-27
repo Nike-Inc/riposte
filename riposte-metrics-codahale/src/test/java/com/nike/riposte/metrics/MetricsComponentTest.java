@@ -18,8 +18,6 @@ import com.nike.riposte.util.Matcher;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.restassured.response.ExtractableResponse;
-import com.jayway.restassured.response.Response;
 
 import org.junit.After;
 import org.junit.Before;
@@ -44,8 +42,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.restassured.response.ExtractableResponse;
+import io.restassured.response.Response;
 
-import static com.jayway.restassured.RestAssured.given;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

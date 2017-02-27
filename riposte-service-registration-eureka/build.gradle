@@ -12,7 +12,7 @@ dependencies {
             "org.assertj:assertj-core:$assertJVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
-            "com.jayway.restassured:rest-assured:$restAssuredVersion",
+            "io.rest-assured:rest-assured:$restAssuredVersion",
             "ch.qos.logback:logback-classic:$logbackVersion",
             "ch.qos.logback:logback-core:$logbackVersion",
             "uk.org.lidalia:slf4j-test:$slf4jTestVersion",

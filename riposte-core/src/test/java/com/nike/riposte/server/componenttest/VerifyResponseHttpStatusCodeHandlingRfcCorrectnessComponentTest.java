@@ -11,7 +11,6 @@ import com.nike.riposte.server.http.impl.SimpleProxyRouterEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
 
-import com.jayway.restassured.response.ExtractableResponse;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
@@ -36,13 +35,14 @@ import java.util.stream.IntStream;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
+import io.restassured.response.ExtractableResponse;
 
-import static com.jayway.restassured.RestAssured.config;
-import static com.jayway.restassured.RestAssured.given;
-import static com.jayway.restassured.config.RedirectConfig.redirectConfig;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
+import static io.restassured.RestAssured.config;
+import static io.restassured.RestAssured.given;
+import static io.restassured.config.RedirectConfig.redirectConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
