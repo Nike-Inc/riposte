@@ -8,7 +8,24 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.9.x` Releases - [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.9.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.0)
+
+Released on 2017-02-28.
+
+### Added
+
+- Added ability for `RequestAndResponseFilter` to be executed before or after security validation depending on the value of `RequestAndResponseFilter.shouldExecuteBeforeSecurityValidation()`.
+	- Added by [Robert Abeyta][contrib_rabeyta] in pull request [#20](https://github.com/Nike-Inc/riposte/pull/20). For issue [#15](https://github.com/Nike-Inc/riposte/issues/15).
+- Added functionality to detect bad or incomplete HTTP calls and return an appropriate error to the caller in those cases. Timeout value controlled via the new `ServerConfig.incompleteHttpCallTimeoutMillis()` config option.  
+	- Added by [Nic Munroe][contrib_nicmunroe] in pull request [#24](https://github.com/Nike-Inc/riposte/pull/24).	
+
+### Updated
+
+- Updated Backstopper dependency version to 0.11.1. This version added convenience constructor to `ApiErrorWithMetadata` that takes a vararg of `Pair<String, Object>` so that you can inline the extra metadata without having to create and populate a `Map` separately.
+	- Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#25](https://github.com/Nike-Inc/riposte/pull/25).
 
 ## [0.8.3](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.3)
 
