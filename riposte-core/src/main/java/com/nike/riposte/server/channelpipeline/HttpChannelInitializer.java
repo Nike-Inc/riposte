@@ -3,6 +3,7 @@ package com.nike.riposte.server.channelpipeline;
 import com.nike.internal.util.StringUtils;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.metrics.MetricsListener;
+import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
@@ -15,6 +16,7 @@ import com.nike.riposte.server.handler.DTraceEndHandler;
 import com.nike.riposte.server.handler.DTraceStartHandler;
 import com.nike.riposte.server.handler.ExceptionHandlingHandler;
 import com.nike.riposte.server.handler.IdleChannelTimeoutHandler;
+import com.nike.riposte.server.handler.IncompleteHttpCallTimeoutHandler;
 import com.nike.riposte.server.handler.NonblockingEndpointExecutionHandler;
 import com.nike.riposte.server.handler.OpenChannelLimitHandler;
 import com.nike.riposte.server.handler.ProcessFinalResponseOutputHandler;
@@ -93,6 +95,12 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
      * request.
      */
     public static final String IDLE_CHANNEL_TIMEOUT_HANDLER_NAME = "IdleChannelTimeoutHandler";
+    /**
+     * The name of the {@link IncompleteHttpCallTimeoutHandler} handler in the pipeline. This handler may or may not be
+     * present in the pipeline depending on the value of {@link #incompleteHttpCallTimeoutMillis} and the current state
+     * of the request.
+     */
+    public static final String INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME = "IncompleteHttpCallTimeoutHandler";
 
     // Inbound or in/out handlers
     /**
@@ -217,6 +225,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final List<PipelineCreateHook> pipelineCreateHooks;
     private final RequestSecurityValidator requestSecurityValidator;
     private final long workerChannelIdleTimeoutMillis;
+    private final long incompleteHttpCallTimeoutMillis;
     private final int maxOpenChannelsThreshold;
     private final ChannelGroup openChannelsGroup;
     private final boolean debugChannelLifecycleLoggingEnabled;
@@ -285,10 +294,17 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
      * @param proxyRouterConnectTimeoutMillis
      *     The amount of time in milliseconds that a proxy/router endpoint should attempt to connect to the downstream
      *     service before giving up and throwing a connection timeout exception. Set this to 0 to disable connection
-     *     timeouts entirely, which is REALLY DEFINITELY NOT RECOMMENDED and you do so at your own risk.
+     *     timeouts entirely, which is REALLY DEFINITELY NOT RECOMMENDED and you do so at your own risk. See {@link
+     *     ServerConfig#proxyRouterConnectTimeoutMillis()}
+     * @param incompleteHttpCallTimeoutMillis
+     *     The amount of idle time in milliseconds that the server should wait before throwing an
+     *     incomplete-http-call-timeout when the request has been started (we've received at least one chunk of the
+     *     request) but before the last chunk of the request is received. Set this to a value less than or equal to 0
+     *     to disable incomplete-call-timeouts entirely, which is not recommended. See {@link
+     *     ServerConfig#incompleteHttpCallTimeoutMillis()}.
      * @param maxOpenChannelsThreshold
      *     The max number of incoming server channels allowed to be open. -1 indicates unlimited. See {@link
-     *     com.nike.riposte.server.config.ServerConfig#maxOpenIncomingServerChannels()} for details on how this is
+     *     ServerConfig#maxOpenIncomingServerChannels()} for details on how this is
      *     used.
      * @param debugChannelLifecycleLoggingEnabled
      *     Whether or not a {@link LoggingHandler} should be added to the channel pipeline, which gives detailed
@@ -314,6 +330,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
                                   RequestSecurityValidator requestSecurityValidator,
                                   long workerChannelIdleTimeoutMillis,
                                   long proxyRouterConnectTimeoutMillis,
+                                  long incompleteHttpCallTimeoutMillis,
                                   int maxOpenChannelsThreshold,
                                   boolean debugChannelLifecycleLoggingEnabled,
                                   List<String> userIdHeaderKeys) {
@@ -363,6 +380,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         this.workerChannelIdleTimeoutMillis = workerChannelIdleTimeoutMillis;
         this.maxOpenChannelsThreshold = maxOpenChannelsThreshold;
+        this.incompleteHttpCallTimeoutMillis = incompleteHttpCallTimeoutMillis;
         openChannelsGroup = (maxOpenChannelsThreshold == -1)
                             ? null
                             : new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
@@ -429,7 +447,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(HTTP_REQUEST_DECODER_HANDLER_NAME, new HttpRequestDecoder());
         // INBOUND - Now that the message is translated into HttpMessages we can add RequestStateCleanerHandler to
         //           setup/clean state for the rest of the pipeline.
-        p.addLast(REQUEST_STATE_CLEANER_HANDLER_NAME, new RequestStateCleanerHandler(metricsListener));
+        p.addLast(REQUEST_STATE_CLEANER_HANDLER_NAME, new RequestStateCleanerHandler(metricsListener,
+                                                                                     incompleteHttpCallTimeoutMillis));
         // INBOUND - Add DTraceStartHandler to start the distributed tracing for this request
         p.addLast(DTRACE_START_HANDLER_NAME, new DTraceStartHandler(userIdHeaderKeys));
         // INBOUND - Access log start

@@ -2,6 +2,7 @@ package com.nike.backstopper.handler.riposte.listener.impl;
 
 import com.nike.backstopper.apierror.ApiError;
 import com.nike.backstopper.apierror.ApiErrorBase;
+import com.nike.backstopper.apierror.ApiErrorWithMetadata;
 import com.nike.backstopper.apierror.SortedApiErrorSet;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
 import com.nike.backstopper.handler.listener.ApiExceptionHandlerListener;
@@ -15,6 +16,7 @@ import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpected
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
+import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
@@ -29,7 +31,9 @@ import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -223,6 +227,19 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
                     Pair.of("num_current_open_channels", String.valueOf(theEx.actualOpenChannelsCount)),
                     Pair.of("max_open_channels_limit", String.valueOf(theEx.maxOpenChannelsLimit))
                 )
+            );
+        }
+
+        if (ex instanceof IncompleteHttpCallTimeoutException) {
+            IncompleteHttpCallTimeoutException theEx = (IncompleteHttpCallTimeoutException)ex;
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("cause", "Unfinished/invalid HTTP request");
+            return ApiExceptionHandlerListenerResult.handleResponse(
+                singletonError(
+                    new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(), metadata)
+                ),
+                Arrays.asList(Pair.of("incomplete_http_call_timeout_millis", String.valueOf(theEx.timeoutMillis)),
+                              Pair.of("exception_message", theEx.getMessage()))
             );
         }
 

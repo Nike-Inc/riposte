@@ -57,6 +57,7 @@ public class ServerConfigTest {
         assertThat(defaultImpl.isDebugChannelLifecycleLoggingEnabled(), is(false));
         assertThat(defaultImpl.workerChannelIdleTimeoutMillis(), is(5000L));
         assertThat(defaultImpl.proxyRouterConnectTimeoutMillis(), is(10000L));
+        assertThat(defaultImpl.incompleteHttpCallTimeoutMillis(), is(5000L));
         assertThat(defaultImpl.maxOpenIncomingServerChannels(), is(20000));
         assertThat(defaultImpl.pipelineCreateHooks(), nullValue());
         assertThat(defaultImpl.customChannelInitializer(), nullValue());

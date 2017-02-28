@@ -203,6 +203,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         public int endpointsPort() {
             return myPort;
         }
+
+        @Override
+        public long workerChannelIdleTimeoutMillis() {
+            return -1;
+        }
     }
 
     public static class BackendServerConfig implements ServerConfig {
@@ -222,6 +227,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         @Override
         public int endpointsPort() {
             return port;
+        }
+
+        @Override
+        public long workerChannelIdleTimeoutMillis() {
+            return -1;
         }
     }
 

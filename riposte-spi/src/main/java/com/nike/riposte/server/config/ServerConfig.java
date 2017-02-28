@@ -348,6 +348,23 @@ public interface ServerConfig {
     }
 
     /**
+     * @return The amount of time in milliseconds that the server should wait without receiving a chunk from the caller
+     * once the first chunk has been received but before the last chunk has arrived. If a request has been started (we
+     * have received the first chunk of the request) but not yet finished, and this amount of time passes without any
+     * further chunks from the caller being received, then a {@link
+     * com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException} will be thrown and an appropriate
+     * error response returned to the caller.
+     *
+     * <p>If this method returns a value less than or equal to 0 then the incomplete call timeout functionality will
+     * be disabled. Be careful with turning this feature off - broken clients or attackers could effectively cause a
+     * memory leak by flooding a server with invalid HTTP requests that never complete while keeping the connection
+     * open indefinitely.
+     */
+    default long incompleteHttpCallTimeoutMillis() {
+        return 5 * 1000;
+    }
+
+    /**
      * @return The maximum allowed number of open channels for the server (incoming channels), with -1 indicating
      * unlimited. Each open channel represents an open socket/connection on the server so this number effectively limits
      * the number of <b>concurrent</b> requests and/or the number of keep-alive connections (whether they are active or

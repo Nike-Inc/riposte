@@ -148,6 +148,7 @@ public class HttpChannelInitializerTest {
         RequestSecurityValidator requestSecurityValidator = mock(RequestSecurityValidator.class);
         long workerChannelIdleTimeoutMillis = 121000;
         long proxyRouterConnectTimeoutMillis = 4200;
+        long incompleteHttpCallTimeoutMillis = 1234;
         int maxOpenChannelsThreshold = 1000;
         boolean debugChannelLifecycleLoggingEnabled = true;
         List<String> userIdHeaderKeys = mock(List.class);
@@ -156,8 +157,8 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
             sslCtx, maxRequestSizeInBytes, endpoints, reqResFilters, longRunningTaskExecutor, riposteErrorHandler, riposteUnhandledErrorHandler,
             validationService, requestContentDeserializer, responseSender, metricsListener, defaultCompletableFutureTimeoutMillis, accessLogger,
-            pipelineCreateHooks, requestSecurityValidator, workerChannelIdleTimeoutMillis, proxyRouterConnectTimeoutMillis, maxOpenChannelsThreshold,
-            debugChannelLifecycleLoggingEnabled, userIdHeaderKeys);
+            pipelineCreateHooks, requestSecurityValidator, workerChannelIdleTimeoutMillis, proxyRouterConnectTimeoutMillis,
+            incompleteHttpCallTimeoutMillis, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled, userIdHeaderKeys);
 
         // then
         assertThat(extractField(hci, "sslCtx"), is(sslCtx));
@@ -175,7 +176,7 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(hci, "pipelineCreateHooks"), is(pipelineCreateHooks));
         assertThat(extractField(hci, "requestSecurityValidator"), is(requestSecurityValidator));
         assertThat(extractField(hci, "workerChannelIdleTimeoutMillis"), is(workerChannelIdleTimeoutMillis));
-        assertThat(extractField(hci, "workerChannelIdleTimeoutMillis"), is(workerChannelIdleTimeoutMillis));
+        assertThat(extractField(hci, "incompleteHttpCallTimeoutMillis"), is(incompleteHttpCallTimeoutMillis));
         assertThat(extractField(hci, "maxOpenChannelsThreshold"), is(maxOpenChannelsThreshold));
         assertThat(extractField(hci, "debugChannelLifecycleLoggingEnabled"), is(debugChannelLifecycleLoggingEnabled));
         assertThat(extractField(hci, "userIdHeaderKeys"), is(userIdHeaderKeys));
@@ -203,7 +204,7 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null);
 
         // then
         assertThat(extractField(hci, "sslCtx"), nullValue());
@@ -233,7 +234,7 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
-                null, null, 121, 42, 100, false, null);
+                null, null, 121, 42, 321, 100, false, null);
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
@@ -256,7 +257,7 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
-                null, null, 121, 42, 100, false, null);
+                null, null, 121, 42, 321, 100, false, null);
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
@@ -274,7 +275,7 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, null, null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -283,7 +284,7 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Collections.emptyList(), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -292,7 +293,7 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, null, mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -301,7 +302,7 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), null,
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -310,7 +311,7 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, null, null, 4242L, null,
-            null, null, 121, 42, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null);
     }
 
     private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind, boolean findLast) {
@@ -343,7 +344,7 @@ public class HttpChannelInitializerTest {
         return new HttpChannelInitializer(
             sslCtx, 42, Arrays.asList(getMockEndpoint("/some/path")), requestAndResponseFilters, null, mock(RiposteErrorHandler.class),
             mock(RiposteUnhandledErrorHandler.class), validationService, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, workerChannelIdleTimeoutMillis, 4200, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled,
+            null, null, workerChannelIdleTimeoutMillis, 4200, 1234, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled,
             null);
     }
 
@@ -513,6 +514,10 @@ public class HttpChannelInitializerTest {
     public void initChannel_adds_RequestStateCleanerHandler_immediately_after_HttpRequestDecoder() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
+        MetricsListener expectedMetricsListener = mock(MetricsListener.class);
+        long expectedIncompleteCallTimeoutMillis = 424242;
+        Whitebox.setInternalState(hci, "metricsListener", expectedMetricsListener);
+        Whitebox.setInternalState(hci, "incompleteHttpCallTimeoutMillis", expectedIncompleteCallTimeoutMillis);
 
         // when
         hci.initChannel(socketChannelMock);
@@ -528,6 +533,10 @@ public class HttpChannelInitializerTest {
         assertThat(requestStateCleanerHandler, notNullValue());
 
         assertThat(requestStateCleanerHandler.getLeft(), is(httpRequestDecoderHandler.getLeft() + 1));
+
+        RequestStateCleanerHandler handler = requestStateCleanerHandler.getRight();
+        assertThat(Whitebox.getInternalState(hci, "metricsListener"), is(expectedMetricsListener));
+        assertThat(Whitebox.getInternalState(hci, "incompleteHttpCallTimeoutMillis"), is(expectedIncompleteCallTimeoutMillis));
     }
 
     @Test

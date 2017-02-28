@@ -522,11 +522,15 @@ public class ResponseSender {
         writeFuture.addListener(logOnWriteErrorOperationListener(ctx));
 
         // Finally, add the appropriate always-close-channel or close-channel-only-on-failure listener.
-        //      We only ever want to do a hard always-close if it's *not* a keep-alive connection *and* this is the last
-        //      chunk, *or* this is a force-close situation. Any other situation should be a close-only-on-failure.
-        if ((!requestInfo.isKeepAliveRequested() && isLastChunk)
-            || responseInfo.isForceConnectionCloseAfterResponseSent()) {
-
+        //      We only ever want to do a hard always-close in the case that this is the last chunk *and* one of the
+        //      following is true:
+        //      (1) it's *not* a keep-alive connection
+        //          *or*
+        //      (2) this is a force-close situation
+        //      Any other situation should be a close-only-on-failure.
+        if (isLastChunk
+            && (!requestInfo.isKeepAliveRequested() || responseInfo.isForceConnectionCloseAfterResponseSent())
+        ) {
             writeFuture.addListener(ChannelFutureListener.CLOSE);
         }
         else
