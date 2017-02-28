@@ -75,7 +75,7 @@ ext {
     javaxInjectVersion = '1'
 
     wingtipsVersion = '0.11.2'
-    backstopperVersion = '0.11.0'
+    backstopperVersion = '0.11.1'
     fastbreakVersion = '0.10.0'
     spockVersion = '0.7-groovy-2.0'
     cgLibVersion = '3.1'

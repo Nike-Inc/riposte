@@ -31,9 +31,7 @@ import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -232,11 +230,10 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
 
         if (ex instanceof IncompleteHttpCallTimeoutException) {
             IncompleteHttpCallTimeoutException theEx = (IncompleteHttpCallTimeoutException)ex;
-            Map<String, Object> metadata = new HashMap<>();
-            metadata.put("cause", "Unfinished/invalid HTTP request");
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(
-                    new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(), metadata)
+                    new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
+                                             Pair.of("cause", "Unfinished/invalid HTTP request"))
                 ),
                 Arrays.asList(Pair.of("incomplete_http_call_timeout_millis", String.valueOf(theEx.timeoutMillis)),
                               Pair.of("exception_message", theEx.getMessage()))
