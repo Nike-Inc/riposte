@@ -3,11 +3,12 @@ package com.nike.riposte.server.handler;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
+import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
-
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
@@ -21,9 +22,18 @@ import io.netty.util.ReferenceCountUtil;
  * This handler should come after {@link io.netty.handler.codec.http.HttpRequestDecoder} and {@link
  * SmartHttpContentCompressor} in the pipeline.
  *
+ * The request size is tracked and if it exceeds the configured global or a given endpoint's override, an exception
+ * will be thrown.
+ *
  * @author Nic Munroe
  */
 public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
+
+    private final int globalConfiguredMaxRequestSizeInBytes;
+
+    public RequestInfoSetterHandler(int globalConfiguredMaxRequestSizeInBytes) {
+        this.globalConfiguredMaxRequestSizeInBytes = globalConfiguredMaxRequestSizeInBytes;
+    }
 
     @Override
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
@@ -47,11 +57,31 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
                                                     + "HttpProcessingState. This should be impossible");
                 }
 
-                requestInfo.addContentChunk((HttpContent) msg);
+                int currentRequestLengthInBytes = requestInfo.addContentChunk((HttpContent) msg);
+                int configuredMaxRequestSize = getConfiguredMaxRequestSize(state);
+
+                if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize) && currentRequestLengthInBytes > configuredMaxRequestSize) {
+                    throw new TooLongFrameException("Request raw content length exceeded configured max request size of " + configuredMaxRequestSize);
+                }
             }
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    private boolean isMaxRequestSizeValidationDisabled(int configuredMaxRequestSize) {
+        return configuredMaxRequestSize <= 0;
+    }
+
+    private int getConfiguredMaxRequestSize(HttpProcessingState state) {
+        Endpoint<?> endpoint = state.getEndpointForExecution();
+
+        //if the endpoint is null or the endpoint is not overriding, we should return the globally configured value
+        if (endpoint == null || endpoint.maxRequestSizeInBytesOverride() == null) {
+            return globalConfiguredMaxRequestSizeInBytes;
+        }
+
+        return endpoint.maxRequestSizeInBytesOverride();
     }
 
     @Override

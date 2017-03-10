@@ -37,6 +37,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.TooLongFrameException;
 
 import static java.util.Collections.singletonList;
 
@@ -114,8 +115,13 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
 
         if (ex instanceof DecoderException) {
             // TODO: TooLongFrameException should result in a 413 Payload Too Large error instead of generic 400 malformed request.
+            //       For now, we can at least let the caller know why it failed via error metadata.
+            ApiError errorToUse = (ex instanceof TooLongFrameException)
+                    ? new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
+                                Pair.of("cause", "The request exceeded the maximum payload size allowed"))
+                    : projectApiErrors.getMalformedRequestApiError();
             return ApiExceptionHandlerListenerResult.handleResponse(
-                singletonError(projectApiErrors.getMalformedRequestApiError()),
+                singletonError(errorToUse),
                 Arrays.asList(
                     Pair.of("decoder_exception", "true"),
                     Pair.of("decoder_exception_message", ex.getMessage())

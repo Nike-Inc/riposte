@@ -230,4 +230,12 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
             return this;
         }
     }
+
+    /**
+     * Proxy router endpoints don't generally want to limit the request size they are proxying, so return 0 to disable
+     */
+    @Override
+    public Integer maxRequestSizeInBytesOverride() {
+        return 0;
+    }
 }

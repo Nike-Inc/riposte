@@ -46,7 +46,7 @@ public class ServerConfigTest {
         assertThat(defaultImpl.riposteUnhandledErrorHandler(), notNullValue());
         assertThat(defaultImpl.numBossThreads(), is(1));
         assertThat(defaultImpl.numWorkerThreads(), is(0));
-        assertThat(defaultImpl.maxRequestSizeInBytes(), is(Integer.MAX_VALUE));
+        assertThat(defaultImpl.maxRequestSizeInBytes(), is(0));
         assertThat(defaultImpl.createSslContext(), notNullValue());
         assertThat(defaultImpl.requestContentValidationService(), nullValue());
         assertThat(defaultImpl.isDebugActionsEnabled(), is(false));

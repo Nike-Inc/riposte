@@ -623,6 +623,8 @@ public class HttpChannelInitializerTest {
         assertThat(requestInfoSetterHandler, notNullValue());
 
         assertThat(requestInfoSetterHandler.getLeft(), is(greaterThan(httpContentCompressor.getLeft())));
+        //verify max size is passed through into RequestInfoSetterHandler
+        assertThat(extractField(requestInfoSetterHandler.getRight(), "globalConfiguredMaxRequestSizeInBytes"), is(42));
     }
 
     @Test
