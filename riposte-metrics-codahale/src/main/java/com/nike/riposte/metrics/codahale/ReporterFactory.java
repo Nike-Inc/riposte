@@ -60,7 +60,7 @@ public interface ReporterFactory {
      * the Reporter with standard means
      */
     default void startReporter() {
-        throw new UnsupportedOperationException("This ReporterFactry does not expose custom start behavior");
+        throw new UnsupportedOperationException("This ReporterFactory does not expose custom start behavior");
     }
 
     /**

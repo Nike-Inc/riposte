@@ -4,6 +4,7 @@ import com.nike.riposte.metrics.codahale.CodahaleMetricsEngine;
 import com.nike.riposte.metrics.codahale.CodahaleMetricsListener;
 import com.nike.riposte.metrics.codahale.contrib.DefaultSLF4jReporterFactory;
 import com.nike.riposte.metrics.codahale.contrib.RiposteGraphiteReporterFactory;
+import com.nike.riposte.metrics.codahale.impl.EndpointMetricsHandlerDefaultImpl;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.AppInfo;
 import com.nike.riposte.server.config.ServerConfig;
@@ -62,6 +63,8 @@ public class MetricsComponentTest {
     private Set<String> executorThreadsUsed = new HashSet<>();
     private ExecutorService executor;
     private ServerConfig serverConfig;
+    private CodahaleMetricsListener metricsListener;
+    private EndpointMetricsHandlerDefaultImpl endpointMetricsHandler;
     private ObjectMapper mapper = new ObjectMapper();
     private String nonblockingEndpointUrl;
 
@@ -70,6 +73,8 @@ public class MetricsComponentTest {
         executor = Executors.newCachedThreadPool();
 
         serverConfig = new MetricsTestConfig();
+        metricsListener = (CodahaleMetricsListener) serverConfig.metricsListener();
+        endpointMetricsHandler = (EndpointMetricsHandlerDefaultImpl) metricsListener.getEndpointMetricsHandler();
         assertTrue(serverConfig.endpointsPort() > 0);
         logger.info("Dynamically chose server port {}", serverConfig.endpointsPort());
         nonblockingEndpointUrl = "http://127.0.0.1:" + serverConfig.endpointsPort() + NON_BLOCKING_MATCHING_PATH;
@@ -98,16 +103,15 @@ public class MetricsComponentTest {
     @Test
     public void serverShouldProcessNonblockingEndpointsAsynchronouslyReturns400() throws Exception {
         logger.warn("serverShouldProcessNonblockingEndpointsAsynchronouslyReturns400 start " + new Date().toString());
-        CodahaleMetricsListener metricsListener = (CodahaleMetricsListener) serverConfig.metricsListener();
         long prevFailedCount = metricsListener.getFailedRequests().getCount();
         long prevProcessedCount = metricsListener.getProcessedRequests().getCount();
-        long prevRequestsCount = metricsListener.getRequests().getCount();
-        long prevGetRequestsCount = metricsListener.getGetRequests().getCount();
-        long prevResponsesCount = metricsListener.getResponses()[4 - 1].getCount();
-        long prevRequestCount = ((Timer) metricsListener.getEndpointRequestsTimers()
+        long prevRequestsCount = endpointMetricsHandler.getRequests().getCount();
+        long prevGetRequestsCount = endpointMetricsHandler.getGetRequests().getCount();
+        long prevResponsesCount = endpointMetricsHandler.getResponses()[4 - 1].getCount();
+        long prevRequestCount = ((Timer) endpointMetricsHandler.getEndpointRequestsTimers()
                                                             .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))
             .getCount();
-        long prevResponseCount = ((Meter[]) metricsListener.getEndpointResponsesMeters()
+        long prevResponseCount = ((Meter[]) endpointMetricsHandler.getEndpointResponsesMeters()
                                                                .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))[4
                                                                                                                      - 1]
             .getCount();
@@ -116,24 +120,24 @@ public class MetricsComponentTest {
 
         long countFailed = metricsListener.getFailedRequests().getCount();
         long processedCount = metricsListener.getProcessedRequests().getCount();
-        long requestsCount = metricsListener.getRequests().getCount();
+        long requestsCount = endpointMetricsHandler.getRequests().getCount();
         long requestSize = metricsListener.getRequestSizes().getSnapshot().getMax();
         long responseSize = metricsListener.getResponseSizes().getSnapshot().getMax();
-        long getRequestsCount = metricsListener.getGetRequests().getCount();
-        long responsesCount = metricsListener.getResponses()[4 - 1].getCount();
-        long requestCount = ((Timer) metricsListener.getEndpointRequestsTimers()
+        long getRequestsCount = endpointMetricsHandler.getGetRequests().getCount();
+        long responsesCount = endpointMetricsHandler.getResponses()[4 - 1].getCount();
+        long requestCount = ((Timer) endpointMetricsHandler.getEndpointRequestsTimers()
                                                         .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))
             .getCount();
-        long responseCount = ((Meter[]) metricsListener.getEndpointResponsesMeters()
+        long responseCount = ((Meter[]) endpointMetricsHandler.getEndpointResponsesMeters()
                                                            .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))[4 - 1]
             .getCount();
 
         long inflight = metricsListener.getInflightRequests().getCount();
         long responseWriteFailed = metricsListener.getResponseWriteFailed().getCount();
-        long postRequests = metricsListener.getPostRequests().getCount();
-        long putRequests = metricsListener.getPutRequests().getCount();
-        long deleteRequests = metricsListener.getDeleteRequests().getCount();
-        long otherRequests = metricsListener.getOtherRequests().getCount();
+        long postRequests = endpointMetricsHandler.getPostRequests().getCount();
+        long putRequests = endpointMetricsHandler.getPutRequests().getCount();
+        long deleteRequests = endpointMetricsHandler.getDeleteRequests().getCount();
+        long otherRequests = endpointMetricsHandler.getOtherRequests().getCount();
 
         assertTrue(countFailed > prevFailedCount);// + NUMBER_OF_REQUESTS);
         assertTrue(processedCount > prevProcessedCount);// + NUMBER_OF_REQUESTS);
@@ -159,13 +163,13 @@ public class MetricsComponentTest {
         CodahaleMetricsListener metricsListener = (CodahaleMetricsListener) serverConfig.metricsListener();
         long prevFailedCount = metricsListener.getFailedRequests().getCount();
         long prevProcessedCount = metricsListener.getProcessedRequests().getCount();
-        long prevRequestsCount = metricsListener.getRequests().getCount();
-        long prevGetRequestsCount = metricsListener.getGetRequests().getCount();
-        long prevResponsesCount = metricsListener.getResponses()[5 - 1].getCount();
-        long prevRequestCount = ((Timer) metricsListener.getEndpointRequestsTimers()
+        long prevRequestsCount = endpointMetricsHandler.getRequests().getCount();
+        long prevGetRequestsCount = endpointMetricsHandler.getGetRequests().getCount();
+        long prevResponsesCount = endpointMetricsHandler.getResponses()[5 - 1].getCount();
+        long prevRequestCount = ((Timer) endpointMetricsHandler.getEndpointRequestsTimers()
                                                             .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))
             .getCount();
-        long prevResponseCount = ((Meter[]) metricsListener.getEndpointResponsesMeters()
+        long prevResponseCount = ((Meter[]) endpointMetricsHandler.getEndpointResponsesMeters()
                                                                .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))[5
                                                                                                                      - 1]
             .getCount();
@@ -174,24 +178,24 @@ public class MetricsComponentTest {
 
         long countFailed = metricsListener.getFailedRequests().getCount();
         long processedCount = metricsListener.getProcessedRequests().getCount();
-        long requestsCount = metricsListener.getRequests().getCount();
+        long requestsCount = endpointMetricsHandler.getRequests().getCount();
         long requestSize = metricsListener.getRequestSizes().getSnapshot().getMax();
         long responseSize = metricsListener.getResponseSizes().getSnapshot().getMax();
-        long getRequestsCount = metricsListener.getGetRequests().getCount();
-        long responsesCount = metricsListener.getResponses()[5 - 1].getCount();
-        long requestCount = ((Timer) metricsListener.getEndpointRequestsTimers()
+        long getRequestsCount = endpointMetricsHandler.getGetRequests().getCount();
+        long responsesCount = endpointMetricsHandler.getResponses()[5 - 1].getCount();
+        long requestCount = ((Timer) endpointMetricsHandler.getEndpointRequestsTimers()
                                                         .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))
             .getCount();
-        long responseCount = ((Meter[]) metricsListener.getEndpointResponsesMeters()
+        long responseCount = ((Meter[]) endpointMetricsHandler.getEndpointResponsesMeters()
                                                            .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))[5 - 1]
             .getCount();
 
         long inflight = metricsListener.getInflightRequests().getCount();
         long responseWriteFailed = metricsListener.getResponseWriteFailed().getCount();
-        long postRequests = metricsListener.getPostRequests().getCount();
-        long putRequests = metricsListener.getPutRequests().getCount();
-        long deleteRequests = metricsListener.getDeleteRequests().getCount();
-        long otherRequests = metricsListener.getOtherRequests().getCount();
+        long postRequests = endpointMetricsHandler.getPostRequests().getCount();
+        long putRequests = endpointMetricsHandler.getPutRequests().getCount();
+        long deleteRequests = endpointMetricsHandler.getDeleteRequests().getCount();
+        long otherRequests = endpointMetricsHandler.getOtherRequests().getCount();
 
         assertTrue(countFailed > prevFailedCount);// + NUMBER_OF_REQUESTS);
         assertTrue(processedCount > prevProcessedCount);// + NUMBER_OF_REQUESTS);
@@ -217,13 +221,13 @@ public class MetricsComponentTest {
         CodahaleMetricsListener metricsListener = (CodahaleMetricsListener) serverConfig.metricsListener();
         long prevFailedCount = metricsListener.getFailedRequests().getCount();
         long prevProcessedCount = metricsListener.getProcessedRequests().getCount();
-        long prevRequestsCount = metricsListener.getRequests().getCount();
-        long prevGetRequestsCount = metricsListener.getGetRequests().getCount();
-        long prevResponsesCount = metricsListener.getResponses()[4 - 1].getCount();
-        long prevRequestCount = ((Timer) metricsListener.getEndpointRequestsTimers()
+        long prevRequestsCount = endpointMetricsHandler.getRequests().getCount();
+        long prevGetRequestsCount = endpointMetricsHandler.getGetRequests().getCount();
+        long prevResponsesCount = endpointMetricsHandler.getResponses()[4 - 1].getCount();
+        long prevRequestCount = ((Timer) endpointMetricsHandler.getEndpointRequestsTimers()
                                                             .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))
             .getCount();
-        long prevResponseCount = ((Meter[]) metricsListener.getEndpointResponsesMeters()
+        long prevResponseCount = ((Meter[]) endpointMetricsHandler.getEndpointResponsesMeters()
                                                                .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))[4
                                                                                                                      - 1]
             .getCount();
@@ -232,24 +236,24 @@ public class MetricsComponentTest {
 
         long countFailed = metricsListener.getFailedRequests().getCount();
         long processedCount = metricsListener.getProcessedRequests().getCount();
-        long requestsCount = metricsListener.getRequests().getCount();
+        long requestsCount = endpointMetricsHandler.getRequests().getCount();
         long requestSize = metricsListener.getRequestSizes().getSnapshot().getMax();
         long responseSize = metricsListener.getResponseSizes().getSnapshot().getMax();
-        long getRequestsCount = metricsListener.getGetRequests().getCount();
-        long responsesCount = metricsListener.getResponses()[4 - 1].getCount();
-        long requestCount = ((Timer) metricsListener.getEndpointRequestsTimers()
+        long getRequestsCount = endpointMetricsHandler.getGetRequests().getCount();
+        long responsesCount = endpointMetricsHandler.getResponses()[4 - 1].getCount();
+        long requestCount = ((Timer) endpointMetricsHandler.getEndpointRequestsTimers()
                                                         .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))
             .getCount();
-        long responseCount = ((Meter[]) metricsListener.getEndpointResponsesMeters()
+        long responseCount = ((Meter[]) endpointMetricsHandler.getEndpointResponsesMeters()
                                                            .get(NON_BLOCKING_ENDPOINT_METRICS_LISTENER_MAP_KEY))[4 - 1]
             .getCount();
 
         long inflight = metricsListener.getInflightRequests().getCount();
         long responseWriteFailed = metricsListener.getResponseWriteFailed().getCount();
-        long postRequests = metricsListener.getPostRequests().getCount();
-        long putRequests = metricsListener.getPutRequests().getCount();
-        long deleteRequests = metricsListener.getDeleteRequests().getCount();
-        long otherRequests = metricsListener.getOtherRequests().getCount();
+        long postRequests = endpointMetricsHandler.getPostRequests().getCount();
+        long putRequests = endpointMetricsHandler.getPutRequests().getCount();
+        long deleteRequests = endpointMetricsHandler.getDeleteRequests().getCount();
+        long otherRequests = endpointMetricsHandler.getOtherRequests().getCount();
 
         assertEquals(countFailed, prevFailedCount);
         assertTrue(processedCount > prevProcessedCount);// + NUMBER_OF_REQUESTS);
@@ -335,7 +339,7 @@ public class MetricsComponentTest {
                 .reportJvmMetrics()
                 .start();
             metricsListener = new CodahaleMetricsListener(metricsEngine.getMetricsCollector());
-            metricsListener.initServerConfigMetrics(this);
+            metricsListener.initEndpointAndServerConfigMetrics(this);
         }
 
         @Override

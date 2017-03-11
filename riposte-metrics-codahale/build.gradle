@@ -13,10 +13,6 @@ dependencies {
             project(":riposte-core").sourceSets.test.output,
             "org.assertj:assertj-core:$assertJVersion",
             "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
-            "org.spockframework:spock-core:$spockVersion",
-            "org.codehaus.groovy:groovy-all:$groovyVersion",
-            "cglib:cglib:$cgLibVersion", //For Spock mocks
-            "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",
