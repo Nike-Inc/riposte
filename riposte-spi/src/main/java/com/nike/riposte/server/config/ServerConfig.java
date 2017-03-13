@@ -390,12 +390,14 @@ public interface ServerConfig {
     /**
      * @return The maximum allowed request size in bytes. If netty receives a request larger than this then it will
      * throw a {@link io.netty.handler.codec.TooLongFrameException}.
+     *
      * This value is an integer, so the max you can set it to is {@link Integer#MAX_VALUE}, which corresponds to 2^31-1,
      * or 2147483647 (around 2 GB).
-     * <p><b>NOTE: This feature is currently disabled - this value will do nothing at the moment.</b>
+     *
+     * A value of 0 or less is disabling the max request size validation. Defaulting to no limit.
      */
     default int maxRequestSizeInBytes() {
-        return Integer.MAX_VALUE;
+        return 0;
     }
 
     /**

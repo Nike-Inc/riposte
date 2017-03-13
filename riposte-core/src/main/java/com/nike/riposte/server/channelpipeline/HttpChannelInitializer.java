@@ -454,10 +454,6 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // INBOUND - Access log start
         p.addLast(ACCESS_LOG_START_HANDLER_NAME, new AccessLogStartHandler());
 
-        // TODO: Now that HttpObjectAggregator is gone, we need to add a handler that counts incoming request bytes and
-        //       throws a TooLongFrameException the instant we detect that a chunk puts the total request size above
-        //       maxRequestSizeInBytes. Might be able to roll that functionality into RequestInfoSetterHandler
-
         // IN/OUT - Add SmartHttpContentCompressor for automatic content compression (if appropriate for the
         //          request/response/size threshold). This must be after HttpRequestDecoder on the incoming pipeline and
         //          before HttpResponseEncoder on the outbound pipeline (keep in mind that "before" on outbound means
@@ -466,7 +462,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME, new SmartHttpContentCompressor(500));
 
         // INBOUND - Add RequestInfoSetterHandler to populate our request state with a RequestInfo object
-        p.addLast(REQUEST_INFO_SETTER_HANDLER_NAME, new RequestInfoSetterHandler());
+        p.addLast(REQUEST_INFO_SETTER_HANDLER_NAME, new RequestInfoSetterHandler(maxRequestSizeInBytes));
         // INBOUND - Add OpenChannelLimitHandler to limit the number of open incoming server channels, but only if
         //           maxOpenChannelsThreshold is not -1.
         if (maxOpenChannelsThreshold != -1) {

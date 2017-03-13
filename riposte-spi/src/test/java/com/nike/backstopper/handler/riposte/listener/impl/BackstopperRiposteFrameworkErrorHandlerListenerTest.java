@@ -187,6 +187,14 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     }
 
     @Test
+    public void shouldHandleTooLongFrameExceptionAndAddCauseMetadata() {
+        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new TooLongFrameException());
+        assertThat(result.shouldHandleResponse).isTrue();
+        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("The request exceeded the maximum payload size allowed");
+    }
+
+    @Test
     public void should_handle_IncompleteHttpCallTimeoutException() {
         verifyExceptionHandled(new IncompleteHttpCallTimeoutException(4242), singletonError(testProjectApiErrors.getMalformedRequestApiError()));
     }

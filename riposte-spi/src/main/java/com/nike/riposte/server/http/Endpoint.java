@@ -117,4 +117,16 @@ public interface Endpoint<I> {
         return null;
     }
 
+    /**
+     * @return The max request size in bytes that you want to allow for this specific endpoint, or null if you want to
+     * use the app-wide default max request size returned by {@link ServerConfig#maxRequestSizeInBytes()}.
+     *
+     * If you would like to disable validation on this endpoint, return 0 or less.
+     *
+     * If you would like to default to the global configured limit, return null.
+     */
+    default Integer maxRequestSizeInBytesOverride() {
+        // Return null by default so that the app-wide max request size will be used unless you override this method.
+        return null;
+    }
 }

@@ -386,7 +386,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
      * {@inheritDoc}
      */
     @Override
-    public void addContentChunk(HttpContent chunk) {
+    public int addContentChunk(HttpContent chunk) {
         if (isCompleteRequestWithAllChunks) {
             throw new IllegalStateException("Cannot add new content chunk - this RequestInfo is already marked as "
                                             + "representing the complete request with all chunks");
@@ -413,6 +413,8 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
                 trailingHeaders.add(chunkTrailingHeaders);
             }
         }
+
+        return rawContentLengthInBytes;
     }
 
     /**
