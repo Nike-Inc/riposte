@@ -35,6 +35,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
@@ -434,7 +435,9 @@ public class CodahaleMetricsListenerTest {
         doReturn(requestMethod).when(requestInfoMock).getMethod();
 
         Endpoint<?> endpoint = serverConfig.appEndpoints().iterator().next();
-        state.setEndpointForExecution(endpoint);
+        String matchingPathTemplate = "/" + UUID.randomUUID().toString();
+
+        state.setEndpointForExecution(endpoint, matchingPathTemplate);
 
         doReturn(responseStatusCode).when(responseInfoMock).getHttpStatusCodeWithDefault(ResponseSender.DEFAULT_HTTP_STATUS_CODE);
 
@@ -492,7 +495,7 @@ public class CodahaleMetricsListenerTest {
 
         // given
         ServerMetricsEvent event = ServerMetricsEvent.RESPONSE_SENT;
-        state.setEndpointForExecution(null);
+        state.setEndpointForExecution(null, null);
         doReturn(responseStatusCode).when(responseInfoMock).getHttpStatusCodeWithDefault(ResponseSender.DEFAULT_HTTP_STATUS_CODE);
 
         int requestRawContentLengthBytes = (int)(Math.random() * 10000);

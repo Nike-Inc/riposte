@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -386,7 +387,8 @@ public class EndpointMetricsHandlerDefaultImplTest {
         doReturn(requestMethod).when(requestInfoMock).getMethod();
 
         Endpoint<?> endpoint = serverConfig.appEndpoints().iterator().next();
-        state.setEndpointForExecution(endpoint);
+        String matchingPathTemplate = "/" + UUID.randomUUID().toString();
+        state.setEndpointForExecution(endpoint, matchingPathTemplate);
 
         String endpointTimerAndMeterKey = instance.getTimerAndMeterMapKeyForEndpoint(endpoint);
 
@@ -443,7 +445,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
     @Test
     public void handleRequest_works_as_expected_for_request_that_do_not_hit_an_endpoint(int responseStatusCode) {
         // given
-        state.setEndpointForExecution(null);
+        state.setEndpointForExecution(null, null);
 
         String expectedTimerKey;
         switch(responseStatusCode) {
