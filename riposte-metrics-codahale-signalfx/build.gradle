@@ -1,0 +1,20 @@
+evaluationDependsOn(':')
+
+dependencies {
+    compile(
+            project(":riposte-metrics-codahale"),
+            "com.signalfx.public:signalfx-codahale:$signalFxCodahaleVersion"
+    )
+
+    testCompile (
+            project(":riposte-guice"),
+            project(":riposte-core").sourceSets.test.output,
+            "org.assertj:assertj-core:$assertJVersion",
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+            "junit:junit:$junitVersion",
+            "org.mockito:mockito-core:$mockitoVersion",
+            "io.rest-assured:rest-assured:$restAssuredVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion"
+    )
+}
