@@ -491,11 +491,6 @@ public class StreamingAsyncHttpClient {
                     setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_NAME, currentSpan.getSpanName());
                 }
 
-                // Remove any content-length header and set the transfer-encoding to chunked
-                //      since we're sending in chunks.
-                initialRequestChunk.headers().remove(CONTENT_LENGTH);
-                initialRequestChunk.headers().set(TRANSFER_ENCODING, CHUNKED);
-
                 Channel ch = channelFuture.getNow();
                 if (logger.isDebugEnabled())
                     logger.debug("Channel ID of the Channel pulled from the pool: {}", ch.toString());
