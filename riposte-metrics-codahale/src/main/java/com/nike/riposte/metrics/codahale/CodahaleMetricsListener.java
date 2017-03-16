@@ -12,34 +12,65 @@ import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Reservoir;
+import com.codahale.metrics.SlidingTimeWindowReservoir;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerConfigMetricNames.BOSS_THREADS;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerConfigMetricNames.ENDPOINTS;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerConfigMetricNames.MAX_REQUEST_SIZE_IN_BYTES;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerConfigMetricNames.WORKER_THREADS;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames.FAILED_REQUESTS;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames.INFLIGHT_REQUESTS;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames.PROCESSED_REQUESTS;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames.REQUEST_SIZES;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames.RESPONSE_SIZES;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames.RESPONSE_WRITE_FAILED;
 
 /**
- * Codahale based metrics listener that create all metrics and also handles the metrics events.
+ * Codahale-based {@link MetricsListener}. <b>Two things must occur during app startup for this class to be fully
+ * functional:</b>
+ *
+ * <pre>
+ * <ul>
+ *     <li>
+ *          You must expose the singleton instance of this class for your app via
+ *          {@link ServerConfig#metricsListener()}. If you fail to do this then no metrics will ever be updated.
+ *     </li>
+ *     <li>
+ *          {@link #initEndpointAndServerConfigMetrics(ServerConfig)} must be called independently at some point during
+ *          app startup once you have a handle on the finalized {@link ServerConfig} that has all its values set and
+ *          exposes all its endpoints via {@link ServerConfig#appEndpoints()}. If you fail to do this then you will not
+ *          receive any server config or per-endpoint metrics.
+ *     </li>
+ * </ul>
+ * </pre>
+ *
+ * It's recommended that you use the {@link Builder} for creating an instance of this class which will let you adjust
+ * any behavior options.
  */
 @SuppressWarnings("WeakerAccess")
 public class CodahaleMetricsListener implements MetricsListener {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    protected final String prefix = this.getClass().getSimpleName();
-
     protected final CodahaleMetricsCollector metricsCollector;
 
     // Aggregate metrics around "server statistics" (requests and data that the server is handling) - not related to
-    //      specific endpoints. Inspired by metrics exposed by RxNetty. These are generic enough that we can handle
-    //      them here in this class and don't need to farm them out to something separate like EndpointMetricsHandler.
+    //      specific endpoints. These are generic enough that we can handle them here in this class and don't need to
+    //      farm them out to something separate like EndpointMetricsHandler.
     protected Counter inflightRequests;
     protected Counter processedRequests;
     protected Counter failedRequests;
@@ -52,58 +83,97 @@ public class CodahaleMetricsListener implements MetricsListener {
 
     protected final boolean includeServerConfigMetrics;
 
+    protected final MetricNamingStrategy<ServerStatisticsMetricNames> serverStatsMetricNamingStrategy;
+    protected final MetricNamingStrategy<ServerConfigMetricNames> serverConfigMetricNamingStrategy;
+
+    public static final Supplier<Histogram> DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER =
+        () -> new Histogram(new ExponentiallyDecayingReservoir());
+
+    protected final Supplier<Histogram> requestAndResponseSizeHistogramSupplier;
+
     /**
-     * Constructor that uses the given {@link CodahaleMetricsCollector}, but uses a default {@link
-     * EndpointMetricsHandlerDefaultImpl} for the endpoint metrics handling and excludes metric gauges that expose
-     * {@link ServerConfig} values. If you need different behavior please use one of the other constructors that allows
-     * you to override the default behavior.
+     * Constructor that uses the given {@link CodahaleMetricsCollector} and defaults for everything else -
+     * see the {@link CodahaleMetricsListener#CodahaleMetricsListener(CodahaleMetricsCollector, EndpointMetricsHandler,
+     * boolean, MetricNamingStrategy, MetricNamingStrategy, Supplier) kitchen sink constructor} for info on defaults.
      *
      * @param cmc A {@link CodahaleMetricsCollector} instance which houses the registry to which server metrics will be
-     * sent.
+     * sent. Cannot be null - an {@link IllegalArgumentException} will be thrown if you pass in null.
      */
     public CodahaleMetricsListener(CodahaleMetricsCollector cmc) {
-        this(cmc, new EndpointMetricsHandlerDefaultImpl());
+        this(cmc, null, false, null, null, null);
     }
 
     /**
-     * Constructor that uses the given {@link CodahaleMetricsCollector} and {@link EndpointMetricsHandler}, but excludes
-     * metric gauges that expose {@link ServerConfig} values by default. If you need different behavior please use one
-     * of the other constructors that allows you to override the default behavior.
+     * The kitchen sink constructor that allows you to specify all the behavior settings. It's recommended that you
+     * use the {@link #newBuilder(CodahaleMetricsCollector)} to construct instances rather than directly calling
+     * this constructor.
      *
      * @param cmc A {@link CodahaleMetricsCollector} instance which houses the registry to which server metrics will be
-     * sent.
-     * @param endpointMetricsHandler The {@link EndpointMetricsHandler} that should be used to tracking and reporting
-     * endpoint metrics.
-     */
-    public CodahaleMetricsListener(CodahaleMetricsCollector cmc, EndpointMetricsHandler endpointMetricsHandler) {
-        this(cmc, endpointMetricsHandler, false);
-    }
-
-    /**
-     * The kitchen sink constructor that allows you to specify all the behavior settings.
-     *
-     * @param cmc A {@link CodahaleMetricsCollector} instance which houses the registry to which server metrics will be
-     * sent.
-     * @param endpointMetricsHandler The {@link EndpointMetricsHandler} that should be used to tracking and reporting
-     * endpoint metrics.
+     * sent. Cannot be null - an {@link IllegalArgumentException} will be thrown if you pass in null.
+     * @param endpointMetricsHandler The {@link EndpointMetricsHandler} that should be used to track and report
+     * endpoint metrics. This can be null - if you pass null a new {@link EndpointMetricsHandlerDefaultImpl} will be
+     * used.
      * @param includeServerConfigMetrics Pass in true to have some of the {@link ServerConfig} values exposed via metric
-     * gauges, or false to exclude those server config value metrics. These are usually easily logged, making metrics
-     * for them wasteful, so it's recommended that you pass in false to exclude them unless you're sure you need them.
+     * gauges, or false to exclude those server config value metrics. These values don't change and are easily logged so
+     * creating metrics for them is usually wasteful, therefore it's recommended that you pass in false to exclude them
+     * unless you're sure you need them.
+     * @param serverStatsMetricNamingStrategy The naming strategy that should be used for the server statistics metrics.
+     * This can be null - if it is null then a new {@link DefaultMetricNamingStrategy} will be used.
+     * @param serverConfigMetricNamingStrategy The naming strategy that should be used for the {@link ServerConfig}
+     * gauge metrics. This can be null - if it is null then a new {@link DefaultMetricNamingStrategy} will be used.
      */
     public CodahaleMetricsListener(CodahaleMetricsCollector cmc,
                                    EndpointMetricsHandler endpointMetricsHandler,
-                                   boolean includeServerConfigMetrics) {
+                                   boolean includeServerConfigMetrics,
+                                   MetricNamingStrategy<ServerStatisticsMetricNames> serverStatsMetricNamingStrategy,
+                                   MetricNamingStrategy<ServerConfigMetricNames> serverConfigMetricNamingStrategy,
+                                   Supplier<Histogram> requestAndResponseSizeHistogramSupplier) {
         if (null == cmc) {
             throw new IllegalArgumentException("cmc is required");
         }
-        this.metricsCollector = cmc;
 
+        if (endpointMetricsHandler == null)
+            endpointMetricsHandler = new EndpointMetricsHandlerDefaultImpl();
+
+        if (serverStatsMetricNamingStrategy == null)
+            serverStatsMetricNamingStrategy = MetricNamingStrategy.defaultImpl();
+
+        if (serverConfigMetricNamingStrategy == null) {
+            serverConfigMetricNamingStrategy = new DefaultMetricNamingStrategy<>(
+                ServerConfig.class.getSimpleName(), DefaultMetricNamingStrategy.DEFAULT_WORD_DELIMITER
+            );
+        }
+
+        if (requestAndResponseSizeHistogramSupplier == null)
+            requestAndResponseSizeHistogramSupplier = DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER;
+
+        this.metricsCollector = cmc;
         this.endpointMetricsHandler = endpointMetricsHandler;
         this.includeServerConfigMetrics = includeServerConfigMetrics;
+        this.serverStatsMetricNamingStrategy = serverStatsMetricNamingStrategy;
+        this.serverConfigMetricNamingStrategy = serverConfigMetricNamingStrategy;
+        this.requestAndResponseSizeHistogramSupplier = requestAndResponseSizeHistogramSupplier;
 
         addServerStatisticsMetrics();
     }
 
+    /**
+     * @param cmc The {@link CodahaleMetricsCollector} that should be used. This is a required field and must be
+     * non-null by the time {@link Builder#build()} is called or an {@link IllegalArgumentException} will be thrown.
+     *
+     * @return A new builder for {@link CodahaleMetricsListener}.
+     */
+    public static Builder newBuilder(CodahaleMetricsCollector cmc) {
+        return new Builder(cmc);
+    }
+
+    /**
+     * Initialize the endpoint and server config metrics. Note that the server config values will not be added if
+     * {@link #includeServerConfigMetrics} is false, however {@link
+     * EndpointMetricsHandler#setupEndpointsMetrics(ServerConfig, MetricRegistry)} will always be called.
+     *
+     * @param config The {@link ServerConfig} that contains the endpoints and server config values.
+     */
     public void initEndpointAndServerConfigMetrics(ServerConfig config) {
         if (includeServerConfigMetrics)
             addServerConfigMetrics(config);
@@ -119,14 +189,22 @@ public class CodahaleMetricsListener implements MetricsListener {
     }
 
     protected void addServerStatisticsMetrics() {
-        // netty
-        this.inflightRequests = metricsCollector.getMetricRegistry().counter(name(prefix, "inflight-requests"));
-        this.processedRequests = metricsCollector.getMetricRegistry().counter(name(prefix, "processed-requests"));
-        this.failedRequests = metricsCollector.getMetricRegistry().counter(name(prefix, "failed-requests"));
-        this.responseWriteFailed = metricsCollector.getMetricRegistry().counter(name(prefix, "response-write-failed"));
+        this.inflightRequests = metricsCollector.getMetricRegistry()
+                                                .counter(serverStatsMetricNamingStrategy.nameFor(INFLIGHT_REQUESTS));
+        this.processedRequests = metricsCollector.getMetricRegistry()
+                                                 .counter(serverStatsMetricNamingStrategy.nameFor(PROCESSED_REQUESTS));
+        this.failedRequests = metricsCollector.getMetricRegistry()
+                                              .counter(serverStatsMetricNamingStrategy.nameFor(FAILED_REQUESTS));
+        this.responseWriteFailed = metricsCollector.getMetricRegistry()
+                                                   .counter(
+                                                       serverStatsMetricNamingStrategy.nameFor(RESPONSE_WRITE_FAILED));
 
-        this.responseSizes = metricsCollector.getMetricRegistry().histogram(name(prefix, "response-sizes"));
-        this.requestSizes = metricsCollector.getMetricRegistry().histogram(name(prefix, "request-sizes"));
+        this.responseSizes = metricsCollector.getMetricRegistry()
+                                             .register(serverStatsMetricNamingStrategy.nameFor(RESPONSE_SIZES),
+                                                       requestAndResponseSizeHistogramSupplier.get());
+        this.requestSizes = metricsCollector.getMetricRegistry()
+                                            .register(serverStatsMetricNamingStrategy.nameFor(REQUEST_SIZES),
+                                                      requestAndResponseSizeHistogramSupplier.get());
     }
 
     /**
@@ -137,28 +215,30 @@ public class CodahaleMetricsListener implements MetricsListener {
         // add server config gauges
         Gauge<Integer> bossThreadsGauge = config::numBossThreads;
         metricsCollector.getMetricRegistry()
-                        .register(name(ServerConfig.class.getSimpleName(), "bossThreads"), bossThreadsGauge);
+                        .register(serverConfigMetricNamingStrategy.nameFor(BOSS_THREADS), bossThreadsGauge);
 
         Gauge<Integer> workerThreadsGauge = config::numWorkerThreads;
         metricsCollector.getMetricRegistry()
-                        .register(name(ServerConfig.class.getSimpleName(), "workerThreads"), workerThreadsGauge);
+                        .register(serverConfigMetricNamingStrategy.nameFor(WORKER_THREADS), workerThreadsGauge);
 
         Gauge<Integer> maxRequestSizeInBytesGauge = config::maxRequestSizeInBytes;
-        metricsCollector.getMetricRegistry().register(name(ServerConfig.class.getSimpleName(), "maxRequestSizeInBytes"),
-                                                      maxRequestSizeInBytesGauge);
+        metricsCollector.getMetricRegistry()
+                        .register(serverConfigMetricNamingStrategy.nameFor(MAX_REQUEST_SIZE_IN_BYTES),
+                                  maxRequestSizeInBytesGauge);
 
-        List<String> endpointsList = config.appEndpoints()
-                                           .stream()
-                                           .map(
-                                               endpoint -> endpoint.getClass().getName() +
-                                                           "-" + getMatchingHttpMethodsAsCombinedString(endpoint) +
-                                                           "-" + endpoint.requestMatcher().matchingPathTemplates()
-                                           )
-                                           .collect(Collectors.toList());
+        List<String> endpointsList =
+            config.appEndpoints()
+                  .stream()
+                  .map(
+                      endpoint -> endpoint.getClass().getName() +
+                                  "-" + getMatchingHttpMethodsAsCombinedString(endpoint) +
+                                  "-" + endpoint.requestMatcher().matchingPathTemplates()
+                  )
+                  .collect(Collectors.toList());
         Gauge<List<String>> endpointsGauge = () -> endpointsList;
 
         metricsCollector.getMetricRegistry()
-                        .register(name(ServerConfig.class.getSimpleName(), "endpoints"), endpointsGauge);
+                        .register(serverConfigMetricNamingStrategy.nameFor(ENDPOINTS), endpointsGauge);
     }
 
     @Override
@@ -185,14 +265,20 @@ public class CodahaleMetricsListener implements MetricsListener {
                 }
 
                 inflightRequests.dec();
+                processedRequests.inc();
+
+                // Make sure HttpProcessingState, RequestInfo, and ResponseInfo are populated with the things we need.
                 RequestInfo<?> requestInfo = httpState.getRequestInfo();
+                if (requestInfo == null) {
+                    logger.error("Metrics Error: httpStatemgetRequestInfo() is null");
+                    return;
+                }
+
                 if (logger.isDebugEnabled()) {
                     logger.debug("inflightRequests decremented {} - URI {} - Thread {}", inflightRequests.getCount(),
                                  requestInfo.getUri(), Thread.currentThread().toString());
                 }
-                processedRequests.inc();
-
-                // check state is populated
+                
                 ResponseInfo<?> responseInfo = httpState.getResponseInfo();
                 if (responseInfo == null) {
                     logger.error("Metrics Error: httpState.getResponseInfo() is null");
@@ -272,5 +358,226 @@ public class CodahaleMetricsListener implements MetricsListener {
 
     public EndpointMetricsHandler getEndpointMetricsHandler() {
         return endpointMetricsHandler;
+    }
+
+    public enum ServerStatisticsMetricNames {
+        INFLIGHT_REQUESTS,
+        PROCESSED_REQUESTS,
+        FAILED_REQUESTS,
+        RESPONSE_WRITE_FAILED,
+        REQUEST_SIZES,
+        RESPONSE_SIZES
+    }
+
+    public enum ServerConfigMetricNames {
+        BOSS_THREADS,
+        WORKER_THREADS,
+        MAX_REQUEST_SIZE_IN_BYTES,
+        ENDPOINTS
+    }
+
+    /**
+     * Interface describing a naming strategy for metric names. You can customize the names of the metrics created and
+     * tracked by {@link CodahaleMetricsListener} by implementing this interface and passing your custom impl when
+     * creating your app's {@link CodahaleMetricsListener}.
+     *
+     * @param <T> The enum representing the metric names that this instance knows how to handle.
+     */
+    @FunctionalInterface
+    public interface MetricNamingStrategy<T extends Enum> {
+        String nameFor(T metricNameEnum);
+
+        /**
+         * @return A default {@link DefaultMetricNamingStrategy}.
+         */
+        static <T extends Enum> MetricNamingStrategy<T> defaultImpl() {
+            return new DefaultMetricNamingStrategy<>();
+        }
+
+        /**
+         * @return A {@link DefaultMetricNamingStrategy} that has no prefix but is otherwise default.
+         */
+        static <T extends Enum> MetricNamingStrategy<T> defaultNoPrefixImpl() {
+            return defaultImpl(null, DefaultMetricNamingStrategy.DEFAULT_WORD_DELIMITER);
+        }
+
+        /**
+         * @return A {@link DefaultMetricNamingStrategy} with the given prefix and word delimiter settings.
+         */
+        static <T extends Enum> MetricNamingStrategy<T> defaultImpl(String prefix, String wordDelimiter) {
+            return new DefaultMetricNamingStrategy<>(prefix, wordDelimiter);
+        }
+    }
+
+    /**
+     * Default implementation of {@link MetricNamingStrategy}. This impl takes the enum passed into {@link
+     * #nameFor(Enum)} and lowercases its name to generate the name for the metric. There are two options you can use
+     * to adjust this class' behavior:
+     *
+     * <ul>
+     *     <li>
+     *          You can set an optional {@link #prefix} that will be prepended to the metric name, with a dot separating
+     *          the prefix and the rest of the metric name. If you want to omit the prefix entirely then pass in null
+     *          or the empty string.
+     *     </li>
+     *     <li>
+     *         You can set an optional {@link #wordDelimiter} that will replace any underscores found in the metric
+     *         enum names. By default this is set to "_", effectively leaving underscores as they are. If you want to
+     *         omit the delimiter entirely then pass in null or the empty string.
+     *     </li>
+     * </ul>
+     *
+     * @param <T> The enum representing the metric names that this instance knows how to handle.
+     */
+    public static class DefaultMetricNamingStrategy<T extends Enum> implements MetricNamingStrategy<T> {
+        public static final String DEFAULT_PREFIX = CodahaleMetricsListener.class.getSimpleName();
+        public static final String DEFAULT_WORD_DELIMITER = "_";
+
+        protected final String prefix;
+        protected final String wordDelimiter;
+
+        public DefaultMetricNamingStrategy() {
+            this(DEFAULT_PREFIX, DEFAULT_WORD_DELIMITER);
+        }
+
+        public DefaultMetricNamingStrategy(String prefix, String wordDelimiter) {
+            if (wordDelimiter == null)
+                wordDelimiter = "";
+
+            this.prefix = prefix;
+            this.wordDelimiter = wordDelimiter;
+        }
+
+        @Override
+        public String nameFor(T metricNameEnum) {
+            return name(prefix, metricNameEnum.name().toLowerCase().replace("_", wordDelimiter));
+        }
+    }
+
+    /**
+     * Builder class for {@link CodahaleMetricsListener}.
+     */
+    public static class Builder {
+
+        private CodahaleMetricsCollector metricsCollector;
+        private EndpointMetricsHandler endpointMetricsHandler;
+        private boolean includeServerConfigMetrics = false;
+        private MetricNamingStrategy<ServerStatisticsMetricNames> serverStatsMetricNamingStrategy;
+        private MetricNamingStrategy<ServerConfigMetricNames> serverConfigMetricNamingStrategy;
+        private Supplier<Histogram> requestAndResponseSizeHistogramSupplier;
+
+        private Builder(CodahaleMetricsCollector cmc) {
+            this.metricsCollector = cmc;
+        }
+
+        /**
+         * Sets the {@link CodahaleMetricsCollector} instance which houses the registry to which server metrics will be
+         * sent. Cannot be null - a {@link IllegalArgumentException} will be thrown when {@link #build()} is called
+         * if this is null.
+         *
+         * @param metricsCollector
+         *     the {@code metricsCollector} to set
+         *
+         * @return A reference to this Builder.
+         */
+        public Builder withMetricsCollector(CodahaleMetricsCollector metricsCollector) {
+            this.metricsCollector = metricsCollector;
+            return this;
+        }
+
+        /**
+         * Sets the {@link EndpointMetricsHandler} that should be used for tracking and reporting endpoint metrics.
+         * This can be null - a new {@link EndpointMetricsHandlerDefaultImpl} will be used if you don't specify a
+         * custom instance.
+         *
+         * @param endpointMetricsHandler
+         *     the {@code endpointMetricsHandler} to set
+         *
+         * @return A reference to this Builder.
+         */
+        public Builder withEndpointMetricsHandler(EndpointMetricsHandler endpointMetricsHandler) {
+            this.endpointMetricsHandler = endpointMetricsHandler;
+            return this;
+        }
+
+        /**
+         * Pass in true to have some of the {@link ServerConfig} values exposed via metric gauges, or false to exclude
+         * those server config value metrics. These values don't change and are easily logged so creating metrics for
+         * them is usually wasteful, therefore it's recommended that you leave this as false to exclude them unless
+         * you're sure you need them (false will be used by default if you don't specify anything).
+         *
+         * @param includeServerConfigMetrics
+         *     the {@code includeServerConfigMetrics} to set
+         *
+         * @return A reference to this Builder.
+         */
+        public Builder withIncludeServerConfigMetrics(boolean includeServerConfigMetrics) {
+            this.includeServerConfigMetrics = includeServerConfigMetrics;
+            return this;
+        }
+
+        /**
+         * Sets the naming strategy that should be used for the server statistics metrics. This can be null - if it is
+         * null then a new {@link DefaultMetricNamingStrategy} will be used.
+         *
+         * @param serverStatsMetricNamingStrategy
+         *     the {@code serverStatsMetricNamingStrategy} to set
+         *
+         * @return a reference to this Builder
+         */
+        public Builder withServerStatsMetricNamingStrategy(
+            MetricNamingStrategy<ServerStatisticsMetricNames> serverStatsMetricNamingStrategy
+        ) {
+            this.serverStatsMetricNamingStrategy = serverStatsMetricNamingStrategy;
+            return this;
+        }
+
+        /**
+         * Sets the naming strategy that should be used for the {@link ServerConfig} gauge metrics. This can be null -
+         * if it is null then a new {@link DefaultMetricNamingStrategy} will be used.
+         *
+         * @param serverConfigMetricNamingStrategy
+         *     the {@code serverConfigMetricNamingStrategy} to set
+         *
+         * @return a reference to this Builder
+         */
+        public Builder withServerConfigMetricNamingStrategy(
+            MetricNamingStrategy<ServerConfigMetricNames> serverConfigMetricNamingStrategy
+        ) {
+            this.serverConfigMetricNamingStrategy = serverConfigMetricNamingStrategy;
+            return this;
+        }
+
+        /**
+         * Sets the supplier that should be used to create the request-size and response-size Histogram metrics. You
+         * might want to set this in order to change the {@link Reservoir} type used by the histograms to a {@link
+         * SlidingTimeWindowReservoir} with the sliding window time values that match your reporter's update frequency.
+         * i.e. if you passed in a supplier like this:
+         * {@code () -> new Histogram(new SlidingTimeWindowReservoir(10L, TimeUnit.SECONDS))} then the request-size and
+         * response-size histograms generated would always give you data for *only* the 10 seconds previous to whenever
+         * you requested the data. This can be null - if it is null then {@link
+         * #DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER} will be used.
+         *
+         * @param requestAndResponseSizeHistogramSupplier The supplier to use when generating the request-size and
+         * response-size {@link Histogram}s.
+         * @return a reference to this Builder
+         */
+        public Builder withRequestAndResponseSizeHistogramSupplier(
+            Supplier<Histogram> requestAndResponseSizeHistogramSupplier
+        ) {
+            this.requestAndResponseSizeHistogramSupplier = requestAndResponseSizeHistogramSupplier;
+            return this;
+        }
+
+        /**
+         * @return a {@link CodahaleMetricsListener} built with parameters from this builder.
+         */
+        public CodahaleMetricsListener build() {
+            return new CodahaleMetricsListener(
+                metricsCollector, endpointMetricsHandler, includeServerConfigMetrics, serverStatsMetricNamingStrategy,
+                serverConfigMetricNamingStrategy, requestAndResponseSizeHistogramSupplier
+            );
+        }
+
     }
 }

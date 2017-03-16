@@ -1,5 +1,10 @@
 package com.nike.riposte.metrics.codahale;
 
+import com.nike.riposte.metrics.codahale.CodahaleMetricsListener.Builder;
+import com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultMetricNamingStrategy;
+import com.nike.riposte.metrics.codahale.CodahaleMetricsListener.MetricNamingStrategy;
+import com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerConfigMetricNames;
+import com.nike.riposte.metrics.codahale.CodahaleMetricsListener.ServerStatisticsMetricNames;
 import com.nike.riposte.metrics.codahale.impl.EndpointMetricsHandlerDefaultImpl;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
@@ -38,12 +43,16 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
 
 import static com.codahale.metrics.MetricRegistry.name;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultMetricNamingStrategy.DEFAULT_PREFIX;
+import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultMetricNamingStrategy.DEFAULT_WORD_DELIMITER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
@@ -78,6 +87,8 @@ public class CodahaleMetricsListenerTest {
     private Map<String, Counter> registeredCounterMocks;
     private Map<String, Histogram> registeredHistogramMocks;
 
+    private Supplier<Histogram> mockHistogramSupplier;
+
     private Map<String, Gauge> registeredGauges;
 
     private ServerConfig serverConfig;
@@ -94,7 +105,8 @@ public class CodahaleMetricsListenerTest {
         setupMetricRegistryAndCodahaleMetricsCollector();
 
         endpointMetricsHandlerMock = mock(EndpointMetricsHandler.class);
-        listener = new CodahaleMetricsListener(cmcMock, endpointMetricsHandlerMock, true);
+        mockHistogramSupplier = () -> mock(Histogram.class);
+        listener = new CodahaleMetricsListener(cmcMock, endpointMetricsHandlerMock, true, null, null, mockHistogramSupplier);
 
         serverConfig = new ServerConfig() {
             private final List<Endpoint<?>> endpoints = Arrays.asList(
@@ -179,9 +191,15 @@ public class CodahaleMetricsListenerTest {
         registeredGauges = new HashMap<>();
         doAnswer(invocation -> {
             String name = invocation.getArgumentAt(0, String.class);
-            Gauge gauge = invocation.getArgumentAt(1, Gauge.class);
-            registeredGauges.put(name, gauge);
-            return gauge;
+            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            if (metric instanceof Gauge)
+                registeredGauges.put(name, (Gauge)metric);
+            else if (metric instanceof Histogram)
+                registeredHistogramMocks.put(name, (Histogram)metric);
+            else
+                throw new RuntimeException("Expected Gauge or Histogram, but received: " + metric.getClass().getName());
+
+            return metric;
         }).when(metricRegistryMock).register(anyString(), any(Metric.class));
     }
 
@@ -202,25 +220,22 @@ public class CodahaleMetricsListenerTest {
             .isInstanceOf(EndpointMetricsHandlerDefaultImpl.class);
         assertThat(instance.getEndpointMetricsHandler()).isSameAs(instance.endpointMetricsHandler);
         assertThat(instance.includeServerConfigMetrics).isFalse();
+        assertNamingStrategyIsDefault(instance.serverStatsMetricNamingStrategy,
+                                      DEFAULT_PREFIX,
+                                      DEFAULT_WORD_DELIMITER);
+        assertNamingStrategyIsDefault(instance.serverConfigMetricNamingStrategy,
+                                      ServerConfig.class.getSimpleName(),
+                                      DEFAULT_WORD_DELIMITER);
         assertThat(registeredGauges).isEmpty();
     }
 
-    @Test
-    public void double_arg_constructor_sets_fields_as_expected() {
-        // given
-        setupMetricRegistryAndCodahaleMetricsCollector();
-
-        // when
-        CodahaleMetricsListener instance = new CodahaleMetricsListener(cmcMock, endpointMetricsHandlerMock);
-
-        // then
-        verifyServerStatisticMetrics(instance);
-        assertThat(instance.getMetricsCollector()).isSameAs(cmcMock);
-        assertThat(instance.metricsCollector).isSameAs(cmcMock);
-        assertThat(instance.getEndpointMetricsHandler()).isSameAs(endpointMetricsHandlerMock);
-        assertThat(instance.endpointMetricsHandler).isSameAs(endpointMetricsHandlerMock);
-        assertThat(instance.includeServerConfigMetrics).isFalse();
-        assertThat(registeredGauges).isEmpty();
+    private void assertNamingStrategyIsDefault(MetricNamingStrategy namingStrategy,
+                                               String expectedPrefix,
+                                               String expectedWordDelimiter) {
+        assertThat(namingStrategy).isInstanceOf(DefaultMetricNamingStrategy.class);
+        DefaultMetricNamingStrategy defNamingStrategy = (DefaultMetricNamingStrategy)namingStrategy;
+        assertThat(defNamingStrategy.prefix).isEqualTo(expectedPrefix);
+        assertThat(defNamingStrategy.wordDelimiter).isEqualTo(expectedWordDelimiter);
     }
 
     @DataProvider(value = {
@@ -231,9 +246,15 @@ public class CodahaleMetricsListenerTest {
     public void kitchen_sink_constructor_sets_fields_as_expected(boolean includeServerConfigMetrics) {
         // given
         setupMetricRegistryAndCodahaleMetricsCollector();
+        MetricNamingStrategy<ServerStatisticsMetricNames> statsNamingStrategyMock = new DefaultMetricNamingStrategy<>();
+        MetricNamingStrategy<ServerConfigMetricNames> configNamingStrategyMock = new DefaultMetricNamingStrategy<>();
+        Supplier<Histogram> customRequestAndResponseSizeHistogramSupplier = () -> mock(Histogram.class);
 
         // when
-        CodahaleMetricsListener instance = new CodahaleMetricsListener(cmcMock, endpointMetricsHandlerMock, includeServerConfigMetrics);
+        CodahaleMetricsListener instance = new CodahaleMetricsListener(
+            cmcMock, endpointMetricsHandlerMock, includeServerConfigMetrics,
+            statsNamingStrategyMock, configNamingStrategyMock, customRequestAndResponseSizeHistogramSupplier
+        );
 
         // then
         verifyServerStatisticMetrics(instance);
@@ -242,33 +263,69 @@ public class CodahaleMetricsListenerTest {
         assertThat(instance.getEndpointMetricsHandler()).isSameAs(endpointMetricsHandlerMock);
         assertThat(instance.endpointMetricsHandler).isSameAs(endpointMetricsHandlerMock);
         assertThat(instance.includeServerConfigMetrics).isEqualTo(includeServerConfigMetrics);
+        assertThat(instance.serverStatsMetricNamingStrategy).isSameAs(statsNamingStrategyMock);
+        assertThat(instance.serverConfigMetricNamingStrategy).isSameAs(configNamingStrategyMock);
+        assertThat(instance.requestAndResponseSizeHistogramSupplier)
+            .isSameAs(customRequestAndResponseSizeHistogramSupplier);
+        assertThat(registeredGauges).isEmpty();
+    }
+
+    @Test
+    public void kitchen_sink_constructor_handles_default_args() {
+        // given
+        setupMetricRegistryAndCodahaleMetricsCollector();
+        
+        // when
+        CodahaleMetricsListener instance = new CodahaleMetricsListener(
+            cmcMock, null, false, null, null, null
+        );
+
+        // then
+        verifyServerStatisticMetrics(instance);
+        assertThat(instance.getMetricsCollector()).isSameAs(cmcMock);
+        assertThat(instance.metricsCollector).isSameAs(cmcMock);
+        assertThat(instance.endpointMetricsHandler)
+            .isNotNull()
+            .isInstanceOf(EndpointMetricsHandlerDefaultImpl.class);
+        assertThat(instance.getEndpointMetricsHandler()).isSameAs(instance.endpointMetricsHandler);
+        assertThat(instance.includeServerConfigMetrics).isFalse();
+        assertNamingStrategyIsDefault(instance.serverStatsMetricNamingStrategy,
+                                      DEFAULT_PREFIX,
+                                      DEFAULT_WORD_DELIMITER);
+        assertNamingStrategyIsDefault(instance.serverConfigMetricNamingStrategy,
+                                      ServerConfig.class.getSimpleName(),
+                                      DEFAULT_WORD_DELIMITER);
+        assertThat(instance.requestAndResponseSizeHistogramSupplier)
+            .isSameAs(DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER);
         assertThat(registeredGauges).isEmpty();
     }
 
     private void verifyServerStatisticMetrics(CodahaleMetricsListener instance) {
+        String prefix = ((DefaultMetricNamingStrategy)instance.serverStatsMetricNamingStrategy).prefix;
+
         assertThat(instance.getInflightRequests()).isSameAs(instance.inflightRequests);
-        verify(metricRegistryMock).counter(name(instance.prefix, "inflight-requests"));
-        assertThat(instance.inflightRequests).isSameAs(registeredCounterMocks.get(name(instance.prefix, "inflight-requests")));
+        verify(metricRegistryMock).counter(name(prefix, "inflight_requests"));
+        assertThat(instance.inflightRequests).isSameAs(registeredCounterMocks.get(name(prefix, "inflight_requests")));
 
         assertThat(instance.getProcessedRequests()).isSameAs(instance.processedRequests);
-        verify(metricRegistryMock).counter(name(instance.prefix, "processed-requests"));
-        assertThat(instance.processedRequests).isSameAs(registeredCounterMocks.get(name(instance.prefix, "processed-requests")));
+        verify(metricRegistryMock).counter(name(prefix, "processed_requests"));
+        assertThat(instance.processedRequests).isSameAs(registeredCounterMocks.get(name(prefix, "processed_requests")));
 
         assertThat(instance.getFailedRequests()).isSameAs(instance.failedRequests);
-        verify(metricRegistryMock).counter(name(instance.prefix, "failed-requests"));
-        assertThat(instance.failedRequests).isSameAs(registeredCounterMocks.get(name(instance.prefix, "failed-requests")));
+        verify(metricRegistryMock).counter(name(prefix, "failed_requests"));
+        assertThat(instance.failedRequests).isSameAs(registeredCounterMocks.get(name(prefix, "failed_requests")));
 
         assertThat(instance.getResponseWriteFailed()).isSameAs(instance.responseWriteFailed);
-        verify(metricRegistryMock).counter(name(instance.prefix, "response-write-failed"));
-        assertThat(instance.responseWriteFailed).isSameAs(registeredCounterMocks.get(name(instance.prefix, "response-write-failed")));
+        verify(metricRegistryMock).counter(name(prefix, "response_write_failed"));
+        assertThat(instance.responseWriteFailed).isSameAs(registeredCounterMocks.get(name(prefix, "response_write_failed")));
 
         assertThat(instance.getResponseSizes()).isSameAs(instance.responseSizes);
-        verify(metricRegistryMock).histogram(name(instance.prefix, "response-sizes"));
-        assertThat(instance.responseSizes).isSameAs(registeredHistogramMocks.get(name(instance.prefix, "response-sizes")));
+        verify(metricRegistryMock).register(name(prefix, "response_sizes"), instance.responseSizes);
+        assertThat(instance.responseSizes).isSameAs(registeredHistogramMocks.get(name(prefix, "response_sizes")));
 
         assertThat(instance.getRequestSizes()).isSameAs(instance.requestSizes);
-        verify(metricRegistryMock).histogram(name(instance.prefix, "request-sizes"));
-        assertThat(instance.requestSizes).isSameAs(registeredHistogramMocks.get(name(instance.prefix, "request-sizes")));
+        verify(metricRegistryMock).register(name(prefix, "request_sizes"), instance.requestSizes);
+        assertThat(instance.requestSizes).isSameAs(registeredHistogramMocks.get(name(prefix, "request_sizes")));
     }
 
     @Test
@@ -280,6 +337,22 @@ public class CodahaleMetricsListenerTest {
         assertThat(ex).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    public void constructor_uses_histogram_supplier_for_request_size_and_response_size_metrics() {
+        // given
+        Histogram mockHistogram = mock(Histogram.class);
+        Supplier<Histogram> histogramSupplier = () -> mockHistogram;
+
+        // when
+        CodahaleMetricsListener instance = new CodahaleMetricsListener(
+            cmcMock, endpointMetricsHandlerMock, false, null, null, histogramSupplier
+        );
+
+        // then
+        assertThat(instance.requestSizes).isSameAs(mockHistogram);
+        assertThat(instance.responseSizes).isSameAs(mockHistogram);
+    }
+
     @DataProvider(value = {
         "true",
         "false"
@@ -288,14 +361,15 @@ public class CodahaleMetricsListenerTest {
     public void initServerConfigMetrics_adds_expected_metrics(boolean includeServerConfigMetrics) {
         // given
         setupMetricRegistryAndCodahaleMetricsCollector();
-        CodahaleMetricsListener instance = new CodahaleMetricsListener(cmcMock,
-                                                                       endpointMetricsHandlerMock,
-                                                                       includeServerConfigMetrics);
+        CodahaleMetricsListener instance = CodahaleMetricsListener.newBuilder(cmcMock)
+                                                                  .withEndpointMetricsHandler(endpointMetricsHandlerMock)
+                                                                  .withIncludeServerConfigMetrics(includeServerConfigMetrics)
+                                                                  .build();
         verifyServerStatisticMetrics(instance);
 
-        String expectedBossThreadsGaugeName = name(ServerConfig.class.getSimpleName(), "bossThreads");
-        String expectedWorkerThreadsGaugeName = name(ServerConfig.class.getSimpleName(), "workerThreads");
-        String expectedMaxRequestSizeInBytesGaugeName = name(ServerConfig.class.getSimpleName(), "maxRequestSizeInBytes");
+        String expectedBossThreadsGaugeName = name(ServerConfig.class.getSimpleName(), "boss_threads");
+        String expectedWorkerThreadsGaugeName = name(ServerConfig.class.getSimpleName(), "worker_threads");
+        String expectedMaxRequestSizeInBytesGaugeName = name(ServerConfig.class.getSimpleName(), "max_request_size_in_bytes");
         String expectedEndpointsListGaugeName = name(ServerConfig.class.getSimpleName(), "endpoints");
 
         List<String> expectedEndpointsListValue =
@@ -549,6 +623,25 @@ public class CodahaleMetricsListenerTest {
     }
 
     @Test
+    public void onEvent_should_short_circuit_for_RESPONSE_SENT_if_request_info_is_null() {
+        // given
+        state.setRequestInfo(null);
+
+        // when
+        listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, state);
+
+        // then
+        // Inflight requests and processed requests counters should still be adjusted properly
+        verify(listener.inflightRequests).dec();
+        verify(listener.processedRequests).inc();
+        // But we should short circuit immediately afterward
+        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verify(endpointMetricsHandlerMock, never()).handleRequest(
+            any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
+        );
+    }
+
+    @Test
     public void onEvent_should_short_circuit_for_RESPONSE_SENT_if_response_info_is_null() {
         // given
         state.setResponseInfo(null);
@@ -654,6 +747,171 @@ public class CodahaleMetricsListenerTest {
         Whitebox.setInternalState(listener, "logger", loggerMock);
         listener.onEvent(ServerMetricsEvent.REQUEST_RECEIVED, null);
         listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, state);
+
+        // Exercise enums
+        for (ServerStatisticsMetricNames enumValue : ServerStatisticsMetricNames.values()) {
+            assertThat(ServerStatisticsMetricNames.valueOf(enumValue.name())).isEqualTo(enumValue);
+        }
+
+        for (ServerConfigMetricNames enumValue : ServerConfigMetricNames.values()) {
+            assertThat(ServerConfigMetricNames.valueOf(enumValue.name())).isEqualTo(enumValue);
+        }
+    }
+
+    private enum FooMetricName {
+        FOO_BAR,
+        SINGLE
+    }
+
+    @Test
+    public void metricNamingStrategy_defaultImpl_no_args_method_works_as_expected() {
+        // when
+        MetricNamingStrategy result = MetricNamingStrategy.defaultImpl();
+
+        // then
+        assertThat(result).isInstanceOf(DefaultMetricNamingStrategy.class);
+        DefaultMetricNamingStrategy defStrat = (DefaultMetricNamingStrategy)result;
+        assertThat(defStrat.prefix).isEqualTo(DEFAULT_PREFIX);
+        assertThat(defStrat.wordDelimiter).isEqualTo(DEFAULT_WORD_DELIMITER);
+    }
+
+    @Test
+    public void metricNamingStrategy_defaultImpl_with_args_method_works_as_expected() {
+        // given
+        String prefix = UUID.randomUUID().toString();
+        String wordDelimiter = UUID.randomUUID().toString();
+
+        // when
+        MetricNamingStrategy result = MetricNamingStrategy.defaultImpl(prefix, wordDelimiter);
+
+        // then
+        assertThat(result).isInstanceOf(DefaultMetricNamingStrategy.class);
+        DefaultMetricNamingStrategy defStrat = (DefaultMetricNamingStrategy)result;
+        assertThat(defStrat.prefix).isEqualTo(prefix);
+        assertThat(defStrat.wordDelimiter).isEqualTo(wordDelimiter);
+    }
+
+    @Test
+    public void metricNamingStrategy_defaultNoPrefixImpl_method_works_as_expected() {
+        // when
+        MetricNamingStrategy result = MetricNamingStrategy.defaultNoPrefixImpl();
+
+        // then
+        assertThat(result).isInstanceOf(DefaultMetricNamingStrategy.class);
+        DefaultMetricNamingStrategy defStrat = (DefaultMetricNamingStrategy)result;
+        assertThat(defStrat.prefix).isEqualTo(null);
+        assertThat(defStrat.wordDelimiter).isEqualTo(DEFAULT_WORD_DELIMITER);
+    }
+
+    @DataProvider(value = {
+        // Underscore word delimiters on the next two
+        "null           |   _               |   foo_bar                             |   single",
+        "somePrefix     |   _               |   somePrefix.foo_bar                  |   somePrefix.single",
+        // Word delimiter on the next line is a dash '-', not an underscore '_'
+        "null           |   -               |   foo-bar                             |   single",
+        "other.Prefix   |   weirddelimiter  |   other.Prefix.fooweirddelimiterbar   |   other.Prefix.single",
+        "               |                   |   foobar                              |   single",
+        "null           |   null            |   foobar                              |   single",
+        "yetMorePrefix  |   null            |   yetMorePrefix.foobar                |   yetMorePrefix.single"
+    }, splitBy = "\\|")
+    @Test
+    public void defaultMetricNamingStrategy_works_as_expected(
+        String prefix, String wordDelimiter, String expectedFooBarName, String expectedSingleName
+    ) {
+        // given
+        DefaultMetricNamingStrategy<FooMetricName> strat = new DefaultMetricNamingStrategy<>(prefix, wordDelimiter);
+
+        // when
+        String actualFooBarName = strat.nameFor(FooMetricName.FOO_BAR);
+        String actualSingleName = strat.nameFor(FooMetricName.SINGLE);
+
+        // then
+        assertThat(actualFooBarName).isEqualTo(expectedFooBarName);
+        assertThat(actualSingleName).isEqualTo(expectedSingleName);
+    }
+
+    @DataProvider(value = {
+        "true   |   true",
+        "true   |   false",
+        "false  |   true",
+        "false  |   false"
+    }, splitBy = "\\|")
+    @Test
+    public void builder_works_as_expected_for_specified_fields(boolean overrideCodahaleMetricsCollector,
+                                                               boolean includeServerConfigMetrics) {
+        // given
+        setupMetricRegistryAndCodahaleMetricsCollector();
+        CodahaleMetricsCollector alternateCmcMock = mock(CodahaleMetricsCollector.class);
+        doReturn(metricRegistryMock).when(alternateCmcMock).getMetricRegistry();
+
+        MetricNamingStrategy<ServerStatisticsMetricNames> statsNamingStrat = new DefaultMetricNamingStrategy<>();
+        MetricNamingStrategy<ServerConfigMetricNames> configNamingStrat = new DefaultMetricNamingStrategy<>();
+        Supplier<Histogram> histogramSupplier = () -> mock(Histogram.class);
+
+        Builder builder = CodahaleMetricsListener.newBuilder(cmcMock);
+
+        if (overrideCodahaleMetricsCollector)
+            builder = builder.withMetricsCollector(alternateCmcMock);
+
+        builder = builder
+            .withEndpointMetricsHandler(endpointMetricsHandlerMock)
+            .withIncludeServerConfigMetrics(includeServerConfigMetrics)
+            .withServerConfigMetricNamingStrategy(configNamingStrat)
+            .withServerStatsMetricNamingStrategy(statsNamingStrat)
+            .withRequestAndResponseSizeHistogramSupplier(histogramSupplier);
+
+        // when
+        CodahaleMetricsListener result = builder.build();
+
+        // then
+        if (overrideCodahaleMetricsCollector)
+            assertThat(result.metricsCollector).isSameAs(alternateCmcMock);
+        else
+            assertThat(result.metricsCollector).isSameAs(cmcMock);
+
+        assertThat(result.endpointMetricsHandler).isSameAs(endpointMetricsHandlerMock);
+        assertThat(result.includeServerConfigMetrics).isEqualTo(includeServerConfigMetrics);
+        assertThat(result.serverConfigMetricNamingStrategy).isSameAs(configNamingStrat);
+        assertThat(result.serverStatsMetricNamingStrategy).isSameAs(statsNamingStrat);
+        assertThat(result.requestAndResponseSizeHistogramSupplier).isSameAs(histogramSupplier);
+    }
+
+    @Test
+    public void builder_works_as_expected_for_default_unspecified_fields() {
+        // given
+        setupMetricRegistryAndCodahaleMetricsCollector();
+        Builder builder = CodahaleMetricsListener.newBuilder(cmcMock);
+
+        // when
+        CodahaleMetricsListener result = builder.build();
+
+        // then
+        assertThat(result.metricsCollector).isSameAs(cmcMock);
+        assertThat(result.endpointMetricsHandler)
+            .isNotNull()
+            .isInstanceOf(EndpointMetricsHandlerDefaultImpl.class);
+        assertThat(result.includeServerConfigMetrics).isFalse();
+        assertNamingStrategyIsDefault(result.serverStatsMetricNamingStrategy,
+                                      DEFAULT_PREFIX,
+                                      DEFAULT_WORD_DELIMITER);
+        assertNamingStrategyIsDefault(result.serverConfigMetricNamingStrategy,
+                                      ServerConfig.class.getSimpleName(),
+                                      DEFAULT_WORD_DELIMITER);
+        assertThat(result.requestAndResponseSizeHistogramSupplier)
+            .isSameAs(DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER);
+        assertThat(registeredGauges).isEmpty();
+    }
+
+    @Test
+    public void an_IllegalArgumentException_is_thrown_if_builder_is_built_with_null_CodahaleMetricsCollector() {
+        // given
+        Builder builder = CodahaleMetricsListener.newBuilder(null);
+
+        // when
+        Throwable ex = catchThrowable(() -> builder.build());
+
+        // then
+        assertThat(ex).isInstanceOf(IllegalArgumentException.class);
     }
 
     private static class DummyEndpoint extends StandardEndpoint<Void, Void> {

@@ -21,9 +21,9 @@ import com.codahale.metrics.MetricRegistry;
 public interface EndpointMetricsHandler {
 
     /**
-     * Eagerly setup or initialize endpoint-related metrics. You can inspect what endpoints are available via
-     * {@link ServerConfig#appEndpoints()}, and use the provided {@link MetricRegistry} to register/setup metrics.
-     * Note that some implementations of this interface may do nothing here.
+     * This method allows you to eagerly setup or initialize endpoint-related metrics. You can inspect what endpoints
+     * are available via {@link ServerConfig#appEndpoints()}, and use the provided {@link MetricRegistry} to
+     * register/setup metrics. Note that some implementations of this interface may do nothing here.
      *
      * @param config The {@link ServerConfig} that has the endpoints for the application.
      * @param metricRegistry The {@link MetricRegistry} to use for creating/registering metrics.
@@ -35,10 +35,10 @@ public interface EndpointMetricsHandler {
      * updating any endpoint-related metrics. Note that at the point this method is called, the response has been
      * fully sent to the caller.
      *
-     * @param requestInfo The request that was processed.
-     * @param responseInfo The response that was processed.
-     * @param httpState The {@link HttpProcessingState} associated with the request/response. This contains some useful
-     * info - in particular {@link HttpProcessingState#getRequestStartTime()} (so you can calculate request latency).
+     * @param requestInfo The request that was processed. Will never be null.
+     * @param responseInfo The response that was processed. Will never be null.
+     * @param httpState The {@link HttpProcessingState} associated with the request/response. This may or may not
+     * contain info you need depending on what the concrete implementation does. Will never be null.
      * @param responseHttpStatusCode The HTTP response status code that was sent to the caller.
      * @param responseHttpStatusCodeXXValue Which category the response status code falls into,
      * i.e. 1xx, 2xx, 3xx, 4xx, 5xx, etc. This is just a convenience for {@code (int)(responseHttpStatusCode / 100)}.

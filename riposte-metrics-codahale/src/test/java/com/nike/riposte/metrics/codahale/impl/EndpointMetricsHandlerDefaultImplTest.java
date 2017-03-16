@@ -33,6 +33,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import io.netty.channel.ChannelHandlerContext;
@@ -49,7 +50,10 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -65,7 +69,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
     private ServerConfig serverConfig;
     private MetricRegistry metricRegistryMock;
 
-    private Map<String, Timer> registeredTimerMocks;
+    private Map<String, Timer> registeredTimers;
     private Map<String, Meter> registeredMeterMocks;
     private Map<String, Counter> registeredCounterMocks;
     private Map<String, Histogram> registeredHistogramMocks;
@@ -78,7 +82,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
     @Before
     public void beforeMethod() {
-        instance = new EndpointMetricsHandlerDefaultImpl();
+        instance = spy(new EndpointMetricsHandlerDefaultImpl());
 
         serverConfig = new ServerConfig() {
             private final List<Endpoint<?>> endpoints = Arrays.asList(
@@ -127,13 +131,15 @@ public class EndpointMetricsHandlerDefaultImplTest {
     private void setupMetricRegistryMock() {
         metricRegistryMock = mock(MetricRegistry.class);
 
-        registeredTimerMocks = new HashMap<>();
+        registeredTimers = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
-            Timer timerMock = mock(Timer.class);
-            registeredTimerMocks.put(name, timerMock);
-            return timerMock;
-        }).when(metricRegistryMock).timer(anyString());
+            Timer originalTimer = (Timer) invocation.callRealMethod();
+            return spy(originalTimer);
+        }).when(instance).createAndRegisterRequestTimer(anyString(), any(MetricRegistry.class));
+
+        doThrow(new RuntimeException(
+            "All timer creation should go through createAndRegisterRequestTimer(), *not* metricRegistry.timer(...)."
+        )).when(metricRegistryMock).timer(anyString());
 
         registeredMeterMocks = new HashMap<>();
         doAnswer(invocation -> {
@@ -162,16 +168,78 @@ public class EndpointMetricsHandlerDefaultImplTest {
         registeredGauges = new HashMap<>();
         doAnswer(invocation -> {
             String name = invocation.getArgumentAt(0, String.class);
-            Gauge gauge = invocation.getArgumentAt(1, Gauge.class);
-            registeredGauges.put(name, gauge);
-            return gauge;
+            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            if (metric instanceof Gauge)
+                registeredGauges.put(name, (Gauge)metric);
+            else if (metric instanceof Timer)
+                registeredTimers.put(name, (Timer)metric);
+            else
+                throw new RuntimeException("Expected Gauge or Timer, but received: " + metric.getClass().getName());
+            
+            return metric;
         }).when(metricRegistryMock).register(anyString(), any(Metric.class));
     }
 
     @Test
-    public void setupEndpointsMetrics_sets_up_metrics_as_expected() {
-        // given
+    public void default_constructor_sets_up_instance_as_expected() {
+        // when
         EndpointMetricsHandlerDefaultImpl newImpl = new EndpointMetricsHandlerDefaultImpl();
+
+        // then
+        assertThat(newImpl.requestTimerGenerator)
+            .isSameAs(EndpointMetricsHandlerDefaultImpl.DEFAULT_REQUEST_TIMER_GENERATOR);
+    }
+
+    @Test
+    public void one_arg_constructor_sets_up_instance_as_expected() {
+        // given
+        Supplier<Timer> timerSupplier = mock(Supplier.class);
+
+        // when
+        EndpointMetricsHandlerDefaultImpl newImpl = new EndpointMetricsHandlerDefaultImpl(timerSupplier);
+
+        // then
+        assertThat(newImpl.requestTimerGenerator).isSameAs(timerSupplier);
+    }
+
+    @Test
+    public void createAndRegisterRequestTimer_should_use_requestTimerGenerator() {
+        // given
+        Timer timerMock = mock(Timer.class);
+        Supplier<Timer> timerSupplier = () -> timerMock;
+        EndpointMetricsHandlerDefaultImpl newImpl = new EndpointMetricsHandlerDefaultImpl(timerSupplier);
+
+        // when
+        Timer result = newImpl.createAndRegisterRequestTimer("foo", metricRegistryMock);
+
+        // then
+        assertThat(result).isSameAs(timerMock);
+    }
+
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
+    @Test
+    public void setupEndpointsMetrics_sets_up_metrics_as_expected(boolean customizeTimerCreation) {
+        // given
+        EndpointMetricsHandlerDefaultImpl newImpl = spy(new EndpointMetricsHandlerDefaultImpl());
+        String expectedTimerPrefix = customizeTimerCreation
+                                     ? UUID.randomUUID().toString() + newImpl.prefix
+                                     : newImpl.prefix;
+        doAnswer(invocation -> {
+            if (!customizeTimerCreation)
+                return invocation.callRealMethod();
+
+            // We're supposed to customize the timer creation for the purposes of this test to verify that all timer
+            //      creation goes through the createAndRegisterRequestTimer() method.
+            String name = invocation.getArgumentAt(0, String.class);
+            // Replace the normal prefix with the customized prefix. This adds the non-standard-ness that lets us verify
+            //      the custom createAndRegisterRequestTimer() was used.
+            name = name.replace(newImpl.prefix, expectedTimerPrefix);
+            MetricRegistry registry = invocation.getArgumentAt(1, MetricRegistry.class);
+            return registry.register(name, mock(Timer.class));
+        }).when(newImpl).createAndRegisterRequestTimer(anyString(), any(MetricRegistry.class));
 
         // when
         newImpl.setupEndpointsMetrics(serverConfig, metricRegistryMock);
@@ -179,7 +247,8 @@ public class EndpointMetricsHandlerDefaultImplTest {
         // then
         // Verify aggregate overall requests and responses metrics are setup with expected names
         assertThat(newImpl.getRequests()).isSameAs(newImpl.requests);
-        assertThat(newImpl.requests).isEqualTo(registeredTimerMocks.get(name(newImpl.prefix, "requests")));
+        assertThat(newImpl.requests).isEqualTo(registeredTimers.get(name(expectedTimerPrefix, "requests")));
+        assertThat(mockingDetails(newImpl.requests).isMock()).isEqualTo(customizeTimerCreation);
 
         assertThat(newImpl.getResponses()).isSameAs(newImpl.responses);
         assertThat(newImpl.responses.length).isEqualTo(5);
@@ -193,29 +262,36 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
         // Verify aggregate HTTP-method request metrics are setup with expected names
         assertThat(newImpl.getGetRequests()).isSameAs(newImpl.getRequests);
-        assertThat(newImpl.getRequests).isEqualTo(registeredTimerMocks.get(name(newImpl.prefix, "get-requests")));
+        assertThat(newImpl.getRequests).isEqualTo(registeredTimers.get(name(expectedTimerPrefix, "get-requests")));
+        assertThat(mockingDetails(newImpl.getRequests).isMock()).isEqualTo(customizeTimerCreation);
 
         assertThat(newImpl.getPostRequests()).isSameAs(newImpl.postRequests);
-        assertThat(newImpl.postRequests).isEqualTo(registeredTimerMocks.get(name(newImpl.prefix, "post-requests")));
+        assertThat(newImpl.postRequests).isEqualTo(registeredTimers.get(name(expectedTimerPrefix, "post-requests")));
+        assertThat(mockingDetails(newImpl.postRequests).isMock()).isEqualTo(customizeTimerCreation);
 
         assertThat(newImpl.getPutRequests()).isSameAs(newImpl.putRequests);
-        assertThat(newImpl.putRequests).isEqualTo(registeredTimerMocks.get(name(newImpl.prefix, "put-requests")));
+        assertThat(newImpl.putRequests).isEqualTo(registeredTimers.get(name(expectedTimerPrefix, "put-requests")));
+        assertThat(mockingDetails(newImpl.putRequests).isMock()).isEqualTo(customizeTimerCreation);
 
         assertThat(newImpl.getDeleteRequests()).isSameAs(newImpl.deleteRequests);
-        assertThat(newImpl.deleteRequests).isEqualTo(registeredTimerMocks.get(name(newImpl.prefix, "delete-requests")));
+        assertThat(newImpl.deleteRequests).isEqualTo(registeredTimers.get(name(expectedTimerPrefix, "delete-requests")));
+        assertThat(mockingDetails(newImpl.deleteRequests).isMock()).isEqualTo(customizeTimerCreation);
 
         assertThat(newImpl.getOtherRequests()).isSameAs(newImpl.otherRequests);
-        assertThat(newImpl.otherRequests).isEqualTo(registeredTimerMocks.get(name(newImpl.prefix, "other-requests")));
+        assertThat(newImpl.otherRequests).isEqualTo(registeredTimers.get(name(expectedTimerPrefix, "other-requests")));
+        assertThat(mockingDetails(newImpl.otherRequests).isMock()).isEqualTo(customizeTimerCreation);
 
         // Verify per-endpoint request and response metrics are setup with expected names
         serverConfig.appEndpoints().forEach(endpoint -> {
             String timerAndMeterMapKeyForEndpoint = newImpl.getTimerAndMeterMapKeyForEndpoint(endpoint);
             String name = name(newImpl.prefix, "endpoints." + endpoint.getClass().getName().replace(".", "-") + "-"
                                                 + timerAndMeterMapKeyForEndpoint);
+            String timerName = name.replace(newImpl.prefix, expectedTimerPrefix);
 
-            Timer expectedTimer = registeredTimerMocks.get(name);
+            Timer expectedTimer = registeredTimers.get(timerName);
             assertThat(expectedTimer).isNotNull();
             assertThat(newImpl.endpointRequestsTimers.get(timerAndMeterMapKeyForEndpoint)).isSameAs(expectedTimer);
+            assertThat(mockingDetails(expectedTimer).isMock()).isEqualTo(customizeTimerCreation);
 
             Meter[] expectedMeters = new Meter[5];
             for (int i = 0; i < 5; i++) {
@@ -233,9 +309,12 @@ public class EndpointMetricsHandlerDefaultImplTest {
         // 404 metrics
         {
             String notFoundNameId = name(newImpl.prefix, "endpoints." + ENDPOINT_NOT_FOUND_MAP_KEY);
-            Timer expected404Timer = registeredTimerMocks.get(notFoundNameId);
+            String timerNotFoundNameId = notFoundNameId.replace(newImpl.prefix, expectedTimerPrefix);
+            Timer expected404Timer = registeredTimers.get(timerNotFoundNameId);
             assertThat(expected404Timer).isNotNull();
             assertThat(newImpl.endpointRequestsTimers.get(ENDPOINT_NOT_FOUND_MAP_KEY)).isSameAs(expected404Timer);
+            assertThat(mockingDetails(expected404Timer).isMock()).isEqualTo(customizeTimerCreation);
+
             Meter expected404Meter = registeredMeterMocks.get(name(notFoundNameId, "4xx-responses"));
             assertThat(expected404Meter).isNotNull();
             assertThat(newImpl.endpointResponsesMeters.get(ENDPOINT_NOT_FOUND_MAP_KEY)).isEqualTo(
@@ -246,9 +325,12 @@ public class EndpointMetricsHandlerDefaultImplTest {
         // 405 metrics
         {
             String methodNotAllowedNameId = name(newImpl.prefix, "endpoints." + METHOD_NOT_ALLOWED_MAP_KEY);
-            Timer expected405Timer = registeredTimerMocks.get(methodNotAllowedNameId);
+            String timerMethodNotAllowedNameId = methodNotAllowedNameId.replace(newImpl.prefix, expectedTimerPrefix);
+            Timer expected405Timer = registeredTimers.get(timerMethodNotAllowedNameId);
             assertThat(expected405Timer).isNotNull();
             assertThat(newImpl.endpointRequestsTimers.get(METHOD_NOT_ALLOWED_MAP_KEY)).isSameAs(expected405Timer);
+            assertThat(mockingDetails(expected405Timer).isMock()).isEqualTo(customizeTimerCreation);
+
             Meter expected405Meter = registeredMeterMocks.get(name(methodNotAllowedNameId, "4xx-responses"));
             assertThat(expected405Meter).isNotNull();
             assertThat(newImpl.endpointResponsesMeters.get(METHOD_NOT_ALLOWED_MAP_KEY)).isEqualTo(
@@ -259,9 +341,12 @@ public class EndpointMetricsHandlerDefaultImplTest {
         // 500 routing error metrics
         {
             String routingErrorNameId = name(newImpl.prefix, "endpoints." + ROUTING_ERROR_MAP_KEY);
-            Timer expected500Timer = registeredTimerMocks.get(routingErrorNameId);
+            String timerRoutingErrorNameId = routingErrorNameId.replace(newImpl.prefix, expectedTimerPrefix);
+            Timer expected500Timer = registeredTimers.get(timerRoutingErrorNameId);
             assertThat(expected500Timer).isNotNull();
             assertThat(newImpl.endpointRequestsTimers.get(ROUTING_ERROR_MAP_KEY)).isSameAs(expected500Timer);
+            assertThat(mockingDetails(expected500Timer).isMock()).isEqualTo(customizeTimerCreation);
+
             Meter expected500Meter = registeredMeterMocks.get(name(routingErrorNameId, "5xx-responses"));
             assertThat(expected500Meter).isNotNull();
             assertThat(newImpl.endpointResponsesMeters.get(ROUTING_ERROR_MAP_KEY)).isEqualTo(
@@ -272,9 +357,12 @@ public class EndpointMetricsHandlerDefaultImplTest {
         // Misc no-endpoint short-circuit response metrics
         {
             String shortCircuitNameId = name(newImpl.prefix, "endpoints." + NO_ENDPOINT_SHORT_CIRCUIT_KEY);
-            Timer expectedShortCircuitTimer = registeredTimerMocks.get(shortCircuitNameId);
+            String timerShortCircuitNameId = shortCircuitNameId.replace(newImpl.prefix, expectedTimerPrefix);
+            Timer expectedShortCircuitTimer = registeredTimers.get(timerShortCircuitNameId);
             assertThat(expectedShortCircuitTimer).isNotNull();
             assertThat(newImpl.endpointRequestsTimers.get(NO_ENDPOINT_SHORT_CIRCUIT_KEY)).isSameAs(expectedShortCircuitTimer);
+            assertThat(mockingDetails(expectedShortCircuitTimer).isMock()).isEqualTo(customizeTimerCreation);
+
             Meter[] expectedShortCircuitMeters = new Meter[5];
             for (int i = 0; i < 5; i++) {
                 String nextMeterName = name(shortCircuitNameId, (i + 1) + "xx-responses");

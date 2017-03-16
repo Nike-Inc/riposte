@@ -9,13 +9,17 @@ import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 
+import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Reservoir;
+import com.codahale.metrics.SlidingTimeWindowReservoir;
 import com.codahale.metrics.Timer;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -27,8 +31,18 @@ import static com.codahale.metrics.MetricRegistry.name;
  * no dimension metadata for the metrics. Think of this as the metrics firehose with really verbose metric names -
  * you'll get *all* the data, and all the info about what the metric is measuring is embedded in the metric name.
  *
+ * <p>Note that by default regular {@link Timer}s will be created and used, which means they will track all-time data
+ * (this is because by default {@link Timer} uses {@link ExponentiallyDecayingReservoir} which tries to weight itself
+ * towards newer data but gives no guarantees, and also expects a normal distribution to guarantee its accuracy, which
+ * is not usually how endpoint latency is distributed). You can customize the timer behavior by using the
+ * {@link EndpointMetricsHandlerDefaultImpl#EndpointMetricsHandlerDefaultImpl(Supplier)} constructor, passing in a
+ * custom {@link Supplier} for generating {@link Timer}s. For example you could use the {@link Timer#Timer(Reservoir)}
+ * constructor and pass in a {@link SlidingTimeWindowReservoir} to get much better accuracy over whatever rolling time
+ * window you choose.
+ *
  * @author Nic Munroe
  */
+@SuppressWarnings("WeakerAccess")
 public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler {
 
     protected final String prefix = CodahaleMetricsListener.class.getSimpleName();
@@ -53,6 +67,30 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
     protected Map<String, Timer> endpointRequestsTimers = new HashMap<>();
     protected Map<String, Meter[]> endpointResponsesMeters = new HashMap<>();
 
+    protected final Supplier<Timer> requestTimerGenerator;
+    public static final Supplier<Timer> DEFAULT_REQUEST_TIMER_GENERATOR = Timer::new;
+
+    /**
+     * Create a default instance that uses {@link #DEFAULT_REQUEST_TIMER_GENERATOR} for creating new timers. Use the
+     * other constructor if you want to customize timer creation. See the class-level javadocs for this class for
+     * info on why you might want to customize timer creation.
+     */
+    public EndpointMetricsHandlerDefaultImpl() {
+        this(null);
+    }
+
+    /**
+     * Create a new instance that uses the given supplier for creating {@link Timer}s. See the class-level javadocs for
+     * this class for info on why you might want to customize timer creation.
+     *
+     * @param requestTimerGenerator The supplier that should be used to generate new {@link Timer}s.
+     */
+    public EndpointMetricsHandlerDefaultImpl(Supplier<Timer> requestTimerGenerator) {
+        if (requestTimerGenerator == null)
+            requestTimerGenerator = DEFAULT_REQUEST_TIMER_GENERATOR;
+        
+        this.requestTimerGenerator = requestTimerGenerator;
+    }
 
     @Override
     public void setupEndpointsMetrics(ServerConfig config, MetricRegistry metricRegistry) {
@@ -65,7 +103,12 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
         setupEndpointSpecificMetrics(config, metricRegistry);
         setupEndpointAggregateMetrics(metricRegistry);
     }
-    
+
+    protected Timer createAndRegisterRequestTimer(String name, MetricRegistry registry) {
+        Timer newTimer = requestTimerGenerator.get();
+        return registry.register(name, newTimer);
+    }
+
     protected void setupEndpointSpecificMetrics(ServerConfig config, MetricRegistry metricRegistry) {
         endpointRequestsTimers = new HashMap<>();
         endpointResponsesMeters = new HashMap<>();
@@ -74,7 +117,7 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
             String name = name(prefix, "endpoints." + endpoint.getClass().getName().replace(".", "-") + "-"
                                        + timerAndMeterMapKeyForEndpoint);
 
-            endpointRequestsTimers.put(timerAndMeterMapKeyForEndpoint, metricRegistry.timer(name));
+            endpointRequestsTimers.put(timerAndMeterMapKeyForEndpoint, createAndRegisterRequestTimer(name, metricRegistry));
 
             endpointResponsesMeters.put(
                 timerAndMeterMapKeyForEndpoint,
@@ -91,7 +134,7 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
         {
             String notFoundNameId = name(prefix, "endpoints." + ENDPOINT_NOT_FOUND_MAP_KEY);
             endpointRequestsTimers
-                .put(ENDPOINT_NOT_FOUND_MAP_KEY, metricRegistry.timer(notFoundNameId));
+                .put(ENDPOINT_NOT_FOUND_MAP_KEY, createAndRegisterRequestTimer(notFoundNameId, metricRegistry));
             endpointResponsesMeters.put(ENDPOINT_NOT_FOUND_MAP_KEY, new Meter[]{
                 metricRegistry.meter(name(notFoundNameId, "4xx-responses"))});
         }
@@ -100,7 +143,7 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
         {
             String methodNotAllowedNameId = name(prefix, "endpoints." + METHOD_NOT_ALLOWED_MAP_KEY);
             endpointRequestsTimers
-                .put(METHOD_NOT_ALLOWED_MAP_KEY, metricRegistry.timer(methodNotAllowedNameId));
+                .put(METHOD_NOT_ALLOWED_MAP_KEY, createAndRegisterRequestTimer(methodNotAllowedNameId, metricRegistry));
             endpointResponsesMeters.put(METHOD_NOT_ALLOWED_MAP_KEY, new Meter[]{
                 metricRegistry.meter(name(methodNotAllowedNameId, "4xx-responses"))});
         }
@@ -109,7 +152,7 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
         {
             String routingErrorNameId = name(prefix, "endpoints." + ROUTING_ERROR_MAP_KEY);
             endpointRequestsTimers
-                .put(ROUTING_ERROR_MAP_KEY, metricRegistry.timer(routingErrorNameId));
+                .put(ROUTING_ERROR_MAP_KEY, createAndRegisterRequestTimer(routingErrorNameId, metricRegistry));
             endpointResponsesMeters.put(ROUTING_ERROR_MAP_KEY, new Meter[]{
                 metricRegistry.meter(name(routingErrorNameId, "5xx-responses"))});
         }
@@ -118,7 +161,7 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
         {
             String shortCircuitNameId = name(prefix, "endpoints." + NO_ENDPOINT_SHORT_CIRCUIT_KEY);
             endpointRequestsTimers
-                .put(NO_ENDPOINT_SHORT_CIRCUIT_KEY, metricRegistry.timer(shortCircuitNameId));
+                .put(NO_ENDPOINT_SHORT_CIRCUIT_KEY, createAndRegisterRequestTimer(shortCircuitNameId, metricRegistry));
             endpointResponsesMeters.put(NO_ENDPOINT_SHORT_CIRCUIT_KEY, new Meter[]{
                 metricRegistry.meter(name(shortCircuitNameId, "1xx-responses")), // 1xx
                 metricRegistry.meter(name(shortCircuitNameId, "2xx-responses")), // 2xx
@@ -131,7 +174,7 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
 
     protected void setupEndpointAggregateMetrics(MetricRegistry metricRegistry) {
         // codahale
-        this.requests = metricRegistry.timer(name(prefix, "requests"));
+        this.requests = createAndRegisterRequestTimer(name(prefix, "requests"), metricRegistry);
         this.responses = new Meter[]{
             metricRegistry.meter(name(prefix, "1xx-responses")), // 1xx
             metricRegistry.meter(name(prefix, "2xx-responses")), // 2xx
@@ -139,11 +182,11 @@ public class EndpointMetricsHandlerDefaultImpl implements EndpointMetricsHandler
             metricRegistry.meter(name(prefix, "4xx-responses")), // 4xx
             metricRegistry.meter(name(prefix, "5xx-responses"))  // 5xx
         };
-        this.getRequests = metricRegistry.timer(name(prefix, "get-requests"));
-        this.postRequests = metricRegistry.timer(name(prefix, "post-requests"));
-        this.putRequests = metricRegistry.timer(name(prefix, "put-requests"));
-        this.deleteRequests = metricRegistry.timer(name(prefix, "delete-requests"));
-        this.otherRequests = metricRegistry.timer(name(prefix, "other-requests"));
+        this.getRequests = createAndRegisterRequestTimer(name(prefix, "get-requests"), metricRegistry);
+        this.postRequests = createAndRegisterRequestTimer(name(prefix, "post-requests"), metricRegistry);
+        this.putRequests = createAndRegisterRequestTimer(name(prefix, "put-requests"), metricRegistry);
+        this.deleteRequests = createAndRegisterRequestTimer(name(prefix, "delete-requests"), metricRegistry);
+        this.otherRequests = createAndRegisterRequestTimer(name(prefix, "other-requests"), metricRegistry);
 
     }
 
