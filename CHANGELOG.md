@@ -8,8 +8,21 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.9.x` Releases - [0.9.0](#090)
+- `0.9.x` Releases - [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.9.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.1)
+
+Released on 2017-03-17.
+
+### Fixed
+
+- Fixed Riposte to honor the `ServerConfig.maxRequestSizeInBytes()` setting. You can use this to limit incoming request payload size at a global level, with the option to override on a per-endpoint basis via `Endpoint.maxRequestSizeInBytesOverride()`. Previously this `ServerConfig` setting existed but was ignored and had no effect.
+	- Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#28](https://github.com/Nike-Inc/riposte/pull/28). For issue [#27](https://github.com/Nike-Inc/riposte/issues/27).
+- Fixed `ProxyRouterEndpoint`s so that they will honor any incoming content-length header rather than the previous behavior of removing content-length and replacing it with transfer-encoding=chunked.
+	- Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#30](https://github.com/Nike-Inc/riposte/pull/30). For issue [#29](https://github.com/Nike-Inc/riposte/issues/29).
+- Fixed request handling to detect when Netty marks a request chunk as a decoder failure (i.e. bad/non-HTTP spec requests). These errors will now be mapped to an appropriate HTTP status code 400 response for the caller. Previously this was incorrectly resulting in a 404-not-found response.
+ 	- Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#33](https://github.com/Nike-Inc/riposte/pull/33). For issue [#32](https://github.com/Nike-Inc/riposte/issues/32).
 
 ## [0.9.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.0)
 
