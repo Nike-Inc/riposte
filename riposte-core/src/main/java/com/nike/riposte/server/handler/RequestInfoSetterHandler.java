@@ -1,6 +1,7 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
@@ -10,6 +11,7 @@ import com.nike.riposte.server.http.impl.RequestInfoImpl;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 
@@ -47,10 +49,12 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
         if (state != null) {
             if (msg instanceof HttpRequest) {
+                throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
                 RequestInfo<?> requestInfo = new RequestInfoImpl<>((HttpRequest) msg);
                 state.setRequestInfo(requestInfo);
             }
             else if (msg instanceof HttpContent) {
+                throwExceptionIfNotSuccessfullyDecoded((HttpContent) msg);
                 RequestInfo<?> requestInfo = state.getRequestInfo();
                 if (requestInfo == null) {
                     throw new IllegalStateException("Found a HttpContent msg without a RequestInfo stored in the "
@@ -67,6 +71,12 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    private void throwExceptionIfNotSuccessfullyDecoded(HttpObject httpObject) {
+        if (httpObject.getDecoderResult() != null && httpObject.getDecoderResult().isFailure()) {
+            throw new InvalidHttpRequestException("Detected HttpObject that was not successfully decoded.", httpObject.getDecoderResult().cause());
+        }
     }
 
     private boolean isMaxRequestSizeValidationDisabled(int configuredMaxRequestSize) {

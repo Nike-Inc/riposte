@@ -13,6 +13,7 @@ import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpected
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
+import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
@@ -145,7 +146,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     public void should_handle_Unauthorized401Exception() {
         verifyExceptionHandled(new Unauthorized401Exception("foo", "/bar", "blah"), singletonError(testProjectApiErrors.getUnauthorizedApiError()));
     }
-    
+
     @Test
     public void should_handle_Forbidden403Exception() {
         verifyExceptionHandled(new Forbidden403Exception("foo", "/bar", "blah"), singletonError(testProjectApiErrors.getForbiddenApiError()));
@@ -206,4 +207,31 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         assertThat(listener.CIRCUIT_BREAKER_TIMEOUT_API_ERROR.getName()).isEqualTo("CIRCUIT_BREAKER_TIMEOUT");
     }
 
+    @Test
+    public void shouldHandleInvalidHttpRequestExceptionWithNullCause() {
+        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new InvalidHttpRequestException("message", null));
+        assertThat(result.shouldHandleResponse).isTrue();
+        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("Invalid HTTP request");
+
+        assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
+        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("message");
+
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("cause_details");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("null");
+    }
+
+    @Test
+    public void shouldHandleInvalidHttpRequestExceptionWithNonNullCause() {
+        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new InvalidHttpRequestException("message", new RuntimeException("runtime exception")));
+        assertThat(result.shouldHandleResponse).isTrue();
+        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("Invalid HTTP request");
+
+        assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
+        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("message");
+
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("cause_details");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("java.lang.RuntimeException: runtime exception");
+    }
 }

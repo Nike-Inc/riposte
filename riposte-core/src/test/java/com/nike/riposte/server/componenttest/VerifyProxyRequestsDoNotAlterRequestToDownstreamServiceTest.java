@@ -1,5 +1,6 @@
 package com.nike.riposte.server.componenttest;
 
+import com.nike.internal.util.Pair;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.hooks.PipelineCreateHook;
@@ -10,27 +11,15 @@ import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
-import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.CharsetUtil;
 import org.apache.commons.lang3.RandomUtils;
@@ -47,12 +36,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static com.nike.riposte.server.testutils.ComponentTestUtils.executeRequest;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singleton;
@@ -64,7 +51,6 @@ import static org.apache.commons.lang3.StringUtils.substringBefore;
 import static org.apache.commons.lang3.StringUtils.substringBetween;
 import static org.apache.commons.lang3.StringUtils.substringsBetween;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 
 public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
 
@@ -75,7 +61,7 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
     private static StringBuilder downstreamServerRequest;
     private static StringBuilder proxyServerRequest;
     private static final String HEADER_SEPARATOR = ":";
-    private static final long incompleteCallTimeoutMillis = 5000;
+    private static final int incompleteCallTimeoutMillis = 5000;
     private static final String payloadDictionary = "aBcDefGhiJkLmN@#$%";
 
     @BeforeClass
@@ -125,10 +111,11 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, HttpHeaders.Values.CHUNKED);
 
         // when
-        String serverResponse = executeRequest(request);
+        Pair<Integer, String> serverResponse = executeRequest(request, proxyServerConfig.endpointsPort(), incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.getRight()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
         assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded();
 
         String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
@@ -167,10 +154,11 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         request.headers().set(HttpHeaders.Names.CONTENT_LENGTH, payloadSize);
 
         // when
-        String serverResponse = executeRequest(request);
+        Pair<Integer, String> serverResponse = executeRequest(request, proxyServerConfig.endpointsPort(), incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.getRight()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
         assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded();
 
         String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
@@ -230,59 +218,6 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(downstreamHeaders.get("X-B3-TraceId")).isNotNull();
         assertThat(downstreamHeaders.get("X-B3-SpanId")).isNotNull();
         assertThat(downstreamHeaders.get("X-B3-SpanName")).isNotNull();
-    }
-
-    private String executeRequest(HttpRequest request) throws InterruptedException, ExecutionException {
-        Bootstrap bootstrap = new Bootstrap();
-        EventLoopGroup eventLoopGroup = new NioEventLoopGroup();
-        try {
-            CompletableFuture<String> responseFromServer = new CompletableFuture<>();
-            bootstrap.group(eventLoopGroup)
-                    .channel(NioSocketChannel.class)
-                    .handler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        protected void initChannel(SocketChannel ch) throws Exception {
-                            ChannelPipeline p = ch.pipeline();
-                            p.addLast(new HttpClientCodec());
-                            p.addLast(new HttpObjectAggregator(Integer.MAX_VALUE));
-                            p.addLast(new SimpleChannelInboundHandler<HttpObject>() {
-                                @Override
-                                protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg)
-                                        throws Exception {
-                                    if (msg instanceof FullHttpResponse) {
-                                        // Store the proxyServer response for asserting on later.
-                                        FullHttpResponse responseMsg = (FullHttpResponse) msg;
-                                        responseFromServer.complete(responseMsg.content().toString(UTF_8));
-                                    } else {
-                                        // Should never happen.
-                                        throw new RuntimeException("Received unexpected message type: " + msg.getClass());
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-            // Connect to the proxyServer.
-            Channel ch = bootstrap.connect("localhost", proxyServerConfig.endpointsPort()).sync().channel();
-
-            // Send the request.
-            ch.writeAndFlush(request);
-
-            // Wait for the response to be received
-            try {
-                responseFromServer.get(incompleteCallTimeoutMillis, TimeUnit.MILLISECONDS);
-            } catch (TimeoutException ex) {
-                fail("The call took much longer than expected without receiving a response. "
-                        + "Cancelling this test - it's not working properly", ex);
-            } finally {
-                ch.close();
-            }
-
-            // If we reach here then the call should be complete.
-            return responseFromServer.get();
-        } finally {
-            eventLoopGroup.shutdownGracefully();
-        }
     }
 
     private static String generatePayloadOfSizeInBytes(int length) {

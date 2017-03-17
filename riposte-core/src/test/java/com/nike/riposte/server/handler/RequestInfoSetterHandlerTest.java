@@ -1,17 +1,20 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 
+import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 
 import org.assertj.core.api.Assertions;
@@ -217,4 +220,32 @@ public class RequestInfoSetterHandlerTest {
         assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
     }
 
+    @Test
+    public void doChannelRead_HttpRequest_throws_exception_when_failed_decoder_result() {
+        // given
+        HttpRequest msgMock = mock(HttpRequest.class);
+        DecoderResult decoderResult = mock(DecoderResult.class);
+        doReturn(true).when(decoderResult).isFailure();
+        doReturn(decoderResult).when(msgMock).getDecoderResult();
+
+        // when
+        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, msgMock));
+
+        // then
+        assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+    }
+
+    @Test
+    public void doChannelRead_HttpContent_throws_exception_when_failed_decoder_result() {
+        // given
+        DecoderResult decoderResult = mock(DecoderResult.class);
+        doReturn(true).when(decoderResult).isFailure();
+        doReturn(decoderResult).when(httpContent).getDecoderResult();
+
+        // when
+        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContent));
+
+        // then
+        assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+    }
 }

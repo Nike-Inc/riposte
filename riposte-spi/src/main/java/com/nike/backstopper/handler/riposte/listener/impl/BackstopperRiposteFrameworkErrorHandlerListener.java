@@ -18,6 +18,7 @@ import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
+import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
@@ -243,6 +244,20 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
                 ),
                 Arrays.asList(Pair.of("incomplete_http_call_timeout_millis", String.valueOf(theEx.timeoutMillis)),
                               Pair.of("exception_message", theEx.getMessage()))
+            );
+        }
+
+        if (ex instanceof InvalidHttpRequestException) {
+            InvalidHttpRequestException theEx = (InvalidHttpRequestException)ex;
+            Throwable cause = theEx.getCause();
+            String causeAsString = cause == null ? "null" : cause.toString();
+            return ApiExceptionHandlerListenerResult.handleResponse(
+                    singletonError(
+                            new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
+                                    Pair.of("cause", "Invalid HTTP request"))
+                    ),
+                    Arrays.asList(Pair.of("exception_message", theEx.getMessage()),
+                                    Pair.of("cause_details", causeAsString))
             );
         }
 
