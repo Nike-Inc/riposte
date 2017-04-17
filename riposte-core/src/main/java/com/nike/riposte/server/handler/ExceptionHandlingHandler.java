@@ -69,10 +69,13 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
         //      processError call.
         HttpProcessingState state = getStateAndCreateIfNeeded(ctx, cause);
         if (state.isResponseSendingStarted()) {
-            logger.debug("A response has already been sent. Ignoring this caught exception. NOTE: This usually occurs "
-                         + "when an error happens on multiple chunks of the incoming request - only the first one is "
-                         + "processed into the error sent to the user. The original error is probably higher up in the "
-                         + "logs.");
+            logger.info(
+                "A response has already been started. Ignoring this exception since it's secondary. NOTE: This often "
+                + "occurs when an error happens repeatedly on multiple chunks of a request or response - only the "
+                + "first one is processed into the error sent to the user. The original error is probably higher up in "
+                + "the logs. ignored_secondary_exception=\"{}\"", cause.toString());
+
+            return PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
         }
         else {
             ResponseInfo<ErrorResponseBody> responseInfo = processError(state, null, cause);

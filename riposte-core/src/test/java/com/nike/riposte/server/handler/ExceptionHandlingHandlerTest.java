@@ -1,6 +1,8 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
+import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.UnexpectedMajorErrorHandlingError;
 import com.nike.riposte.server.error.handler.ErrorResponseBody;
 import com.nike.riposte.server.error.handler.ErrorResponseInfo;
@@ -13,9 +15,14 @@ import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.impl.FullResponseInfo;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+import com.tngtech.java.junit.dataprovider.UseDataProvider;
 
+import org.assertj.core.api.Assertions;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.Whitebox;
 
@@ -33,6 +40,8 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.Attribute;
 
+import static com.nike.riposte.server.handler.base.PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
+import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -43,6 +52,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,6 +60,7 @@ import static org.mockito.Mockito.verify;
 /**
  * Tests the functionality of {@link com.nike.riposte.server.handler.ExceptionHandlingHandler}
  */
+@RunWith(DataProviderRunner.class)
 public class ExceptionHandlingHandlerTest {
 
     private ExceptionHandlingHandler handler;
@@ -110,6 +121,55 @@ public class ExceptionHandlingHandlerTest {
         // then
         verify(handlerSpy).getStateAndCreateIfNeeded(ctxMock, cause);
         verify(handlerSpy).processError(state, null, cause);
+        assertThat(state.getResponseInfo(), is(errorResponseMock));
+        assertThat(result, is(PipelineContinuationBehavior.CONTINUE));
+    }
+
+    @Test
+    public void doExceptionCaught_should_do_nothing_and_return_DO_NOT_FIRE_CONTINUE_EVENT_if_response_sending_already_started()
+        throws Exception {
+        // given
+        ExceptionHandlingHandler handlerSpy = spy(handler);
+        Throwable cause = new Exception("intentional test exception");
+        ResponseInfo<?> responseInfoMock = mock(ResponseInfo.class);
+        doReturn(true).when(responseInfoMock).isResponseSendingStarted();
+        state.setResponseInfo(responseInfoMock);
+
+        // when
+        PipelineContinuationBehavior result = handlerSpy.doExceptionCaught(ctxMock, cause);
+
+        // then
+        verify(handlerSpy, never()).processError(any(HttpProcessingState.class), any(Object.class), any(Throwable.class));
+        Assertions.assertThat(result).isEqualTo(DO_NOT_FIRE_CONTINUE_EVENT);
+    }
+
+    @DataProvider
+    public static List<List<Throwable>> exceptionsThatShouldForceCloseConnection() {
+        return Arrays.asList(
+            singletonList(mock(TooManyOpenChannelsException.class)),
+            singletonList(mock(IncompleteHttpCallTimeoutException.class))
+        );
+    }
+
+    @UseDataProvider("exceptionsThatShouldForceCloseConnection")
+    @Test
+    public void doExceptionCaught_should_setForceConnectionCloseAfterResponseSent_to_true_on_request_when_exception_matches_certain_types(
+        Throwable exThatShouldForceCloseConnection
+    ) throws Exception {
+        // given
+        ExceptionHandlingHandler handlerSpy = spy(handler);
+        ResponseInfo<ErrorResponseBody> errorResponseMock = mock(ResponseInfo.class);
+        doReturn(errorResponseMock).when(handlerSpy).processError(state, null, exThatShouldForceCloseConnection);
+        assertThat(state.getResponseInfo(), nullValue());
+
+        // when
+        PipelineContinuationBehavior result = handlerSpy.doExceptionCaught(ctxMock, exThatShouldForceCloseConnection);
+
+        // then
+        verify(errorResponseMock).setForceConnectionCloseAfterResponseSent(true);
+
+        verify(handlerSpy).getStateAndCreateIfNeeded(ctxMock, exThatShouldForceCloseConnection);
+        verify(handlerSpy).processError(state, null, exThatShouldForceCloseConnection);
         assertThat(state.getResponseInfo(), is(errorResponseMock));
         assertThat(result, is(PipelineContinuationBehavior.CONTINUE));
     }
@@ -364,4 +424,6 @@ public class ExceptionHandlingHandlerTest {
         assertThat(responseInfo.getHttpStatusCode(), is(httpStatusCode));
         assertThat(responseInfo.getHeaders().entries().size(), is(0));
     }
+
+    
 }

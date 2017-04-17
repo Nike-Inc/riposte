@@ -86,9 +86,6 @@ import io.netty.util.concurrent.Promise;
 import static com.nike.riposte.util.AsyncNettyHelper.linkTracingAndMdcToCurrentThread;
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 import static com.nike.riposte.util.AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
-import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
 
 /**
  * TODO: Class Description
@@ -119,7 +116,7 @@ public class StreamingAsyncHttpClient {
     private final boolean debugChannelLifecycleLoggingEnabled;
     private final long idleChannelTimeoutMillis;
     private final int downstreamConnectionTimeoutMillis;
-    private static final AttributeKey<Boolean> CHANNEL_IS_BROKEN_ATTR = AttributeKey.newInstance("channelIsBroken");
+    protected static final AttributeKey<Boolean> CHANNEL_IS_BROKEN_ATTR = AttributeKey.newInstance("channelIsBroken");
     private final ProxyRouterChannelHealthChecker CHANNEL_HEALTH_CHECK_INSTANCE = new ProxyRouterChannelHealthChecker();
     public final static String SHOULD_LOG_BAD_MESSAGES_AFTER_REQUEST_FINISHES_SYSTEM_PROP_KEY =
         "StreamingAsyncHttpClient.debug.shouldLogBadMessagesAfterRequestFinishes";
@@ -138,9 +135,10 @@ public class StreamingAsyncHttpClient {
 
     public static class StreamingChannel {
 
-        private final Channel channel;
-        private final ChannelPool pool;
-        private final ObjectHolder<Boolean> callActiveHolder;
+        protected final Channel channel;
+        protected final ChannelPool pool;
+        protected final ObjectHolder<Boolean> callActiveHolder;
+        protected boolean channelClosedDueToUnrecoverableError = false;
 
         StreamingChannel(Channel channel, ChannelPool pool, ObjectHolder<Boolean> callActiveHolder) {
             this.channel = channel;
@@ -148,18 +146,32 @@ public class StreamingAsyncHttpClient {
             this.callActiveHolder = callActiveHolder;
         }
 
-        public ChannelFuture streamChunks(HttpContent... chunksToWrite) {
-            ChannelFuture lastChunkFuture = null;
-            for (HttpContent chunk : chunksToWrite) {
-                lastChunkFuture = channel.write(chunk);
+        /**
+         * Calls {@link Channel#writeAndFlush(Object)} to pass the given chunk to the downstream system. Note that
+         * the flush will cause the reference count of the given chunk to decrease by 1. If any error occurs that
+         * prevents the {@link Channel#writeAndFlush(Object)} call from executing (e.g. {@link
+         * #channelClosedDueToUnrecoverableError} was called previously) then {@link HttpContent#release()} will
+         * be called manually so that you can rely on the given chunk's reference count always being reduced by 1
+         * at some point after calling this method.
+         *
+         * @param chunkToWrite The chunk to send downstream.
+         * @return The {@link ChannelFuture} that will tell you if the write succeeded.
+         */
+        public ChannelFuture streamChunk(HttpContent chunkToWrite) {
+            if (channelClosedDueToUnrecoverableError) {
+                chunkToWrite.release();
+                return channel.newFailedFuture(new RuntimeException(
+                    "Unable to stream chunks downstream - "
+                    + "the channel was closed previously due to an unrecoverable error"
+                ));
             }
 
-            channel.flush();
-
-            return lastChunkFuture;
+            return channel.writeAndFlush(chunkToWrite);
         }
 
         public void closeChannelDueToUnrecoverableError() {
+            channelClosedDueToUnrecoverableError = true;
+
             // Mark the channel as broken so it will be closed and removed from the pool when it is returned.
             markChannelAsBroken(channel);
 
@@ -567,7 +579,7 @@ public class StreamingAsyncHttpClient {
                 try {
                     String errorMsg = "Error occurred attempting to send first chunk (headers/etc) downstream";
                     Exception errorToFire = new WrapperException(errorMsg, ex);
-                    logger.error(errorMsg, errorToFire);
+                    logger.warn(errorMsg, errorToFire);
                     streamingChannel.completeExceptionally(errorToFire);
                 }
                 finally {
@@ -952,7 +964,7 @@ public class StreamingAsyncHttpClient {
         return "async_downstream_call-" + httpMethod + "_" + url;
     }
 
-    private static class ObjectHolder<T> {
+    protected static class ObjectHolder<T> {
         public T heldObject;
     }
 }

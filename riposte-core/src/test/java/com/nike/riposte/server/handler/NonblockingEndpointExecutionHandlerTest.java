@@ -6,6 +6,7 @@ import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.NonblockingEndpoint;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
@@ -29,7 +30,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
+import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.ScheduledFuture;
+import io.netty.util.internal.OneTimeTask;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
@@ -37,6 +40,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -52,10 +56,12 @@ public class NonblockingEndpointExecutionHandlerTest {
 
     private NonblockingEndpointExecutionHandler handlerSpy;
     private HttpProcessingState stateMock;
+    private ProxyRouterProcessingState proxyRouterStateMock;
     private ChannelHandlerContext ctxMock;
     private Channel channelMock;
     private EventLoop eventLoopMock;
     private Attribute<HttpProcessingState> stateAttrMock;
+    private Attribute<ProxyRouterProcessingState> proxyRouterStateAttrMock;
     private RequestInfo requestInfo;
     private NonblockingEndpoint<?, ?> endpointMock;
     private Executor longRunningTaskExecutorMock;
@@ -64,27 +70,36 @@ public class NonblockingEndpointExecutionHandlerTest {
     private CompletableFuture<Void> stateWorkChainFutureSpy;
     private CompletableFuture futureThatWillBeAttachedToSpy;
     private LastHttpContent msg = mock(LastHttpContent.class);
+    private EventExecutor eventExecutorMock;
 
     @Before
     public void beforeMethod() {
         stateMock = mock(HttpProcessingState.class);
+        proxyRouterStateMock = mock(ProxyRouterProcessingState.class);
         ctxMock = mock(ChannelHandlerContext.class);
         channelMock = mock(Channel.class);
         stateAttrMock = mock(Attribute.class);
+        proxyRouterStateAttrMock = mock(Attribute.class);
         requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
         endpointMock = mock(StandardEndpoint.class);
         longRunningTaskExecutorMock = mock(Executor.class);
         responseFuture = new CompletableFuture<>();
         stateWorkChainFutureSpy = spy(CompletableFuture.completedFuture(null));
         eventLoopMock = mock(EventLoop.class);
+        eventExecutorMock = mock(EventExecutor.class);
 
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttrMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(stateMock).when(stateAttrMock).get();
+        doReturn(false).when(stateMock).isRequestHandled();
+        doReturn(proxyRouterStateAttrMock).when(channelMock).attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY);
+        doReturn(proxyRouterStateMock).when(proxyRouterStateAttrMock).get();
         doReturn(endpointMock).when(stateMock).getEndpointForExecution();
         doReturn(requestInfo).when(stateMock).getRequestInfo();
         doReturn(responseFuture).when(endpointMock).execute(any(RequestInfo.class), any(Executor.class), any(ChannelHandlerContext.class));
         doReturn(eventLoopMock).when(channelMock).eventLoop();
+        doReturn(eventExecutorMock).when(ctxMock).executor();
+        doReturn(true).when(eventExecutorMock).inEventLoop();
         doReturn(true).when(channelMock).isActive();
         doAnswer(invocation -> {
             CompletableFuture actualFutureForAttaching = (CompletableFuture) invocation.callRealMethod();
@@ -327,7 +342,15 @@ public class NonblockingEndpointExecutionHandlerTest {
     }
 
     @Test
-    public void asyncCallback_sets_responseInfo_on_state_and_fires_channelRead_event_on_ctx() {
+    public void argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo_returns_false() {
+        // expect
+        assertThat(
+            handlerSpy.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(null, null, null, null)
+        ).isFalse();
+    }
+
+    @Test
+    public void asyncCallback_calls_setResponseInfoAndActivatePipelineForResponse_if_channel_is_active_and_we_are_in_executor_event_loop() {
         // given
         ResponseInfo<?> responseInfo = ResponseInfo.newBuilder().build();
 
@@ -335,12 +358,37 @@ public class NonblockingEndpointExecutionHandlerTest {
         handlerSpy.asyncCallback(ctxMock, responseInfo);
 
         // then
-        verify(stateMock).setResponseInfo(responseInfo);
-        verify(ctxMock).fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
+        verify(handlerSpy).setResponseInfoAndActivatePipelineForResponse(stateMock, responseInfo, ctxMock);
     }
 
     @Test
-    public void asyncCallback_sets_responseInfo_on_state_but_does_not_fire_channelRead_event_on_ctx_if_channel_is_inactive() {
+    public void asyncCallback_calls_setResponseInfoAndActivatePipelineForResponse_via_EventExecutor_with_OneTimeTask_if_we_are_not_in_executor_event_loop() {
+        // given
+        ResponseInfo<?> responseInfo = ResponseInfo.newBuilder().build();
+        doReturn(false).when(eventExecutorMock).inEventLoop();
+
+        // when
+        handlerSpy.asyncCallback(ctxMock, responseInfo);
+
+        // then
+        // Verify that the EventExecutor was passed a runnable and extract it so we can verify it.
+        ArgumentCaptor<Runnable> eventExecutorArgCaptor = ArgumentCaptor.forClass(Runnable.class);
+        verify(eventExecutorMock).execute(eventExecutorArgCaptor.capture());
+        assertThat(eventExecutorArgCaptor.getValue()).isInstanceOf(OneTimeTask.class);
+        OneTimeTask task = (OneTimeTask)eventExecutorArgCaptor.getValue();
+
+        // Verify setResponseInfoAndActivatePipelineForResponse() not called yet
+        verify(handlerSpy, never()).setResponseInfoAndActivatePipelineForResponse(
+            any(HttpProcessingState.class), any(ResponseInfo.class), any(ChannelHandlerContext.class)
+        );
+
+        // Now verify that after we execute the task, setResponseInfoAndActivatePipelineForResponse() *is* called.
+        task.run();
+        verify(handlerSpy).setResponseInfoAndActivatePipelineForResponse(stateMock, responseInfo, ctxMock);
+    }
+
+    @Test
+    public void asyncCallback_does_not_call_setResponseInfoAndActivatePipelineForResponse_if_channel_is_inactive() {
         // given
         ResponseInfo<?> responseInfo = ResponseInfo.newBuilder().build();
         doReturn(false).when(channelMock).isActive();
@@ -349,8 +397,57 @@ public class NonblockingEndpointExecutionHandlerTest {
         handlerSpy.asyncCallback(ctxMock, responseInfo);
 
         // then
+        verify(handlerSpy, never()).setResponseInfoAndActivatePipelineForResponse(
+            any(HttpProcessingState.class), any(ResponseInfo.class), any(ChannelHandlerContext.class)
+        );
+    }
+
+    @Test
+    public void asyncCallback_calls_asyncErrorCallback_if_responseInfo_is_chunked() {
+        // given
+        ResponseInfo<?> responseInfo = ResponseInfo.newChunkedResponseBuilder().build();
+
+        // when
+        handlerSpy.asyncCallback(ctxMock, responseInfo);
+
+        // then
+        verify(handlerSpy, never()).setResponseInfoAndActivatePipelineForResponse(
+            any(HttpProcessingState.class), any(ResponseInfo.class), any(ChannelHandlerContext.class)
+        );
+
+        ArgumentCaptor<Throwable> exceptionArgCaptor = ArgumentCaptor.forClass(Throwable.class);
+        verify(handlerSpy).asyncErrorCallback(eq(ctxMock), exceptionArgCaptor.capture());
+        Throwable exArg = exceptionArgCaptor.getValue();
+        assertThat(exArg).hasMessage("NonblockingEndpoint execution resulted in a chunked ResponseInfo, when only full "
+                                     + "ResponseInfos are allowed. offending_endpoint_class=" +
+                                     stateMock.getEndpointForExecution().getClass().getName());
+    }
+
+    @Test
+    public void setResponseInfoAndActivatePipelineForResponse_sets_responseInfo_on_state_and_fires_channelRead_event_on_ctx() {
+        // given
+        ResponseInfo<?> responseInfo = ResponseInfo.newBuilder().build();
+
+        // when
+        handlerSpy.setResponseInfoAndActivatePipelineForResponse(stateMock, responseInfo, ctxMock);
+
+        // then
         verify(stateMock).setResponseInfo(responseInfo);
-        verify(ctxMock, times(0)).fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
+        verify(ctxMock).fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
+    }
+
+    @Test
+    public void setResponseInfoAndActivatePipelineForResponse_does_not_set_responseInfo_or_fire_channelRead_event_if_request_already_handled() {
+        // given
+        ResponseInfo<?> responseInfo = ResponseInfo.newBuilder().build();
+        doReturn(true).when(stateMock).isRequestHandled();
+
+        // when
+        handlerSpy.setResponseInfoAndActivatePipelineForResponse(stateMock, responseInfo, ctxMock);
+
+        // then
+        verify(stateMock, never()).setResponseInfo(any(ResponseInfo.class));
+        verify(ctxMock, never()).fireChannelRead(any(Object.class));
     }
 
     @Test

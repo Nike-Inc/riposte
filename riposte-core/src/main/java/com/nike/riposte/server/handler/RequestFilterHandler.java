@@ -22,7 +22,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
 
 /**
  * Handler for executing the request filtering side of the {@link RequestAndResponseFilter}s associated with this
@@ -85,13 +84,6 @@ public class RequestFilterHandler extends BaseInboundHandlerWithTracingAndMdcSup
 
                             state.setRequestInfo(currentReqInfo);
                             state.setResponseInfo(responseInfo);
-
-                            // We're done with the message since we're short circuiting. Release it (if the RequestInfo
-                            //      object is collecting chunks in order to build the raw content string then it will
-                            //      have retain()-ed the message already and this release won't cause the msg's
-                            //      reference count to fall below 1, but from the pipeline's point of view we're done
-                            //      with this message so we call release).
-                            ReferenceCountUtil.release(msg);
 
                             // Fire the short-circuit event that will get the desired response info sent to the caller.
                             ctx.fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
