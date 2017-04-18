@@ -4,7 +4,7 @@
         <!-- encoders are assigned the type
              ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
         <encoder>
-            <pattern>traceId=%X{traceId} %date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX"} [%thread] |-%-5level %logger{36} - %msg%n</pattern>
+            <pattern>span=%X{spanJson} %date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX"} [%thread] |-%-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
@@ -25,7 +25,7 @@
         <appender-ref ref="ACCESS_LOG_APPENDER" />
     </logger>
 
-    <root level="debug">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>

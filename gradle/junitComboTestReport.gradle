@@ -26,7 +26,7 @@ subprojects {
     test {
         testLogging {
             exceptionFormat "FULL"
-            events "passed", "skipped", "failed"
+            events "passed", "skipped", "failed", "standardOut", "standardError"
             displayGranularity = 0
         }
 

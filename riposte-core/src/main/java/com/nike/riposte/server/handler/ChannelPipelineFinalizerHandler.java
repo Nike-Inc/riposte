@@ -198,6 +198,8 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         // If we're in an error case (cause != null) and the response sending has started but not completed, then this
         //      request is broken. We can't do anything except kill the channel.
         if ((cause != null) && state.isResponseSendingStarted() && !state.isResponseSendingLastChunkSent()) {
+            logger.error("Received an error in ChannelPipelineFinalizerHandler after response sending was started, but "
+                         + "before it finished. Closing the channel.", cause);
             ctx.channel().close();
         }
     }

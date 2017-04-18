@@ -287,7 +287,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                     // The chunk streaming is complete, one way or another. React appropriately if there was
                     //      a problem.
                     if (!future.isSuccess()) {
-                        String errorMsg = "Chunk streaming future came back as being unsuccessful.";
+                        String errorMsg = "Chunk streaming future came back as being unsuccessful. channel_id=" + sc.getChannel().toString();
                         Throwable errorToFire = new WrapperException(errorMsg, future.cause());
                         sc.closeChannelDueToUnrecoverableError();
                         StreamingCallback callback = proxyRouterState.getStreamingCallback();
@@ -728,7 +728,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             logger.warn(
                                 "A secondary exception occurred after the response had already been sent to the user. "
                                 + "Not necessarily anything to worry about but in case it helps debugging: "
-                                + "secondary_exception=\"{}\"", error.toString()
+                                + "secondary_exception=\"{}\"", error.toString(), error
                             );
                         }
                         else if (firstChunkSent || stateResponseSendingStarted) {

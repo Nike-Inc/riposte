@@ -126,8 +126,8 @@ ext {
         configure(subprojects.findAll { !it.name.startsWith("sample") }) {
             jacocoCoverage {
                 // Enforce minimum code coverage. See https://github.com/palantir/gradle-jacoco-coverage for the full list of options.
-                reportThreshold 0.8, INSTRUCTION
-                reportThreshold 0.5, BRANCH
+                reportThreshold 0.1, INSTRUCTION
+                reportThreshold 0.1, BRANCH
             }
         }
     }
