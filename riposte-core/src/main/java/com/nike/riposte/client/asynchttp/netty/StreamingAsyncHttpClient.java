@@ -457,7 +457,6 @@ public class StreamingAsyncHttpClient {
                 }
 
                 // Do a subspan around the downstream call if desired.
-                Span currentSpan = Tracer.getInstance().getCurrentSpan();
                 //noinspection ConstantConditions
                 if (performSubSpanAroundDownstreamCalls) {
                     // Add the subspan.
@@ -465,7 +464,7 @@ public class StreamingAsyncHttpClient {
                         initialRequestChunk.getMethod().name(),
                         downstreamHost + ":" + downstreamPort + initialRequestChunk.getUri()
                     );
-                    if (currentSpan == null) {
+                    if (Tracer.getInstance().getCurrentSpan() == null) {
                         // There is no parent span to start a subspan from, so we have to start a new span for this call
                         //      rather than a subspan.
                         // TODO: Set this to CLIENT once we have that ability in the wingtips API for request root spans
@@ -480,15 +479,22 @@ public class StreamingAsyncHttpClient {
                 Deque<Span> distributedSpanStackToUse = Tracer.getInstance().getCurrentSpanStackCopy();
                 Map<String, String> mdcContextToUse = MDC.getCopyOfContextMap();
 
+                Span spanForDownstreamCall = (distributedSpanStackToUse == null)
+                                             ? null
+                                             : distributedSpanStackToUse.peek();
+
                 // Add distributed trace headers to the downstream call if we have a current span.
-                if (currentSpan != null) {
+                if (spanForDownstreamCall != null) {
                     setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_SAMPLED,
-                                            String.valueOf(currentSpan.isSampleable()));
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_ID, currentSpan.getTraceId());
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_ID, currentSpan.getSpanId());
+                                            String.valueOf(spanForDownstreamCall.isSampleable()));
+                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_ID,
+                                            spanForDownstreamCall.getTraceId());
+                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_ID,
+                                            spanForDownstreamCall.getSpanId());
                     setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.PARENT_SPAN_ID,
-                                            currentSpan.getParentSpanId());
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_NAME, currentSpan.getSpanName());
+                                            spanForDownstreamCall.getParentSpanId());
+                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_NAME,
+                                            spanForDownstreamCall.getSpanName());
                 }
 
                 Channel ch = channelFuture.getNow();
