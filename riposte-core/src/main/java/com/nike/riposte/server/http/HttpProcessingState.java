@@ -26,6 +26,7 @@ public class HttpProcessingState implements ProcessingState {
     private ResponseInfo<?> responseInfo;
     private HttpResponse actualResponseObject;
     private Endpoint<?> endpointForExecution;
+    private String matchingPathTemplate;
     private Deque<Span> distributedTraceStack;
     private Map<String, String> loggerMdcContextMap;
     private Instant requestStartTime;
@@ -44,6 +45,7 @@ public class HttpProcessingState implements ProcessingState {
         this.responseInfo = copyMe.getResponseInfo();
         this.actualResponseObject = copyMe.getActualResponseObject();
         this.endpointForExecution = copyMe.getEndpointForExecution();
+        this.matchingPathTemplate = copyMe.getMatchingPathTemplate();
         this.distributedTraceStack = copyMe.getDistributedTraceStack();
         this.loggerMdcContextMap = copyMe.getLoggerMdcContextMap();
         this.requestStartTime = copyMe.getRequestStartTime();
@@ -62,6 +64,7 @@ public class HttpProcessingState implements ProcessingState {
         responseInfo = null;
         actualResponseObject = null;
         endpointForExecution = null;
+        matchingPathTemplate = null;
         distributedTraceStack = null;
         loggerMdcContextMap = null;
         requestStartTime = null;
@@ -84,8 +87,13 @@ public class HttpProcessingState implements ProcessingState {
         return endpointForExecution;
     }
 
-    public void setEndpointForExecution(Endpoint<?> endpointForExecution) {
+    public void setEndpointForExecution(Endpoint<?> endpointForExecution, String matchingPathTemplate) {
         this.endpointForExecution = endpointForExecution;
+        this.matchingPathTemplate = matchingPathTemplate;
+    }
+
+    public String getMatchingPathTemplate() {
+        return matchingPathTemplate;
     }
 
     public boolean isRequestHandled() {

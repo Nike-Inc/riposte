@@ -2,6 +2,7 @@ package com.nike.riposte.metrics.codahale;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reporter;
+import com.codahale.metrics.ScheduledReporter;
 
 import java.util.concurrent.TimeUnit;
 
@@ -22,10 +23,11 @@ public interface ReporterFactory {
 
     /**
      * True if this factory provides scheduled reporters, normally these reporters will implement ScheduledReporter
-     * but the CodahaleMetricsEngine can deal with reporters which dont implement ScheduledReporter but do have a
+     * but the CodahaleMetricsEngine can still deal with reporters which don't implement ScheduledReporter but do have a
      * start(long interval, TimeUnit unit) method.
      *
-     * @return true if Reporters created by this Factory are scheduled otherwise false
+     * @return true if Reporters created by this Factory are scheduled (and therefore have a
+     * {@code start(long interval, TimeUnit unit)} method), otherwise false
      */
     default boolean isScheduled() {
         return true;
@@ -60,7 +62,7 @@ public interface ReporterFactory {
      * the Reporter with standard means
      */
     default void startReporter() {
-        throw new UnsupportedOperationException("This ReporterFactry does not expose custom start behavior");
+        throw new UnsupportedOperationException("This ReporterFactory does not expose custom start behavior");
     }
 
     /**

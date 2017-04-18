@@ -112,7 +112,7 @@ public class RoutingHandlerTest {
         // then
         verify(handlerSpy).findSingleEndpointForExecution(requestInfoMock);
         verify(requestInfoMock).setPathParamsBasedOnPathTemplate(defaultPath);
-        verify(stateMock).setEndpointForExecution(endpointMock);
+        verify(stateMock).setEndpointForExecution(endpointMock, defaultPath);
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 

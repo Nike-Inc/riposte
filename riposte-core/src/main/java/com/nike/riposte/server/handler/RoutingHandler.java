@@ -106,7 +106,7 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
             request.setPathParamsBasedOnPathTemplate(endpointForExecution.getRight());
 
-            state.setEndpointForExecution(endpointForExecution.getLeft());
+            state.setEndpointForExecution(endpointForExecution.getLeft(), endpointForExecution.getRight());
         }
 
         return PipelineContinuationBehavior.CONTINUE;

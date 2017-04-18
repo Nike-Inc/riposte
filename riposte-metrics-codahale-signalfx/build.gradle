@@ -2,10 +2,8 @@ evaluationDependsOn(':')
 
 dependencies {
     compile(
-            project(":riposte-core"),
-            "io.dropwizard.metrics:metrics-core:$codahaleMetricsVersion",
-            "io.dropwizard.metrics:metrics-jvm:$codahaleMetricsVersion",
-            "io.dropwizard.metrics:metrics-graphite:$codahaleMetricsVersion"
+            project(":riposte-metrics-codahale"),
+            "com.signalfx.public:signalfx-codahale:$signalFxCodahaleVersion"
     )
 
     testCompile (
