@@ -8,8 +8,21 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.9.x` Releases - [0.9.1](#091), [0.9.0](#090)
+- `0.9.x` Releases - [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.9.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.2)
+
+Released on 2017-04-18.
+
+### Added
+
+- Refactored the Codahale/Dropwizard metrics system (see `CodahaleMetricsListener`, `CodahaleMetricsListener.Builder`, `EndpointMetricsHandler`, and `SignalFxEndpointMetricsHandler` for details on the following):
+    - You can now set custom metric names and customize `Timer`/`Histogram` creation (e.g. so you can use different `Reservoir`s).
+    - Endpoint metrics handling has been split out into a `EndpointMetricsHandler` interface, allowing you full flexibility for handling endpoint-specific metrics related to requests and responses. A default impl (`EndpointMetricsHandlerDefaultImpl`) is used for Graphite-style conventions if you don't specify a different impl.
+    - SignalFx support has been added via the `riposte-metrics-codahale-signalfx` module. Wire it up using `SignalFxReporterFactory` and `SignalFxEndpointMetricsHandler`.
+    - All of this should be opt-in only, i.e. existing Riposte projects using the Codahale metrics system should continue to behave the same way.
+        - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#42](https://github.com/Nike-Inc/riposte/pull/42).
 
 ## [0.9.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.1)
 
