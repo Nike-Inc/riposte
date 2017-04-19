@@ -198,6 +198,13 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         // If we're in an error case (cause != null) and the response sending has started but not completed, then this
         //      request is broken. We can't do anything except kill the channel.
         if ((cause != null) && state.isResponseSendingStarted() && !state.isResponseSendingLastChunkSent()) {
+            runnableWithTracingAndMdc(
+                () -> logger.error(
+                    "Received an error in ChannelPipelineFinalizerHandler after response sending was started, but "
+                    + "before it finished. Closing the channel. unexpected_error={}", cause.toString()
+                ),
+                ctx
+            ).run();
             ctx.channel().close();
         }
     }
@@ -221,8 +228,25 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             ProxyRouterProcessingState proxyRouterState =
                 ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
 
-            RequestInfo<?> requestInfo = (httpState == null) ? null : httpState.getRequestInfo();
-            ResponseInfo<?> responseInfo = (httpState == null) ? null : httpState.getResponseInfo();
+            if (httpState == null) {
+                if (proxyRouterState == null) {
+                    logger.debug("This channel closed before it processed any requests. Nothing to cleanup. "
+                                 + "current_span={}", Tracer.getInstance().getCurrentSpan());
+                }
+                else {
+                    // This should never happen, but if it does we'll try to release what we can and then return.
+                    logger.error("Found a channel where HttpProcessingState was null, but ProxyRouterProcessingState "
+                                 + "was not null. This should not be possible! "
+                                 + "current_span={}", Tracer.getInstance().getCurrentSpan());
+                    releaseProxyRouterStateResources(proxyRouterState);
+                }
+
+                // With httpState null, there's nothing left for us to do.
+                return PipelineContinuationBehavior.CONTINUE;
+            }
+
+            RequestInfo<?> requestInfo = httpState.getRequestInfo();
+            ResponseInfo<?> responseInfo = httpState.getResponseInfo();
 
             if (logger.isDebugEnabled()) {
                 runnableWithTracingAndMdc(
@@ -238,7 +262,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             //      debug investigations can find out what happened.
             // TODO: Is there a way we can handle access logging and/or metrics here, but only if it wasn't done elsewhere?
             @SuppressWarnings("SimplifiableConditionalExpression")
-            boolean tracingAlreadyCompleted = (httpState == null) ? true : httpState.isTraceCompletedOrScheduled();
+            boolean tracingAlreadyCompleted = httpState.isTraceCompletedOrScheduled();
             boolean responseNotFullySent = responseInfo == null || !responseInfo.isResponseSendingLastChunkSent();
             if (responseNotFullySent || !tracingAlreadyCompleted) {
                 runnableWithTracingAndMdc(
@@ -248,7 +272,8 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                                 "The caller's channel was closed before a response could be sent. This means that "
                                 + "an access log probably does not exist for this request. Distributed tracing "
                                 + "will be completed now if it wasn't already done. Any dangling resources will be "
-                                + "released."
+                                + "released. response_info_is_null={}",
+                                (responseInfo == null)
                             );
                         }
 
@@ -268,16 +293,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             if (requestInfo != null)
                 requestInfo.releaseAllResources();
 
-            // Tell the ProxyRouterProcessingState that the stream failed and trigger its chunk streaming error handling
-            //      with an artificial exception. If the call had already succeeded previously then this will do
-            //      nothing, but if it hasn't already succeeded then it's not going to (since the connection is closing)
-            //      and doing this will cause any resources its holding onto to be released.
-            if (proxyRouterState != null) {
-                proxyRouterState.setStreamingFailed();
-                proxyRouterState.triggerStreamingChannelErrorForChunks(
-                    new RuntimeException("Server worker channel closed")
-                );
-            }
+            releaseProxyRouterStateResources(proxyRouterState);
         }
         catch(Throwable t) {
             runnableWithTracingAndMdc(
@@ -289,5 +305,22 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    /**
+     * Tell the ProxyRouterProcessingState that the stream failed and trigger its chunk streaming error handling with an
+     * artificial exception. If the call had already succeeded previously then this will do nothing, but if it hasn't
+     * already succeeded then it's not going to (since the connection is closing) and doing this will cause any
+     * resources it's holding onto to be released.
+     *
+     * @param proxyRouterState The state to cleanup.
+     */
+    protected void releaseProxyRouterStateResources(ProxyRouterProcessingState proxyRouterState) {
+        if (proxyRouterState != null) {
+            proxyRouterState.setStreamingFailed();
+            proxyRouterState.triggerStreamingChannelErrorForChunks(
+                new RuntimeException("Server worker channel closed")
+            );
+        }
     }
 }

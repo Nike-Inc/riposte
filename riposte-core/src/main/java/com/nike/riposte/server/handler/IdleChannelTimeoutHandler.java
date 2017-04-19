@@ -46,10 +46,12 @@ public class IdleChannelTimeoutHandler extends IdleStateHandler {
      * log message.
      */
     protected void channelIdleTriggered(ChannelHandlerContext ctx, IdleStateEvent evt) {
-        logger.debug(
-            "Closing server channel due to idle timeout. "
-            + "custom_handler_id={}, idle_timeout_millis={}, worker_channel_being_closed={}",
-            customHandlerIdForLogs, idleTimeoutMillis, ctx.channel().toString()
-        );
+        if (logger.isDebugEnabled()) {
+            logger.debug(
+                "Closing server channel due to idle timeout. "
+                + "custom_handler_id={}, idle_timeout_millis={}, worker_channel_being_closed={}",
+                customHandlerIdForLogs, idleTimeoutMillis, ctx.channel().toString()
+            );
+        }
     }
 }

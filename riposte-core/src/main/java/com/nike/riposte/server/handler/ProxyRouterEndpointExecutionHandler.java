@@ -237,7 +237,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                 //      and we're done. If not, then we call registerChunkStreamingAction() to set up the
                 //      chunk-streaming behavior and subsequent cleanup for the given HttpContent.
                 if (!releaseContentChunkIfStreamAlreadyFailed(msgContent, proxyRouterState)) {
-                    registerChunkStreamingAction(proxyRouterState, msgContent, requestInfo, ctx);
+                    registerChunkStreamingAction(proxyRouterState, msgContent, ctx);
                 }
 
             }
@@ -251,7 +251,6 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
     protected void registerChunkStreamingAction(
         ProxyRouterProcessingState proxyRouterState,
         HttpContent msgContent,
-        RequestInfo<?> requestInfo,
         ChannelHandlerContext ctx
     ) {
         // We have a content chunk to stream downstream. Attach the chunk processing to the proxyRouterState and
@@ -266,58 +265,50 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
 
             if (cause == null) {
                 // Nothing has blown up yet, so stream this next chunk downstream. Calling streamChunk() will decrement
-                //      the chunk's reference count, allowing it to be destroyed since this should be the last handle
-                //      on the chunk's memory.
-                ChannelFuture writeFuture;
-                try {
-                    writeFuture = sc.streamChunk(msgContent);
-                }
-                catch(Throwable t) {
-                    logger.error(
-                        "StreamingAsyncHttpClient.streamChunk() threw an error. This should not be possible and "
-                        + "indicates something went wrong with a Netty write() and flush(). If you see Netty memory "
-                        + "leak warnings then this could be why. Please report this along with the stack trace to "
-                        + "https://github.com/Nike-Inc/riposte/issues/new",
-                        t
-                    );
-                    return;
-                }
-
+                //      the chunk's reference count (at some point in the future), allowing it to be destroyed since
+                //      this should be the last handle on the chunk's memory.
+                ChannelFuture writeFuture = sc.streamChunk(msgContent);
                 writeFuture.addListener(future -> {
                     // The chunk streaming is complete, one way or another. React appropriately if there was
                     //      a problem.
                     if (!future.isSuccess()) {
-                        String errorMsg = "Chunk streaming future came back as being unsuccessful.";
-                        Throwable errorToFire = new WrapperException(errorMsg, future.cause());
-                        sc.closeChannelDueToUnrecoverableError();
-                        StreamingCallback callback = proxyRouterState.getStreamingCallback();
-                        if (callback != null)
-                            callback.unrecoverableErrorOccurred(errorToFire);
-                        else {
-                            // We have to set proxyRouterState.setStreamingFailed() here since we couldn't
-                            //      call callback.unrecoverableErrorOccurred(...);
-                            proxyRouterState.setStreamingFailed();
-                            runnableWithTracingAndMdc(
-                                () -> logger.error(
-                                    "Unrecoverable error occurred and somehow the StreamingCallback was "
-                                    + "not available. This should not be possible. Firing the following "
-                                    + "error down the pipeline manually: " + errorMsg,
-                                    errorToFire),
-                                ctx
-                            ).run();
-                            executeOnlyIfChannelIsActive(
-                                ctx,
-                                "ProxyRouterEndpointExecutionHandler-streamchunk-writefuture-unsuccessful",
-                                () -> ctx.fireExceptionCaught(errorToFire)
-                            );
+                        try {
+                            String errorMsg = "Chunk streaming ChannelFuture came back as being unsuccessful. "
+                                              + "downstream_channel_id=" + sc.getChannel().toString();
+                            Throwable errorToFire = new WrapperException(errorMsg, future.cause());
+                            StreamingCallback callback = proxyRouterState.getStreamingCallback();
+                            if (callback != null)
+                                callback.unrecoverableErrorOccurred(errorToFire);
+                            else {
+                                // We have to set proxyRouterState.setStreamingFailed() here since we couldn't
+                                //      call callback.unrecoverableErrorOccurred(...);
+                                proxyRouterState.setStreamingFailed();
+                                runnableWithTracingAndMdc(
+                                    () -> logger.error(
+                                        "Unrecoverable error occurred and somehow the StreamingCallback was "
+                                        + "not available. This should not be possible. Firing the following "
+                                        + "error down the pipeline manually: " + errorMsg,
+                                        errorToFire),
+                                    ctx
+                                ).run();
+                                executeOnlyIfChannelIsActive(
+                                    ctx,
+                                    "ProxyRouterEndpointExecutionHandler-streamchunk-writefuture-unsuccessful",
+                                    () -> ctx.fireExceptionCaught(errorToFire)
+                                );
+                            }
+                        }
+                        finally {
+                            // Close down the StreamingChannel so its Channel can be released back to the pool.
+                            sc.closeChannelDueToUnrecoverableError(future.cause());
                         }
                     }
                 });
             }
             else {
+                StreamingChannel scToNotify = sc;
                 try {
                     // Something blew up while attempting to send a chunk to the downstream server.
-                    StreamingChannel scToNotify = sc;
                     if (scToNotify == null) {
                         // No StreamingChannel from the registration future. Try to extract it from the
                         //      proxyRouterState directly if possible.
@@ -329,34 +320,16 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             }
                             catch (Throwable t) {
                                 runnableWithTracingAndMdc(
-                                    () -> logger.error("What? This should never happen. Swallowing.", t), ctx
+                                    () -> logger.error("What? This should never happen. Swallowing.", t),
+                                    ctx
                                 ).run();
                             }
                         }
                     }
 
-                    if (scToNotify != null) {
-                        scToNotify.closeChannelDueToUnrecoverableError();
-                    }
-                    else {
-                        @SuppressWarnings("ThrowableResultOfMethodCallIgnored")
-                        Throwable actualCause = unwrapAsyncExceptions(cause);
-                        if (!(actualCause instanceof WrapperException)) {
-                            runnableWithTracingAndMdc(
-                                () -> logger.error(
-                                    "Unable to extract StreamingChannel during error handling and the error "
-                                    + "that caused it was not a WrapperException, meaning "
-                                    + "StreamingAsyncHttpClient.streamDownstreamCall(...) did not properly "
-                                    + "handle it. This should likely never happen and might leave things in a "
-                                    + "bad state - it should be investigated and fixed! The error that caused "
-                                    + "this is: ",
-                                    cause),
-                                ctx
-                            ).run();
-                        }
-                    }
-
-                    String errorMsg = "Chunk streaming future came back as being unsuccessful.";
+                    String downstreamChannelId = (scToNotify == null) ? "UNKNOWN" : scToNotify.getChannel().toString();
+                    String errorMsg = "Chunk streaming future came back as being unsuccessful. "
+                                      + "downstream_channel_id=" + downstreamChannelId;
                     Throwable errorToFire = new WrapperException(errorMsg, cause);
 
                     StreamingCallback callback = proxyRouterState.getStreamingCallback();
@@ -382,6 +355,28 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                     //      dangling reference count handle that needs cleaning up. Since there's nothing left to
                     //      do with this chunk, we can release it now.
                     msgContent.release();
+
+                    // Close down the StreamingChannel so its Channel can be released back to the pool.
+                    if (scToNotify != null) {
+                        scToNotify.closeChannelDueToUnrecoverableError(cause);
+                    }
+                    else {
+                        @SuppressWarnings("ThrowableResultOfMethodCallIgnored")
+                        Throwable actualCause = unwrapAsyncExceptions(cause);
+                        if (!(actualCause instanceof WrapperException)) {
+                            runnableWithTracingAndMdc(
+                                () -> logger.error(
+                                    "Unable to extract StreamingChannel during error handling and the error that "
+                                    + "caused it was not a WrapperException, meaning "
+                                    + "StreamingAsyncHttpClient.streamDownstreamCall(...) did not properly handle it. "
+                                    + "This should likely never happen and might leave things in a bad state - it "
+                                    + "should be investigated and fixed! The error that caused this is: ",
+                                    cause
+                                ),
+                                ctx
+                            ).run();
+                        }
+                    }
                 }
             }
         });

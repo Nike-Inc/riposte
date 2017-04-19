@@ -390,7 +390,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
     @Override
     public void contentChunksWillBeReleasedExternally() {
         this.contentChunksWillBeReleasedExternally = true;
-        // If we had somehow already pulled in some content chunks then can remove them from the contentChunks list,
+        // If we had somehow already pulled in some content chunks then we can remove them from the contentChunks list,
         //      however as per the javadocs for this method we should *not* release() them.
         if (contentChunks.size() > 0) {
             contentChunks.clear();

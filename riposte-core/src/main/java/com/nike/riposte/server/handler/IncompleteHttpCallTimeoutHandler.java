@@ -53,12 +53,8 @@ public class IncompleteHttpCallTimeoutHandler extends IdleStateHandler {
 
         channelIdleTriggered(ctx, evt);
 
-        try {
-            throw new IncompleteHttpCallTimeoutException(idleTimeoutMillis);
-        }
-        finally {
-            alreadyTriggeredException = true;
-        }
+        alreadyTriggeredException = true;
+        throw new IncompleteHttpCallTimeoutException(idleTimeoutMillis);
     }
 
     protected void channelIdleTriggered(ChannelHandlerContext ctx, IdleStateEvent evt) {

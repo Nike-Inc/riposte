@@ -532,6 +532,14 @@ public class ChannelPipelineFinalizerHandlerTest {
     }
 
     @Test
+    public void argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo_returns_false() {
+        // expect
+        Assertions.assertThat(
+            handler.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(null, null, null, null)
+        ).isFalse();
+    }
+
+    @Test
     public void code_coverage_hoops() throws Exception {
         // jump!
 
