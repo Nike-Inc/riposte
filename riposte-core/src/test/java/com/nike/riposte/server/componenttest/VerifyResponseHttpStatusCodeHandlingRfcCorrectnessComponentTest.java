@@ -19,9 +19,11 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import uk.org.lidalia.slf4jext.Level;
-import uk.org.lidalia.slf4jtest.TestLoggerFactory;
+//import uk.org.lidalia.slf4jext.Level;
+//import uk.org.lidalia.slf4jtest.TestLoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -64,13 +66,13 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
     private static Server edgeRouterServer;
     private static ServerConfig edgeRouterServerConfig;
 
-    private static Level logPrintLevelAtStart;
+//    private static Level logPrintLevelAtStart;
 
     @BeforeClass
     public static void setUpClass() throws Exception {
         // The slf4j-test logger causes a huge amount of spam to be output for these tests. Disable for these tests, then re-enable in tearDown().
-        logPrintLevelAtStart = TestLoggerFactory.getInstance().getPrintLevel();
-        TestLoggerFactory.getInstance().setPrintLevel(Level.WARN);
+//        logPrintLevelAtStart = TestLoggerFactory.getInstance().getPrintLevel();
+//        TestLoggerFactory.getInstance().setPrintLevel(Level.INFO);
 
         System.setProperty(StreamingAsyncHttpClient.SHOULD_LOG_BAD_MESSAGES_AFTER_REQUEST_FINISHES_SYSTEM_PROP_KEY, "true");
 
@@ -92,8 +94,8 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
 
     @AfterClass
     public static void tearDown() throws Exception {
-        if (logPrintLevelAtStart != null)
-            TestLoggerFactory.getInstance().setPrintLevel(logPrintLevelAtStart);
+//        if (logPrintLevelAtStart != null)
+//            TestLoggerFactory.getInstance().setPrintLevel(logPrintLevelAtStart);
 
         backendServer.shutdown();
         intermediateRouterServer.shutdown();
@@ -143,10 +145,13 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         return false;
     }
 
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
+
     @Test
     @UseDataProvider("responseStatusCodeScenariosDataProvider")
     public void verify_response_status_code_scenarios(int desiredStatusCode, boolean shouldReturnEmptyPayload) {
         for (int i = 0; i < 3; i++) { // Run this scenario 3 times in quick succession to catch potential keep-alive connection pooling issues.
+            logger.info("=== RUN " + i + " ===");
             ExtractableResponse response = given()
                 .config(config().redirect(redirectConfig().followRedirects(false)))
                 .baseUri("http://localhost")
@@ -173,6 +178,7 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
                 else
                     assertThat(response.asString()).isEqualTo(BackendEndpoint.NON_EMPTY_PAYLOAD);
             }
+            logger.info("=== END RUN " + i + " ===");
         }
     }
 
@@ -208,6 +214,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         public long workerChannelIdleTimeoutMillis() {
             return -1;
         }
+
+        @Override
+        public long incompleteHttpCallTimeoutMillis() {
+            return -1;
+        }
     }
 
     public static class BackendServerConfig implements ServerConfig {
@@ -231,6 +242,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
 
         @Override
         public long workerChannelIdleTimeoutMillis() {
+            return -1;
+        }
+
+        @Override
+        public long incompleteHttpCallTimeoutMillis() {
             return -1;
         }
     }

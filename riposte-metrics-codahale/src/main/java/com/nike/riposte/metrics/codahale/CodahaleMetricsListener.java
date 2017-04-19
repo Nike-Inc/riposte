@@ -270,7 +270,7 @@ public class CodahaleMetricsListener implements MetricsListener {
                 // Make sure HttpProcessingState, RequestInfo, and ResponseInfo are populated with the things we need.
                 RequestInfo<?> requestInfo = httpState.getRequestInfo();
                 if (requestInfo == null) {
-                    logger.error("Metrics Error: httpStatemgetRequestInfo() is null");
+                    logger.error("Metrics Error: httpState.getRequestInfo() is null");
                     return;
                 }
 

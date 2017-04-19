@@ -86,9 +86,6 @@ import io.netty.util.concurrent.Promise;
 import static com.nike.riposte.util.AsyncNettyHelper.linkTracingAndMdcToCurrentThread;
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 import static com.nike.riposte.util.AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
-import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
 
 /**
  * TODO: Class Description
@@ -119,7 +116,7 @@ public class StreamingAsyncHttpClient {
     private final boolean debugChannelLifecycleLoggingEnabled;
     private final long idleChannelTimeoutMillis;
     private final int downstreamConnectionTimeoutMillis;
-    private static final AttributeKey<Boolean> CHANNEL_IS_BROKEN_ATTR = AttributeKey.newInstance("channelIsBroken");
+    protected static final AttributeKey<Boolean> CHANNEL_IS_BROKEN_ATTR = AttributeKey.newInstance("channelIsBroken");
     private final ProxyRouterChannelHealthChecker CHANNEL_HEALTH_CHECK_INSTANCE = new ProxyRouterChannelHealthChecker();
     public final static String SHOULD_LOG_BAD_MESSAGES_AFTER_REQUEST_FINISHES_SYSTEM_PROP_KEY =
         "StreamingAsyncHttpClient.debug.shouldLogBadMessagesAfterRequestFinishes";
@@ -138,9 +135,10 @@ public class StreamingAsyncHttpClient {
 
     public static class StreamingChannel {
 
-        private final Channel channel;
-        private final ChannelPool pool;
-        private final ObjectHolder<Boolean> callActiveHolder;
+        protected final Channel channel;
+        protected final ChannelPool pool;
+        protected final ObjectHolder<Boolean> callActiveHolder;
+        protected boolean channelClosedDueToUnrecoverableError = false;
 
         StreamingChannel(Channel channel, ChannelPool pool, ObjectHolder<Boolean> callActiveHolder) {
             this.channel = channel;
@@ -148,26 +146,58 @@ public class StreamingAsyncHttpClient {
             this.callActiveHolder = callActiveHolder;
         }
 
-        public ChannelFuture streamChunks(HttpContent... chunksToWrite) {
-            ChannelFuture lastChunkFuture = null;
-            for (HttpContent chunk : chunksToWrite) {
-                lastChunkFuture = channel.write(chunk);
+        /**
+         * Calls {@link Channel#writeAndFlush(Object)} to pass the given chunk to the downstream system. Note that
+         * the flush will cause the reference count of the given chunk to decrease by 1. If any error occurs that
+         * prevents the {@link Channel#writeAndFlush(Object)} call from executing (e.g. {@link
+         * #channelClosedDueToUnrecoverableError} was called previously) then {@link HttpContent#release()} will
+         * be called manually so that you can rely on the given chunk's reference count always being reduced by 1
+         * at some point after calling this method.
+         *
+         * @param chunkToWrite The chunk to send downstream.
+         * @return The {@link ChannelFuture} that will tell you if the write succeeded.
+         */
+        public ChannelFuture streamChunk(HttpContent chunkToWrite) {
+            if (channelClosedDueToUnrecoverableError) {
+                chunkToWrite.release();
+                return channel.newFailedFuture(new RuntimeException(
+                    "Unable to stream chunks downstream - "
+                    + "the channel was closed previously due to an unrecoverable error"
+                ));
             }
 
-            channel.flush();
+            return channel.writeAndFlush(chunkToWrite);
+        }
 
-            return lastChunkFuture;
+        private static final Logger logger = LoggerFactory.getLogger(StreamingChannel.class);
+
+        public Channel getChannel() {
+            return channel;
         }
 
         public void closeChannelDueToUnrecoverableError() {
-            // Mark the channel as broken so it will be closed and removed from the pool when it is returned.
-            markChannelAsBroken(channel);
+            if (callActiveHolder.heldObject) {
+                logger.error("Closing StreamingChannel due to unrecoverable error. call_active={}, channel_id={}",
+                             callActiveHolder.heldObject, channel.toString(),
+                             new Exception("Here for tracking purposes"));
+                channelClosedDueToUnrecoverableError = true;
 
-            // Release it back to the pool if possible/necessary so the pool can do its usual cleanup.
-            releaseChannelBackToPoolIfCallIsActive(channel, pool, callActiveHolder);
+                // Mark the channel as broken so it will be closed and removed from the pool when it is returned.
+                markChannelAsBroken(channel);
 
-            // No matter what the cause is we want to make sure the channel is closed.
-            channel.close();
+                // Release it back to the pool if possible/necessary so the pool can do its usual cleanup.
+                releaseChannelBackToPoolIfCallIsActive(channel, pool, callActiveHolder);
+
+                // No matter what the cause is we want to make sure the channel is closed.
+                channel.close();
+            }
+            else {
+                channelClosedDueToUnrecoverableError = true;
+                logger.error("NOT closing StreamingChannel due to unrecoverable error, because the call is no longer "
+                             + "active and someone else might be using this channel.call_active={}, channel_id={}",
+                             callActiveHolder.heldObject, channel.toString(),
+                             new Exception("Here for tracking purposes"));
+            }
         }
     }
 
@@ -567,7 +597,7 @@ public class StreamingAsyncHttpClient {
                 try {
                     String errorMsg = "Error occurred attempting to send first chunk (headers/etc) downstream";
                     Exception errorToFire = new WrapperException(errorMsg, ex);
-                    logger.error(errorMsg, errorToFire);
+                    logger.warn(errorMsg, errorToFire);
                     streamingChannel.completeExceptionally(errorToFire);
                 }
                 finally {
@@ -703,16 +733,25 @@ public class StreamingAsyncHttpClient {
                 }
             }
             finally {
-                // Mark the channel as broken so it will be closed and removed from the pool when it is returned.
-                markChannelAsBroken(ch);
+                if (callActiveHolder.heldObject) {
+                    logger.error("Closing Downstream pipeline channel due to an error. call_active={}, channel_id={}",
+                                 callActiveHolder.heldObject, ch.toString(), cause);
+                    // Mark the channel as broken so it will be closed and removed from the pool when it is returned.
+                    markChannelAsBroken(ch);
 
-                // Release it back to the pool if possible/necessary so the pool can do its usual cleanup.
-                releaseChannelBackToPoolIfCallIsActive(ch, pool, callActiveHolder);
+                    // Release it back to the pool if possible/necessary so the pool can do its usual cleanup.
+                    releaseChannelBackToPoolIfCallIsActive(ch, pool, callActiveHolder);
 
-                // No matter what the cause is we want to make sure the channel is closed. Doing this raw ch.close()
-                //      here will catch the cases where this channel does not have an active call but still needs to be
-                //      closed (e.g. an idle channel timeout that happens in-between calls).
-                ch.close();
+                    // No matter what the cause is we want to make sure the channel is closed. Doing this raw ch.close()
+                    //      here will catch the cases where this channel does not have an active call but still needs to be
+                    //      closed (e.g. an idle channel timeout that happens in-between calls).
+                    ch.close();
+                }
+                else {
+                    logger.error("NOT closing Downstream pipeline channel due to an error because the call was active "
+                                 + "and someone else might be using it. call_active={}, channel_id={}",
+                                 callActiveHolder.heldObject, ch.toString(), cause);
+                }
 
                 // Unhook the tracing and MDC stuff from this thread now that we're done.
                 unlinkTracingAndMdcFromCurrentThread(originalThreadInfo);
@@ -904,8 +943,8 @@ public class StreamingAsyncHttpClient {
                 boolean channelAlreadyBroken = channelIsMarkedAsBeingBroken(ch);
                 logger.warn(
                     "HttpClientCodec inbound state was not 0. The channel will be marked as broken so it won't be "
-                    + "used. bad_httpclientcodec_inbound_state={}, channel_already_broken={}, call_context=\"{}\"",
-                    currentHttpClientCodecInboundState, channelAlreadyBroken, callContextForLogs
+                    + "used. bad_httpclientcodec_inbound_state={}, channel_already_broken={}, call_context=\"{}\", channel_id={}",
+                    currentHttpClientCodecInboundState, channelAlreadyBroken, callContextForLogs, ch.toString()
                 );
                 markChannelAsBroken(ch);
             }
@@ -915,8 +954,8 @@ public class StreamingAsyncHttpClient {
                     boolean channelAlreadyBroken = channelIsMarkedAsBeingBroken(ch);
                     logger.warn(
                         "HttpClientCodec outbound state was not 0. The channel will be marked as broken so it won't be "
-                        + "used. bad_httpclientcodec_outbound_state={}, channel_already_broken={}, call_context=\"{}\"",
-                        currentHttpClientCodecOutboundState, channelAlreadyBroken, callContextForLogs
+                        + "used. bad_httpclientcodec_outbound_state={}, channel_already_broken={}, call_context=\"{}\", channel_id={}",
+                        currentHttpClientCodecOutboundState, channelAlreadyBroken, callContextForLogs, ch.toString()
                     );
                     markChannelAsBroken(ch);
                 }
@@ -952,7 +991,7 @@ public class StreamingAsyncHttpClient {
         return "async_downstream_call-" + httpMethod + "_" + url;
     }
 
-    private static class ObjectHolder<T> {
+    protected static class ObjectHolder<T> {
         public T heldObject;
     }
 }

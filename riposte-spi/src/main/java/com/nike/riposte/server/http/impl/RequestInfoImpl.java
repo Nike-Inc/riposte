@@ -36,7 +36,7 @@ import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
-import io.netty.util.ReferenceCountUtil;
+import io.netty.util.ReferenceCounted;
 
 /**
  * Default implementation of {@link RequestInfo}
@@ -44,7 +44,7 @@ import io.netty.util.ReferenceCountUtil;
  * @author Nic Munroe
  */
 @SuppressWarnings("WeakerAccess")
-public class RequestInfoImpl<T> implements RequestInfo<T> {
+public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalRequestInfo {
 
     private static final Logger logger = LoggerFactory.getLogger(RequestInfoImpl.class);
 
@@ -73,6 +73,8 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
 
     protected ObjectMapper contentDeserializer;
     protected TypeReference<T> contentDeserializerTypeReference;
+
+    protected boolean contentChunksWillBeReleasedExternally = false;
 
     public RequestInfoImpl(String uri, HttpMethod method, HttpHeaders headers, HttpHeaders trailingHeaders,
                            QueryStringDecoder queryParams,
@@ -386,6 +388,18 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
      * {@inheritDoc}
      */
     @Override
+    public void contentChunksWillBeReleasedExternally() {
+        this.contentChunksWillBeReleasedExternally = true;
+        // If we had somehow already pulled in some content chunks then can remove them from the contentChunks list,
+        //      however as per the javadocs for this method we should *not* release() them.
+        if (contentChunks.size() > 0) {
+            contentChunks.clear();
+        }
+    }
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public int addContentChunk(HttpContent chunk) {
         if (isCompleteRequestWithAllChunks) {
             throw new IllegalStateException("Cannot add new content chunk - this RequestInfo is already marked as "
@@ -393,11 +407,19 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
         }
 
         chunk.retain();
-        contentChunks.add(chunk);
         rawContentLengthInBytes += chunk.content().readableBytes();
 
+        // If content chunks will be released externally then there's no point in us holding on to them
+        if (!contentChunksWillBeReleasedExternally)
+            contentChunks.add(chunk);
+
         if (chunk instanceof LastHttpContent) {
-            isCompleteRequestWithAllChunks = true;
+            // If content chunks will be released externally then we can't guarantee that the data will be available
+            //      at any given time (earlier chunks may have already been released before the last chunk arrives,
+            //      e.g. in the case of ProxyRouter endpoints), so we'll never allow isCompleteRequestWithAllChunks
+            //      to be set to true if content chunks are released externally.
+            if (!contentChunksWillBeReleasedExternally)
+                isCompleteRequestWithAllChunks = true;
 
             HttpHeaders chunkTrailingHeaders = ((LastHttpContent) chunk).trailingHeaders();
             //noinspection StatementWithEmptyBody
@@ -439,7 +461,9 @@ public class RequestInfoImpl<T> implements RequestInfo<T> {
      */
     @Override
     public void releaseContentChunks() {
-        contentChunks.forEach(ReferenceCountUtil::release);
+        if (!contentChunksWillBeReleasedExternally) {
+            contentChunks.forEach(ReferenceCounted::release);
+        }
         // Now that the chunks have been released we should clear the chunk list - we can no longer rely on the chunks
         //      for anything, and if this method is called a second time we don't want to re-release the chunks
         //      (which would screw up the reference counting).

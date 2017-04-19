@@ -7,20 +7,28 @@ import com.nike.riposte.server.error.handler.ErrorResponseBody;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
+import com.nike.wingtips.Span;
+import com.nike.wingtips.Tracer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandler;
+import io.netty.channel.ChannelOutboundHandler;
+import io.netty.channel.ChannelPromise;
 
 import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME;
+import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 
 /**
  * Finalizes incoming messages so that the pipeline considers the message handled and won't throw an error. This first
@@ -190,7 +198,98 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         // If we're in an error case (cause != null) and the response sending has started but not completed, then this
         //      request is broken. We can't do anything except kill the channel.
         if ((cause != null) && state.isResponseSendingStarted() && !state.isResponseSendingLastChunkSent()) {
+            logger.error("Received an error in ChannelPipelineFinalizerHandler after response sending was started, but "
+                         + "before it finished. Closing the channel.", cause);
             ctx.channel().close();
         }
+    }
+
+    /**
+     * This method is used as the final cleanup safety net for when a channel is closed. It guarantees that any
+     * {@link ByteBuf}s being held by {@link RequestInfo} or {@link ProxyRouterProcessingState} are {@link
+     * ByteBuf#release()}d so that we don't end up with a memory leak.
+     *
+     * <p>Note that we can't use {@link ChannelOutboundHandler#close(ChannelHandlerContext, ChannelPromise)} for this
+     * purpose as it is only called if we close the connection in our application code. It won't be triggered if
+     * (for example) the caller closes the connection, and we need it to *always* run for *every* closed connection,
+     * no matter the source of the close. {@link ChannelInboundHandler#channelInactive(ChannelHandlerContext)} is always
+     * called, so we're using that.
+     */
+    @Override
+    public PipelineContinuationBehavior doChannelInactive(ChannelHandlerContext ctx) throws Exception {
+        try {
+            // Grab hold of the things we may need when cleaning up.
+            HttpProcessingState httpState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
+            ProxyRouterProcessingState proxyRouterState =
+                ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
+
+            RequestInfo<?> requestInfo = (httpState == null) ? null : httpState.getRequestInfo();
+            ResponseInfo<?> responseInfo = (httpState == null) ? null : httpState.getResponseInfo();
+
+            if (logger.isDebugEnabled()) {
+                runnableWithTracingAndMdc(
+                    () -> logger.debug("Cleaning up channel after it was closed. closed_channel_id={}",
+                                       ctx.channel().toString()),
+                    ctx
+                ).run();
+            }
+
+            // Handle the case where the response wasn't fully sent or tracing wasn't completed for some reason.
+            //      We want to finish the distributed tracing span for this request since there's no other place it
+            //      might be done, and if the request wasn't fully sent then we should spit out a log message so
+            //      debug investigations can find out what happened.
+            // TODO: Is there a way we can handle access logging and/or metrics here, but only if it wasn't done elsewhere?
+            @SuppressWarnings("SimplifiableConditionalExpression")
+            boolean tracingAlreadyCompleted = (httpState == null) ? true : httpState.isTraceCompletedOrScheduled();
+            boolean responseNotFullySent = responseInfo == null || !responseInfo.isResponseSendingLastChunkSent();
+            if (responseNotFullySent || !tracingAlreadyCompleted) {
+                runnableWithTracingAndMdc(
+                    () -> {
+                        if (responseNotFullySent) {
+                            logger.warn(
+                                "The caller's channel was closed before a response could be sent. This means that "
+                                + "an access log probably does not exist for this request. Distributed tracing "
+                                + "will be completed now if it wasn't already done. Any dangling resources will be "
+                                + "released."
+                            );
+                        }
+
+                        if (!tracingAlreadyCompleted) {
+                            Span currentSpan = Tracer.getInstance().getCurrentSpan();
+                            if (currentSpan != null && !currentSpan.isCompleted())
+                                Tracer.getInstance().completeRequestSpan();
+
+                            httpState.setTraceCompletedOrScheduled(true);
+                        }
+                    },
+                    ctx
+                ).run();
+            }
+
+            // Tell the RequestInfo it can release all its resources.
+            if (requestInfo != null)
+                requestInfo.releaseAllResources();
+
+            // Tell the ProxyRouterProcessingState that the stream failed and trigger its chunk streaming error handling
+            //      with an artificial exception. If the call had already succeeded previously then this will do
+            //      nothing, but if it hasn't already succeeded then it's not going to (since the connection is closing)
+            //      and doing this will cause any resources its holding onto to be released.
+            if (proxyRouterState != null) {
+                proxyRouterState.setStreamingFailed();
+                proxyRouterState.triggerStreamingChannelErrorForChunks(
+                    new RuntimeException("Server worker channel closed")
+                );
+            }
+        }
+        catch(Throwable t) {
+            runnableWithTracingAndMdc(
+                () -> logger.error(
+                    "An unexpected error occurred during ChannelPipelineFinalizerHandler.doChannelInactive() - this "
+                    + "should not happen and indicates a bug that needs to be fixed in Riposte.", t),
+                ctx
+            ).run();
+        }
+
+        return PipelineContinuationBehavior.CONTINUE;
     }
 }

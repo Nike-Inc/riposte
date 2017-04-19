@@ -7,6 +7,18 @@ import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+
+import org.assertj.core.api.Assertions;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -16,15 +28,6 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
-
-import org.assertj.core.api.Assertions;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +42,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
  *
  * @author Nic Munroe
  */
+@RunWith(DataProviderRunner.class)
 public class RequestInfoSetterHandlerTest {
 
     private RequestInfoSetterHandler handler;
@@ -47,7 +51,7 @@ public class RequestInfoSetterHandlerTest {
     private Channel channelMock;
     private Attribute<HttpProcessingState> stateAttrMock;
     private Endpoint<?> endpointMock;
-    private HttpContent httpContent;
+    private HttpContent httpContentMock;
     private ByteBuf byteBufMock;
     private int maxRequestSizeInBytes;
     private RequestInfo<?> requestInfo;
@@ -60,7 +64,7 @@ public class RequestInfoSetterHandlerTest {
         stateAttrMock = mock(Attribute.class);
         endpointMock = mock(Endpoint.class);
         maxRequestSizeInBytes = 10;
-        httpContent = mock(HttpContent.class);
+        httpContentMock = mock(HttpContent.class);
         byteBufMock = mock(ByteBuf.class);
         requestInfo = mock(RequestInfo.class);
 
@@ -70,7 +74,7 @@ public class RequestInfoSetterHandlerTest {
         doReturn(stateAttrMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(stateMock).when(stateAttrMock).get();
         doReturn(endpointMock).when(stateMock).getEndpointForExecution();
-        doReturn(byteBufMock).when(httpContent).content();
+        doReturn(byteBufMock).when(httpContentMock).content();
         doReturn(null).when(endpointMock).maxRequestSizeInBytesOverride();
         doReturn(requestInfo).when(stateMock).getRequestInfo();
     }
@@ -122,28 +126,42 @@ public class RequestInfoSetterHandlerTest {
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 
+    @DataProvider(value = {
+        "true   |   false",
+        "false  |   true",
+        "true   |   true"
+    }, splitBy = "\\|")
     @Test
-    public void doChannelRead_returns_do_not_fire_when_null_state() {
+    public void doChannelRead_releases_content_and_returns_do_not_fire_when_state_is_null_or_response_already_sent(
+        boolean stateIsNull, boolean responseAlreadySent
+    ) {
         // given
-        doReturn(true).when(stateMock).isResponseSendingLastChunkSent();
+        if (stateIsNull)
+            doReturn(null).when(stateAttrMock).get();
+
+        if (responseAlreadySent) {
+            doReturn(true).when(stateMock).isResponseSendingLastChunkSent();
+        }
 
         // when
-        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContent);
+        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
 
         // then
+        verify(httpContentMock).release();
         assertThat(result).isEqualTo(PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT);
     }
 
     @Test
-    public void doChannelRead_throws_exception_when_no_request_info_when_HttpContent_message() {
+    public void doChannelRead_throws_exception_and_releases_content_when_no_request_info_when_HttpContent_message() {
         // given
         doReturn(null).when(stateMock).getRequestInfo();
 
         // when
-        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContent));
+        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(IllegalStateException.class);
+        verify(httpContentMock).release();
     }
 
     @Test
@@ -155,10 +173,11 @@ public class RequestInfoSetterHandlerTest {
         doReturn(100).when(requestInfo).addContentChunk(anyObject());
 
         // when
-        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContent);
+        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
 
         // then
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+        verify(httpContentMock).release();
     }
 
     @Test
@@ -170,10 +189,11 @@ public class RequestInfoSetterHandlerTest {
         doReturn(2).when(requestInfo).addContentChunk(anyObject());
 
         // when
-        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContent));
+        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
+        verify(httpContentMock).release();
     }
 
     @Test
@@ -185,39 +205,67 @@ public class RequestInfoSetterHandlerTest {
         doReturn(99).when(requestInfo).addContentChunk(anyObject());
 
         // when
-        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContent);
+        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
 
         // then
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+        verify(httpContentMock).release();
     }
 
+    @DataProvider(value = {
+        "true   |   false",
+        "false  |   true"
+    }, splitBy = "\\|")
     @Test
-    public void doChannelRead_no_endpoint_override_uses_global_configured_max_request_size_no_error() {
+    public void doChannelRead_override_uses_global_configured_max_request_size_when_necessary_no_error(
+        boolean endpointIsNull, boolean endpointReturnsNullOverride
+    ) {
         // given
+        if (endpointIsNull)
+            doReturn(null).when(stateMock).getEndpointForExecution();
+
+        if (endpointReturnsNullOverride)
+            doReturn(null).when(endpointMock).maxRequestSizeInBytesOverride();
+
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
         doReturn(5).when(requestInfo).addContentChunk(anyObject());
 
         // when
-        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContent);
+        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
 
         // then
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+        verify(httpContentMock).release();
     }
 
+    @DataProvider(value = {
+        "true   |   false",
+        "false  |   true"
+    }, splitBy = "\\|")
     @Test
-    public void doChannelRead_no_endpoint_override_uses_global_configured_max_request_size() {
+    public void doChannelRead_no_endpoint_override_uses_global_configured_max_request_size_when_necessary_with_error(
+        boolean endpointIsNull, boolean endpointReturnsNullOverride
+    ) {
         // given
+        // given
+        if (endpointIsNull)
+            doReturn(null).when(stateMock).getEndpointForExecution();
+
+        if (endpointReturnsNullOverride)
+            doReturn(null).when(endpointMock).maxRequestSizeInBytesOverride();
+        
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
 
         doReturn(11).when(requestInfo).addContentChunk(anyObject());
 
         // when
-        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContent));
+        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
+        verify(httpContentMock).release();
     }
 
     @Test
@@ -240,12 +288,13 @@ public class RequestInfoSetterHandlerTest {
         // given
         DecoderResult decoderResult = mock(DecoderResult.class);
         doReturn(true).when(decoderResult).isFailure();
-        doReturn(decoderResult).when(httpContent).getDecoderResult();
+        doReturn(decoderResult).when(httpContentMock).getDecoderResult();
 
         // when
-        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContent));
+        Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+        verify(httpContentMock).release();
     }
 }

@@ -4,6 +4,7 @@ import com.nike.backstopper.apierror.ApiError;
 import com.nike.backstopper.apierror.ApiErrorBase;
 import com.nike.backstopper.exception.ApiException;
 import com.nike.backstopper.model.DefaultErrorContractDTO;
+import com.nike.internal.util.MapBuilder;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
@@ -16,7 +17,6 @@ import com.nike.riposte.util.Matcher;
 import com.nike.riposte.util.MultiMatcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -356,7 +356,7 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
 
         public static final String MATCHING_PATH = "/withMetadata";
         public static final ApiError ERROR_WITH_METADATA = new ApiErrorBase("WITH_METADATA", 90000, "Blowup with MD", 400,
-                                                                            ImmutableMap.of("foo", "bar"));
+                                                                            MapBuilder.builder("foo", (Object)"bar").build());
 
         @Override
         public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {

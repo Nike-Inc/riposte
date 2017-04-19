@@ -25,7 +25,9 @@ dependencies {
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",
-            "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
+//            "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion",
             "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
             "commons-io:commons-io:$apacheCommonsIoVersion",
     )

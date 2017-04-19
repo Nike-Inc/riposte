@@ -20,6 +20,7 @@ public class ProxyRouterProcessingState implements ProcessingState {
     private CompletableFuture<StreamingAsyncHttpClient.StreamingChannel> firstChunkCF;
     private CompletableFuture<StreamingAsyncHttpClient.StreamingChannel> latestChunkCF;
     private long streamingStartTimeNanos;
+    private boolean streamingFailed;
 
     public ProxyRouterProcessingState() {
         // Default constructor - do nothing
@@ -31,6 +32,7 @@ public class ProxyRouterProcessingState implements ProcessingState {
         firstChunkCF = null;
         latestChunkCF = null;
         streamingStartTimeNanos = 0;
+        streamingFailed = false;
     }
 
     public CompletableFuture<StreamingAsyncHttpClient.StreamingChannel> getStreamingChannelCompletableFuture() {
@@ -80,5 +82,13 @@ public class ProxyRouterProcessingState implements ProcessingState {
 
     public long getStreamingStartTimeNanos() {
         return streamingStartTimeNanos;
+    }
+
+    public boolean isStreamingFailed() {
+        return streamingFailed;
+    }
+
+    public void setStreamingFailed() {
+        this.streamingFailed = true;
     }
 }

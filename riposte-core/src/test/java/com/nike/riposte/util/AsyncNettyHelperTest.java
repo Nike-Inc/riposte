@@ -3,6 +3,7 @@ package com.nike.riposte.util;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.util.asynchelperwrapper.BiConsumerWithTracingAndMdcSupport;
 import com.nike.riposte.util.asynchelperwrapper.BiFunctionWithTracingAndMdcSupport;
@@ -44,6 +45,7 @@ import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -62,7 +64,9 @@ public class AsyncNettyHelperTest {
     private Channel channelMock;
     private ChannelHandlerContext ctxMock;
     private Attribute<HttpProcessingState> stateAttributeMock;
+    private Attribute<ProxyRouterProcessingState> proxyRouterStateAttrMock;
     private HttpProcessingState state;
+    private ProxyRouterProcessingState proxyRouterStateMock;
     private RequestInfo requestInfoMock;
 
     private Runnable runnableMock;
@@ -81,11 +85,15 @@ public class AsyncNettyHelperTest {
         channelMock = mock(Channel.class);
         ctxMock = mock(ChannelHandlerContext.class);
         stateAttributeMock = mock(Attribute.class);
+        proxyRouterStateAttrMock = mock(Attribute.class);
         state = new HttpProcessingState();
+        proxyRouterStateMock = mock(ProxyRouterProcessingState.class);
         requestInfoMock = mock(RequestInfo.class);
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttributeMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(state).when(stateAttributeMock).get();
+        doReturn(proxyRouterStateAttrMock).when(channelMock).attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY);
+        doReturn(proxyRouterStateMock).when(proxyRouterStateAttrMock).get();
         state.setRequestInfo(requestInfoMock);
 
         runnableMock = mock(Runnable.class);
@@ -481,252 +489,261 @@ public class AsyncNettyHelperTest {
         assertThat(AsyncNettyHelper.extractTracingAndMdcInfoFromChannelHandlerContext(null)).isNull();
     }
 
-    @DataProvider(value = {
-        "true",
-        "false"
-    })
     @Test
-    public void linkTracingAndMdcToCurrentThread_ctx_works_as_expected(boolean useNullCtx) {
+    public void extractTracingAndMdcInfoFromChannelHandlerContext_returns_null_if_state_is_null() {
         // given
-        Pair<Deque<Span>, Map<String, String>> stateInfo = setupStateWithTracingAndMdcInfo();
-        ChannelHandlerContext ctxToUse = (useNullCtx) ? null : ctxMock;
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
+        doReturn(null).when(stateAttributeMock).get();
 
-        // when
-        Pair<Deque<Span>, Map<String, String>> preCallInfo =
-            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(ctxToUse);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
-
-        // then
-        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
-        if (useNullCtx)
-            assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
-        else
-            assertThat(postCallInfo).isEqualTo(stateInfo);
+        // expect
+        assertThat(AsyncNettyHelper.extractTracingAndMdcInfoFromChannelHandlerContext(ctxMock)).isNull();
     }
 
-    @DataProvider(value = {
-        "true",
-        "false"
-    })
-    @Test
-    public void linkTracingAndMdcToCurrentThread_pair_works_as_expected(boolean useNullPair) {
-        // given
-        Pair<Deque<Span>, Map<String, String>> infoForLinking = (useNullPair) ? null
-                                                                               : setupStateWithTracingAndMdcInfo();
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
+//    @DataProvider(value = {
+//        "true",
+//        "false"
+//    })
+//    @Test
+//    public void linkTracingAndMdcToCurrentThread_ctx_works_as_expected(boolean useNullCtx) {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> stateInfo = setupStateWithTracingAndMdcInfo();
+//        ChannelHandlerContext ctxToUse = (useNullCtx) ? null : ctxMock;
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // when
+//        Pair<Deque<Span>, Map<String, String>> preCallInfo =
+//            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(ctxToUse);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
+//        if (useNullCtx)
+//            assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
+//        else
+//            assertThat(postCallInfo).isEqualTo(stateInfo);
+//    }
 
-        // when
-        Pair<Deque<Span>, Map<String, String>> preCallInfo =
-            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(infoForLinking);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
+//    @DataProvider(value = {
+//        "true",
+//        "false"
+//    })
+//    @Test
+//    public void linkTracingAndMdcToCurrentThread_pair_works_as_expected(boolean useNullPair) {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> infoForLinking = (useNullPair) ? null
+//                                                                               : setupStateWithTracingAndMdcInfo();
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // when
+//        Pair<Deque<Span>, Map<String, String>> preCallInfo =
+//            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(infoForLinking);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
+//        if (useNullPair)
+//            assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
+//        else
+//            assertThat(postCallInfo).isEqualTo(infoForLinking);
+//    }
 
-        // then
-        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
-        if (useNullPair)
-            assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
-        else
-            assertThat(postCallInfo).isEqualTo(infoForLinking);
-    }
+//    @Test
+//    public void linkTracingAndMdcToCurrentThread_pair_works_as_expected_with_non_null_pair_and_null_innards() {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> infoForLinking = Pair.of(null, null);
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // when
+//        Pair<Deque<Span>, Map<String, String>> preCallInfo =
+//            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(infoForLinking);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
+//        assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
+//    }
 
-    @Test
-    public void linkTracingAndMdcToCurrentThread_pair_works_as_expected_with_non_null_pair_and_null_innards() {
-        // given
-        Pair<Deque<Span>, Map<String, String>> infoForLinking = Pair.of(null, null);
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
+//    @DataProvider(value = {
+//        "true   |   true",
+//        "false  |   true",
+//        "true   |   false",
+//        "false  |   false",
+//    }, splitBy = "\\|")
+//    @Test
+//    public void linkTracingAndMdcToCurrentThread_separate_args_works_as_expected(boolean useNullSpanStack,
+//                                                                                 boolean useNullMdcInfo) {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> info = setupStateWithTracingAndMdcInfo();
+//        info.getRight().put("fooMdcKey", UUID.randomUUID().toString());
+//        Deque<Span> spanStackForLinking = (useNullSpanStack) ? null : info.getLeft();
+//        Map<String, String> mdcInfoForLinking = (useNullMdcInfo) ? null : info.getRight();
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        Map<String, String> expectedMdcInfo;
+//        // The expected MDC info will vary depending on combinations.
+//        if (useNullMdcInfo) {
+//            // MDC may still be populated after the call if the span stack is not empty
+//            if (useNullSpanStack)
+//                expectedMdcInfo = Collections.emptyMap();
+//            else {
+//                // MDC will have been populated with tracing info.
+//                expectedMdcInfo = new HashMap<>();
+//                Span expectedSpan = spanStackForLinking.peek();
+//                expectedMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, expectedSpan.getTraceId());
+//                expectedMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, expectedSpan.toJSON());
+//            }
+//        }
+//        else {
+//            // Not null MDC. Start with the MDC info for linking.
+//            expectedMdcInfo = new HashMap<>(mdcInfoForLinking);
+//            if (useNullSpanStack) {
+//                // In the case of a null span stack, the trace info would be removed from the MDC.
+//                expectedMdcInfo.remove(Tracer.TRACE_ID_MDC_KEY);
+//                expectedMdcInfo.remove(Tracer.SPAN_JSON_MDC_KEY);
+//            }
+//        }
+//
+//        // when
+//        Pair<Deque<Span>, Map<String, String>> preCallInfo =
+//            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(spanStackForLinking, mdcInfoForLinking);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
+//        assertThat(postCallInfo.getLeft()).isEqualTo(spanStackForLinking);
+//        assertThat(postCallInfo.getRight()).isEqualTo(expectedMdcInfo);
+//    }
+//
+//    @DataProvider(value = {
+//        "true",
+//        "false"
+//    })
+//    @Test
+//    public void unlinkTracingAndMdcFromCurrentThread_pair_works_as_expected(boolean useNullPair) {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> infoForLinking = (useNullPair) ? null
+//                                                                               : setupStateWithTracingAndMdcInfo();
+//        // Setup the current thread with something that is not ultimately what we expect so that our assertions are
+//        //      verifying that the unlinkTracingAndMdcFromCurrentThread method actually did something.
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//
+//        // when
+//        AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread(infoForLinking);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        if (useNullPair)
+//            assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
+//        else
+//            assertThat(postCallInfo).isEqualTo(infoForLinking);
+//    }
 
-        // when
-        Pair<Deque<Span>, Map<String, String>> preCallInfo =
-            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(infoForLinking);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
+//    @Test
+//    public void unlinkTracingAndMdcFromCurrentThread_pair_works_as_expected_with_non_null_pair_and_null_innards() {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> infoForLinking = Pair.of(null, null);
+//        // Setup the current thread with something that is not ultimately what we expect so that our assertions are
+//        //      verifying that the unlinkTracingAndMdcFromCurrentThread method actually did something.
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//
+//        // when
+//        AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread(infoForLinking);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
+//    }
 
-        // then
-        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
-        assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
-    }
-
-    @DataProvider(value = {
-        "true   |   true",
-        "false  |   true",
-        "true   |   false",
-        "false  |   false",
-    }, splitBy = "\\|")
-    @Test
-    public void linkTracingAndMdcToCurrentThread_separate_args_works_as_expected(boolean useNullSpanStack,
-                                                                                 boolean useNullMdcInfo) {
-        // given
-        Pair<Deque<Span>, Map<String, String>> info = setupStateWithTracingAndMdcInfo();
-        info.getRight().put("fooMdcKey", UUID.randomUUID().toString());
-        Deque<Span> spanStackForLinking = (useNullSpanStack) ? null : info.getLeft();
-        Map<String, String> mdcInfoForLinking = (useNullMdcInfo) ? null : info.getRight();
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-        Pair<Deque<Span>, Map<String, String>> expectedPreCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
-
-        Map<String, String> expectedMdcInfo;
-        // The expected MDC info will vary depending on combinations.
-        if (useNullMdcInfo) {
-            // MDC may still be populated after the call if the span stack is not empty
-            if (useNullSpanStack)
-                expectedMdcInfo = Collections.emptyMap();
-            else {
-                // MDC will have been populated with tracing info.
-                expectedMdcInfo = new HashMap<>();
-                Span expectedSpan = spanStackForLinking.peek();
-                expectedMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, expectedSpan.getTraceId());
-                expectedMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, expectedSpan.toJSON());
-            }
-        }
-        else {
-            // Not null MDC. Start with the MDC info for linking.
-            expectedMdcInfo = new HashMap<>(mdcInfoForLinking);
-            if (useNullSpanStack) {
-                // In the case of a null span stack, the trace info would be removed from the MDC.
-                expectedMdcInfo.remove(Tracer.TRACE_ID_MDC_KEY);
-                expectedMdcInfo.remove(Tracer.SPAN_JSON_MDC_KEY);
-            }
-        }
-
-        // when
-        Pair<Deque<Span>, Map<String, String>> preCallInfo =
-            AsyncNettyHelper.linkTracingAndMdcToCurrentThread(spanStackForLinking, mdcInfoForLinking);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
-
-        // then
-        assertThat(preCallInfo).isEqualTo(expectedPreCallInfo);
-        assertThat(postCallInfo.getLeft()).isEqualTo(spanStackForLinking);
-        assertThat(postCallInfo.getRight()).isEqualTo(expectedMdcInfo);
-    }
-
-    @DataProvider(value = {
-        "true",
-        "false"
-    })
-    @Test
-    public void unlinkTracingAndMdcFromCurrentThread_pair_works_as_expected(boolean useNullPair) {
-        // given
-        Pair<Deque<Span>, Map<String, String>> infoForLinking = (useNullPair) ? null
-                                                                               : setupStateWithTracingAndMdcInfo();
-        // Setup the current thread with something that is not ultimately what we expect so that our assertions are
-        //      verifying that the unlinkTracingAndMdcFromCurrentThread method actually did something.
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-
-        // when
-        AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread(infoForLinking);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
-
-        // then
-        if (useNullPair)
-            assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
-        else
-            assertThat(postCallInfo).isEqualTo(infoForLinking);
-    }
-
-    @Test
-    public void unlinkTracingAndMdcFromCurrentThread_pair_works_as_expected_with_non_null_pair_and_null_innards() {
-        // given
-        Pair<Deque<Span>, Map<String, String>> infoForLinking = Pair.of(null, null);
-        // Setup the current thread with something that is not ultimately what we expect so that our assertions are
-        //      verifying that the unlinkTracingAndMdcFromCurrentThread method actually did something.
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-
-        // when
-        AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread(infoForLinking);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
-
-        // then
-        assertThat(postCallInfo).isEqualTo(Pair.of(null, Collections.emptyMap()));
-    }
-
-    @DataProvider(value = {
-        "true   |   true",
-        "false  |   true",
-        "true   |   false",
-        "false  |   false",
-    }, splitBy = "\\|")
-    @Test
-    public void unlinkTracingAndMdcFromCurrentThread_separate_args_works_as_expected(boolean useNullSpanStack,
-                                                                                     boolean useNullMdcInfo) {
-        // given
-        Pair<Deque<Span>, Map<String, String>> info = setupStateWithTracingAndMdcInfo();
-        info.getRight().put("fooMdcKey", UUID.randomUUID().toString());
-        Deque<Span> spanStackForLinking = (useNullSpanStack) ? null : info.getLeft();
-        Map<String, String> mdcInfoForLinking = (useNullMdcInfo) ? null : info.getRight();
-        // Setup the current thread with something that is not ultimately what we expect so that our assertions are
-        //      verifying that the unlinkTracingAndMdcFromCurrentThread method actually did something.
-        resetTracingAndMdc();
-        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
-
-        Map<String, String> expectedMdcInfo;
-        // The expected MDC info will vary depending on combinations.
-        if (useNullMdcInfo) {
-            // MDC may still be populated after the call if the span stack is not empty
-            if (useNullSpanStack)
-                expectedMdcInfo = Collections.emptyMap();
-            else {
-                // MDC will have been populated with tracing info.
-                expectedMdcInfo = new HashMap<>();
-                Span expectedSpan = spanStackForLinking.peek();
-                expectedMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, expectedSpan.getTraceId());
-                expectedMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, expectedSpan.toJSON());
-            }
-        }
-        else {
-            // Not null MDC. Since unlinkTracingAndMdcFromCurrentThread doesn't call registerWithThread when
-            //      the span stack is null we don't need to worry about trace ID and span JSON being removed from MDC.
-            //      Therefore it should match mdcInfoForLinking exactly.
-            expectedMdcInfo = new HashMap<>(mdcInfoForLinking);
-        }
-
-        // when
-        AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread(spanStackForLinking, mdcInfoForLinking);
-        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
-            Tracer.getInstance().getCurrentSpanStackCopy(),
-            MDC.getCopyOfContextMap()
-        );
-
-        // then
-        assertThat(postCallInfo.getLeft()).isEqualTo(spanStackForLinking);
-        assertThat(postCallInfo.getRight()).isEqualTo(expectedMdcInfo);
-    }
+//    @DataProvider(value = {
+//        "true   |   true",
+//        "false  |   true",
+//        "true   |   false",
+//        "false  |   false",
+//    }, splitBy = "\\|")
+//    @Test
+//    public void unlinkTracingAndMdcFromCurrentThread_separate_args_works_as_expected(boolean useNullSpanStack,
+//                                                                                     boolean useNullMdcInfo) {
+//        // given
+//        Pair<Deque<Span>, Map<String, String>> info = setupStateWithTracingAndMdcInfo();
+//        info.getRight().put("fooMdcKey", UUID.randomUUID().toString());
+//        Deque<Span> spanStackForLinking = (useNullSpanStack) ? null : info.getLeft();
+//        Map<String, String> mdcInfoForLinking = (useNullMdcInfo) ? null : info.getRight();
+//        // Setup the current thread with something that is not ultimately what we expect so that our assertions are
+//        //      verifying that the unlinkTracingAndMdcFromCurrentThread method actually did something.
+//        resetTracingAndMdc();
+//        Tracer.getInstance().startRequestWithRootSpan("foo-" + UUID.randomUUID().toString());
+//
+//        Map<String, String> expectedMdcInfo;
+//        // The expected MDC info will vary depending on combinations.
+//        if (useNullMdcInfo) {
+//            // MDC may still be populated after the call if the span stack is not empty
+//            if (useNullSpanStack)
+//                expectedMdcInfo = Collections.emptyMap();
+//            else {
+//                // MDC will have been populated with tracing info.
+//                expectedMdcInfo = new HashMap<>();
+//                Span expectedSpan = spanStackForLinking.peek();
+//                expectedMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, expectedSpan.getTraceId());
+//                expectedMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, expectedSpan.toJSON());
+//            }
+//        }
+//        else {
+//            // Not null MDC. Since unlinkTracingAndMdcFromCurrentThread doesn't call registerWithThread when
+//            //      the span stack is null we don't need to worry about trace ID and span JSON being removed from MDC.
+//            //      Therefore it should match mdcInfoForLinking exactly.
+//            expectedMdcInfo = new HashMap<>(mdcInfoForLinking);
+//        }
+//
+//        // when
+//        AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread(spanStackForLinking, mdcInfoForLinking);
+//        Pair<Deque<Span>, Map<String, String>> postCallInfo = Pair.of(
+//            Tracer.getInstance().getCurrentSpanStackCopy(),
+//            MDC.getCopyOfContextMap()
+//        );
+//
+//        // then
+//        assertThat(postCallInfo.getLeft()).isEqualTo(spanStackForLinking);
+//        assertThat(postCallInfo.getRight()).isEqualTo(expectedMdcInfo);
+//    }
 
     @DataProvider(value = {
         "true",
@@ -750,15 +767,16 @@ public class AsyncNettyHelperTest {
     }
 
     @DataProvider(value = {
-        "true   |   true    |   true",
-        "false  |   true    |   true",
-        "false  |   true    |   false",
-        "false  |   false   |   true",
-        "false  |   false   |   false",
+        "true   |   true    |   true    |   true",
+        "false  |   true    |   true    |   true",
+        "false  |   true    |   false   |   true",
+        "false  |   false   |   true    |   true",
+        "false  |   false   |   false   |   true",
+        "false  |   false   |   false   |   false",
     }, splitBy = "\\|")
     @Test
     public void executeOnlyIfChannelIsActive_releases_request_resources_and_completes_trace_as_appropriate_when_channel_is_not_active(
-        boolean stateIsNull, boolean requestInfoIsNull, boolean isTraceCompletedOrScheduledSetup
+        boolean stateIsNull, boolean requestInfoIsNull, boolean isTraceCompletedOrScheduledSetup, boolean proxyRouterStateIsNull
     ) {
         // given
         Pair<Deque<Span>, Map<String, String>> stateInfo = setupStateWithTracingAndMdcInfo();
@@ -769,6 +787,9 @@ public class AsyncNettyHelperTest {
 
         if (requestInfoIsNull)
             state.setRequestInfo(null);
+
+        if (proxyRouterStateIsNull)
+            doReturn(null).when(proxyRouterStateAttrMock).get();
 
         state.setTraceCompletedOrScheduled(isTraceCompletedOrScheduledSetup);
 
@@ -789,6 +810,13 @@ public class AsyncNettyHelperTest {
             verify(requestInfoMock).releaseAllResources();
             assertThat(currentSpanStackWhenRequestResourcesReleased.get(0)).isEqualTo(stateInfo.getLeft());
             assertThat(currentMdcInfoWhenRequestResourcesReleased.get(0)).isEqualTo(stateInfo.getRight());
+        }
+
+        if (proxyRouterStateIsNull)
+            verifyZeroInteractions(proxyRouterStateMock);
+        else {
+            verify(proxyRouterStateMock).setStreamingFailed();
+            verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
         }
 
         if (!stateIsNull && !isTraceCompletedOrScheduledSetup)

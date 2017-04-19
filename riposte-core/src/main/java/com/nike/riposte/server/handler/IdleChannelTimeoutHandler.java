@@ -1,8 +1,5 @@
 package com.nike.riposte.server.handler;
 
-import com.nike.riposte.server.channelpipeline.ChannelAttributes;
-import com.nike.riposte.server.http.HttpProcessingState;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,14 +34,7 @@ public class IdleChannelTimeoutHandler extends IdleStateHandler {
     protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
         channelIdleTriggered(ctx, evt);
 
-        // Release any state if possible.
-        HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
-        if (state != null) {
-            state.getRequestInfo().releaseAllResources();
-            state.cleanStateForNewRequest();
-        }
-
-        // Close the channel.
+        // Close the channel. ChannelPipelineFinalizerHandler.channelInactive(...) will ensure that content is released.
         ctx.channel().close();
 
         super.channelIdle(ctx, evt);
