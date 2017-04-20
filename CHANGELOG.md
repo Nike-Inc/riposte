@@ -8,8 +8,23 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.9.x` Releases - [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
+- `0.9.x` Releases - [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.9.3](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.3)
+
+Released on 2017-04-20.
+
+### Fixed
+
+- Fixed distributed tracing headers for the downstream call when handling `ProxyRouterEndpoint`s. The parent span's information was being passed downstream rather than the sub-span created for the downstream call. The trace ID was correct, but if the downstream call continued the trace then its span would be pointing at the wrong parent. This was fixed to correctly use the sub-span.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#47](https://github.com/Nike-Inc/riposte/pull/47)
+- Fixed several issues related to `ProxyRouterEndpoint` handling:
+    - Fixed incorrect Netty reference counting handling. This could lead to leaks or incorrect over-decrementing. If you saw `LEAK: ByteBuf.release() was not called before it's garbage-collected` or `IllegalReferenceCountException`s in your logs for data handled by Riposte (i.e. not your application-specific code) then this should now be fixed.
+    - Fixed some race conditions that could lead to requests not being processed correctly.
+    - Better internal corner-case error handling, leading to less log spam warnings.
+    - Improved logging when corner case errors do pop up. If a request is handled in an unexpected way and you have the trace ID from the response headers, then the logs should give you better insight into what happened (e.g. the caller or downstream system dropping connection partway through a request).
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#48](https://github.com/Nike-Inc/riposte/pull/48)
 
 ## [0.9.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.2)
 
@@ -22,7 +37,7 @@ Released on 2017-04-18.
     - Endpoint metrics handling has been split out into a `EndpointMetricsHandler` interface, allowing you full flexibility for handling endpoint-specific metrics related to requests and responses. A default impl (`EndpointMetricsHandlerDefaultImpl`) is used for Graphite-style conventions if you don't specify a different impl.
     - SignalFx support has been added via the `riposte-metrics-codahale-signalfx` module. Wire it up using `SignalFxReporterFactory` and `SignalFxEndpointMetricsHandler`.
     - All of this should be opt-in only, i.e. existing Riposte projects using the Codahale metrics system should continue to behave the same way.
-        - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#42](https://github.com/Nike-Inc/riposte/pull/42).
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#42](https://github.com/Nike-Inc/riposte/pull/42).
 
 ## [0.9.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.1)
 
