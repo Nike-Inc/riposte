@@ -32,6 +32,7 @@ public class IncompleteHttpCallTimeoutHandler extends IdleStateHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(IncompleteHttpCallTimeoutHandler.class);
     protected final long idleTimeoutMillis;
+    protected boolean alreadyTriggeredException = false;
 
     public IncompleteHttpCallTimeoutHandler(long idleTimeoutMillis) {
         super(0, 0, (int) idleTimeoutMillis, TimeUnit.MILLISECONDS);
@@ -40,8 +41,19 @@ public class IncompleteHttpCallTimeoutHandler extends IdleStateHandler {
 
     @Override
     protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
+        if (alreadyTriggeredException) {
+            runnableWithTracingAndMdc(
+                () -> logger.error(
+                    "IncompleteHttpCallTimeoutHandler triggered multiple times - this should not happen."
+                ),
+                ctx
+            ).run();
+            return;
+        }
+
         channelIdleTriggered(ctx, evt);
 
+        alreadyTriggeredException = true;
         throw new IncompleteHttpCallTimeoutException(idleTimeoutMillis);
     }
 

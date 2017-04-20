@@ -21,8 +21,9 @@ import java.util.concurrent.TimeUnit;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.ScheduledFuture;
+import io.netty.util.internal.OneTimeTask;
 
 import static com.nike.riposte.util.AsyncNettyHelper.executeOnlyIfChannelIsActive;
 import static com.nike.riposte.util.AsyncNettyHelper.functionWithTracingAndMdc;
@@ -71,75 +72,66 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
         Endpoint<?> endpoint = state.getEndpointForExecution();
 
         if (shouldHandleDoChannelReadMessage(msg, endpoint)) {
-            try {
-                // We only do something when the last chunk of content has arrived.
-                if (msg instanceof LastHttpContent) {
-                    NonblockingEndpoint nonblockingEndpoint = ((NonblockingEndpoint) endpoint);
+            // We only do something when the last chunk of content has arrived.
+            if (msg instanceof LastHttpContent) {
+                NonblockingEndpoint nonblockingEndpoint = ((NonblockingEndpoint) endpoint);
 
-                    // We're supposed to execute the endpoint. There may be pre-endpoint-execution validation logic or
-                    //      other work that needs to happen before the endpoint is executed, so set up the
-                    //      CompletableFuture for the endpoint call to only execute if the pre-endpoint-execution
-                    //      validation/work chain is successful.
-                    RequestInfo<?> requestInfo = state.getRequestInfo();
-                    @SuppressWarnings("unchecked")
-                    CompletableFuture<ResponseInfo<?>> responseFuture = state
-                        .getPreEndpointExecutionWorkChain()
-                        .thenCompose(functionWithTracingAndMdc(
-                            aVoid -> (CompletableFuture<ResponseInfo<?>>)nonblockingEndpoint.execute(
-                                requestInfo, longRunningTaskExecutor, ctx
-                            ), ctx)
-                        );
+                // We're supposed to execute the endpoint. There may be pre-endpoint-execution validation logic or
+                //      other work that needs to happen before the endpoint is executed, so set up the
+                //      CompletableFuture for the endpoint call to only execute if the pre-endpoint-execution
+                //      validation/work chain is successful.
+                RequestInfo<?> requestInfo = state.getRequestInfo();
+                @SuppressWarnings("unchecked")
+                CompletableFuture<ResponseInfo<?>> responseFuture = state
+                    .getPreEndpointExecutionWorkChain()
+                    .thenCompose(functionWithTracingAndMdc(
+                        aVoid -> (CompletableFuture<ResponseInfo<?>>)nonblockingEndpoint.execute(
+                            requestInfo, longRunningTaskExecutor, ctx
+                        ), ctx)
+                    );
 
-                    // Register an on-completion callback so we can be notified when the CompletableFuture finishes.
-                    responseFuture.whenComplete((responseInfo, throwable) -> {
-                        if (throwable != null)
-                            asyncErrorCallback(ctx, throwable);
-                        else
-                            asyncCallback(ctx, responseInfo);
-                    });
+                // Register an on-completion callback so we can be notified when the CompletableFuture finishes.
+                responseFuture.whenComplete((responseInfo, throwable) -> {
+                    if (throwable != null)
+                        asyncErrorCallback(ctx, throwable);
+                    else
+                        asyncCallback(ctx, responseInfo);
+                });
 
-                    // Also schedule a timeout check with our Netty event loop to make sure we kill the
-                    //      CompletableFuture if it goes on too long.
-                    long timeoutValueToUse = (nonblockingEndpoint.completableFutureTimeoutOverrideMillis() == null)
-                                             ? defaultCompletableFutureTimeoutMillis
-                                             : nonblockingEndpoint.completableFutureTimeoutOverrideMillis();
-                    ScheduledFuture<?> responseTimeoutScheduledFuture = ctx.channel().eventLoop().schedule(() -> {
-                        if (!responseFuture.isDone()) {
-                            runnableWithTracingAndMdc(
-                                () -> logger.error("A non-blocking endpoint's CompletableFuture did not finish within "
-                                                   + "the allotted timeout ({} milliseconds). Forcibly cancelling it.",
-                                                   timeoutValueToUse), ctx
-                            ).run();
-                            @SuppressWarnings("unchecked")
-                            Throwable errorToUse = nonblockingEndpoint.getCustomTimeoutExceptionCause(requestInfo, ctx);
-                            if (errorToUse == null)
-                                errorToUse = new NonblockingEndpointCompletableFutureTimedOut(timeoutValueToUse);
-                            responseFuture.completeExceptionally(errorToUse);
-                        }
-                    }, timeoutValueToUse, TimeUnit.MILLISECONDS);
+                // Also schedule a timeout check with our Netty event loop to make sure we kill the
+                //      CompletableFuture if it goes on too long.
+                long timeoutValueToUse = (nonblockingEndpoint.completableFutureTimeoutOverrideMillis() == null)
+                                         ? defaultCompletableFutureTimeoutMillis
+                                         : nonblockingEndpoint.completableFutureTimeoutOverrideMillis();
+                ScheduledFuture<?> responseTimeoutScheduledFuture = ctx.channel().eventLoop().schedule(() -> {
+                    if (!responseFuture.isDone()) {
+                        runnableWithTracingAndMdc(
+                            () -> logger.error("A non-blocking endpoint's CompletableFuture did not finish within "
+                                               + "the allotted timeout ({} milliseconds). Forcibly cancelling it.",
+                                               timeoutValueToUse), ctx
+                        ).run();
+                        @SuppressWarnings("unchecked")
+                        Throwable errorToUse = nonblockingEndpoint.getCustomTimeoutExceptionCause(requestInfo, ctx);
+                        if (errorToUse == null)
+                            errorToUse = new NonblockingEndpointCompletableFutureTimedOut(timeoutValueToUse);
+                        responseFuture.completeExceptionally(errorToUse);
+                    }
+                }, timeoutValueToUse, TimeUnit.MILLISECONDS);
 
-                    /*
-                        The problem with the scheduled timeout check is that it holds on to the RequestInfo,
-                        ChannelHandlerContext, and a bunch of other stuff that *should* become garbage the instant the
-                        request finishes, but because of the timeout check it has to wait until the check executes
-                        before the garbage is collectable. In high volume servers the default 60 second timeout is way
-                        too long and acts like a memory leak and results in garbage collection thrashing if the
-                        available memory can be filled within the 60 second timeout. To combat this we cancel the
-                        timeout future when the endpoint future finishes. Netty will remove the cancelled timeout future
-                        from its scheduled list within a short time, thus letting the garbage be collected.
-                    */
-                    responseFuture.whenComplete((responseInfo, throwable) -> {
-                        if (!responseTimeoutScheduledFuture.isDone())
-                            responseTimeoutScheduledFuture.cancel(false);
-                    });
-                }
-            }
-            finally {
-                // No matter what, we're done with the message. Release it (if the RequestInfo object is collecting
-                //      chunks in order to build the raw content string then it will have retain()-ed the message
-                //      already and this release won't cause the msg's reference count to fall below 1, but from the
-                //      pipeline's point of view we're done with this message so we call release).
-                ReferenceCountUtil.release(msg);
+                /*
+                    The problem with the scheduled timeout check is that it holds on to the RequestInfo,
+                    ChannelHandlerContext, and a bunch of other stuff that *should* become garbage the instant the
+                    request finishes, but because of the timeout check it has to wait until the check executes
+                    before the garbage is collectable. In high volume servers the default 60 second timeout is way
+                    too long and acts like a memory leak and results in garbage collection thrashing if the
+                    available memory can be filled within the 60 second timeout. To combat this we cancel the
+                    timeout future when the endpoint future finishes. Netty will remove the cancelled timeout future
+                    from its scheduled list within a short time, thus letting the garbage be collected.
+                */
+                responseFuture.whenComplete((responseInfo, throwable) -> {
+                    if (!responseTimeoutScheduledFuture.isDone())
+                        responseTimeoutScheduledFuture.cancel(false);
+                });
             }
 
             // Whether it was the last chunk or not, we don't want the pipeline to continue since the endpoint was a
@@ -176,11 +168,40 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
             );
         }
         else {
-            state.setResponseInfo(responseInfo);
             executeOnlyIfChannelIsActive(
                 ctx, "NonblockingEndpointExecutionHandler-asyncCallback",
-                () -> ctx.fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE)
+                () -> {
+                    // We have to set the ResponseInfo on the state and fire the event while in the
+                    //      channel's EventLoop. Otherwise there could be a race condition with an error
+                    //      that was fired down the pipe that sets the ResponseInfo on the state first, then
+                    //      this comes along and replaces the ResponseInfo (or vice versa).
+                    EventExecutor executor = ctx.executor();
+                    if (executor.inEventLoop()) {
+                        setResponseInfoAndActivatePipelineForResponse(state, responseInfo, ctx);
+                    }
+                    else {
+                        executor.execute(new OneTimeTask() {
+                            @Override
+                            public void run() {
+                                setResponseInfoAndActivatePipelineForResponse(state, responseInfo, ctx);
+                            }
+                        });
+                    }
+                }
             );
+        }
+    }
+
+    protected void setResponseInfoAndActivatePipelineForResponse(HttpProcessingState state,
+                                                                 ResponseInfo<?> responseInfo,
+                                                                 ChannelHandlerContext ctx) {
+        if (state.isRequestHandled()) {
+            logger.warn("The request has already been handled, likely due to an error, so "
+                        + "the endpoint's response will be ignored.");
+        }
+        else {
+            state.setResponseInfo(responseInfo);
+            ctx.fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
         }
     }
 

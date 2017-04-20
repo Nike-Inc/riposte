@@ -8,6 +8,10 @@ import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpContent;
@@ -31,6 +35,8 @@ import io.netty.util.ReferenceCountUtil;
  */
 public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
+    private static final Logger logger = LoggerFactory.getLogger(RequestInfoSetterHandler.class);
+
     private final int globalConfiguredMaxRequestSizeInBytes;
 
     public RequestInfoSetterHandler(int globalConfiguredMaxRequestSizeInBytes) {
@@ -39,38 +45,57 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
     @Override
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
-        HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
-        if (state != null && state.isResponseSendingLastChunkSent()) {
-            // A response has already been sent for this request, likely due to an error being thrown from an
-            //      earlier msg. We can therefore ignore this msg chunk and not process anything further.
-            ReferenceCountUtil.release(msg);
-            return PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
-        }
+        try {
+            HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
+            if (state == null || state.isResponseSendingLastChunkSent()) {
+                if (state == null)
+                    logger.error("HttpProcessingState is null for this request. This should not be possible.");
 
-        if (state != null) {
+                // A response has already been sent for this request (likely due to an error being thrown from an
+                //      earlier msg) or the state is null. We can therefore ignore this msg chunk and not process
+                //      anything further.
+                return PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
+            }
+
+            // We have a HttpProcessingState. Process the message and continue the pipeline processing.
             if (msg instanceof HttpRequest) {
                 throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
                 RequestInfo<?> requestInfo = new RequestInfoImpl<>((HttpRequest) msg);
                 state.setRequestInfo(requestInfo);
             }
             else if (msg instanceof HttpContent) {
-                throwExceptionIfNotSuccessfullyDecoded((HttpContent) msg);
+                HttpContent httpContentMsg = (HttpContent) msg;
+
+                throwExceptionIfNotSuccessfullyDecoded(httpContentMsg);
                 RequestInfo<?> requestInfo = state.getRequestInfo();
                 if (requestInfo == null) {
-                    throw new IllegalStateException("Found a HttpContent msg without a RequestInfo stored in the "
-                                                    + "HttpProcessingState. This should be impossible");
+                    throw new IllegalStateException(
+                        "Found a HttpContent msg without a RequestInfo stored in the HttpProcessingState. "
+                        + "This should be impossible"
+                    );
                 }
 
-                int currentRequestLengthInBytes = requestInfo.addContentChunk((HttpContent) msg);
+                int currentRequestLengthInBytes = requestInfo.addContentChunk(httpContentMsg);
                 int configuredMaxRequestSize = getConfiguredMaxRequestSize(state);
 
-                if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize) && currentRequestLengthInBytes > configuredMaxRequestSize) {
-                    throw new TooLongFrameException("Request raw content length exceeded configured max request size of " + configuredMaxRequestSize);
+                if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
+                    && currentRequestLengthInBytes > configuredMaxRequestSize) {
+                    throw new TooLongFrameException(
+                        "Request raw content length exceeded configured max request size of "
+                        + configuredMaxRequestSize
+                    );
                 }
             }
-        }
 
-        return PipelineContinuationBehavior.CONTINUE;
+            return PipelineContinuationBehavior.CONTINUE;
+        }
+        finally {
+            // For HttpContent messages, either requestInfo.addContentChunk() has been called and the reference count
+            //      increased (i.e. the RequestInfo is now responsible for releasing the content when
+            //      requestInfo.releaseAllResources() is called), or an exception has been thrown. In any case, we
+            //      are done with any message from a pipeline perspective and can reduce its reference count.
+            ReferenceCountUtil.release(msg);
+        }
     }
 
     private void throwExceptionIfNotSuccessfullyDecoded(HttpObject httpObject) {

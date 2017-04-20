@@ -19,6 +19,8 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import uk.org.lidalia.slf4jext.Level;
 import uk.org.lidalia.slf4jtest.TestLoggerFactory;
@@ -34,9 +36,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.restassured.response.ExtractableResponse;
 
+import static com.nike.riposte.server.componenttest.VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest.BackendEndpoint.CALL_ID_RESPONSE_HEADER_KEY;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
@@ -54,6 +58,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @RunWith(DataProviderRunner.class)
 public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
+
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     private static Server backendServer;
     private static ServerConfig backendServerConfig;
@@ -147,6 +153,8 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
     @UseDataProvider("responseStatusCodeScenariosDataProvider")
     public void verify_response_status_code_scenarios(int desiredStatusCode, boolean shouldReturnEmptyPayload) {
         for (int i = 0; i < 3; i++) { // Run this scenario 3 times in quick succession to catch potential keep-alive connection pooling issues.
+            logger.info("=== RUN " + i + " ===");
+            String callId = UUID.randomUUID().toString();
             ExtractableResponse response = given()
                 .config(config().redirect(redirectConfig().followRedirects(false)))
                 .baseUri("http://localhost")
@@ -154,12 +162,14 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
                 .basePath(BackendEndpoint.MATCHING_PATH)
                 .header(BackendEndpoint.DESIRED_RESPONSE_HTTP_STATUS_CODE_HEADER_KEY, String.valueOf(desiredStatusCode))
                 .header(BackendEndpoint.SHOULD_RETURN_EMPTY_PAYLOAD_BODY_HEADER_KEY, String.valueOf(shouldReturnEmptyPayload))
+                .header(BackendEndpoint.CALL_ID_REQUEST_HEADER_KEY, callId)
             .when()
                 .get()
             .then()
                 .extract();
 
             assertThat(response.statusCode()).isEqualTo(desiredStatusCode);
+            assertThat(response.header(CALL_ID_RESPONSE_HEADER_KEY)).isEqualTo(callId);
             if (isContentAlwaysEmptyStatusCode(desiredStatusCode)) {
                 assertThat(response.asString()).isNullOrEmpty();
                 assertThat(response.header(CONTENT_LENGTH)).isEqualTo("0");
@@ -171,8 +181,9 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
                 if (shouldReturnEmptyPayload)
                     assertThat(response.asString()).isNullOrEmpty();
                 else
-                    assertThat(response.asString()).isEqualTo(BackendEndpoint.NON_EMPTY_PAYLOAD);
+                    assertThat(response.asString()).isEqualTo(callId + BackendEndpoint.NON_EMPTY_PAYLOAD);
             }
+            logger.info("=== END RUN " + i + " ===");
         }
     }
 
@@ -240,16 +251,23 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         public static final String MATCHING_PATH = "/backendEndpoint";
         public static final String DESIRED_RESPONSE_HTTP_STATUS_CODE_HEADER_KEY = "desiredResponseHttpStatusCode";
         public static final String SHOULD_RETURN_EMPTY_PAYLOAD_BODY_HEADER_KEY = "shouldReturnEmptyPayloadBody";
+        public static final String CALL_ID_REQUEST_HEADER_KEY = "callId";
+        public static final String CALL_ID_RESPONSE_HEADER_KEY = "callId-received";
         public static final String NON_EMPTY_PAYLOAD = UUID.randomUUID().toString();
 
         @Override
         public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
             int statusCode = Integer.parseInt(request.getHeaders().get(DESIRED_RESPONSE_HTTP_STATUS_CODE_HEADER_KEY));
             boolean returnEmptyPayload = "true".equals(request.getHeaders().get(SHOULD_RETURN_EMPTY_PAYLOAD_BODY_HEADER_KEY));
-            String returnPayload = (returnEmptyPayload) ? null : NON_EMPTY_PAYLOAD;
+            String callIdReceived = String.valueOf(request.getHeaders().get(CALL_ID_REQUEST_HEADER_KEY));
+            String returnPayload = (returnEmptyPayload) ? null : callIdReceived + NON_EMPTY_PAYLOAD;
 
             return CompletableFuture.completedFuture(
-                ResponseInfo.newBuilder(returnPayload).withHttpStatusCode(statusCode).withDesiredContentWriterMimeType("text/plain").build()
+                ResponseInfo.newBuilder(returnPayload)
+                            .withHttpStatusCode(statusCode)
+                            .withDesiredContentWriterMimeType("text/plain")
+                            .withHeaders(new DefaultHttpHeaders().set(CALL_ID_RESPONSE_HEADER_KEY, callIdReceived))
+                            .build()
             );
         }
 

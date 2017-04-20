@@ -3,6 +3,7 @@ package com.nike.riposte.util;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.util.asynchelperwrapper.BiConsumerWithTracingAndMdcSupport;
 import com.nike.riposte.util.asynchelperwrapper.BiFunctionWithTracingAndMdcSupport;
@@ -44,6 +45,7 @@ import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -62,7 +64,9 @@ public class AsyncNettyHelperTest {
     private Channel channelMock;
     private ChannelHandlerContext ctxMock;
     private Attribute<HttpProcessingState> stateAttributeMock;
+    private Attribute<ProxyRouterProcessingState> proxyRouterStateAttrMock;
     private HttpProcessingState state;
+    private ProxyRouterProcessingState proxyRouterStateMock;
     private RequestInfo requestInfoMock;
 
     private Runnable runnableMock;
@@ -81,11 +85,15 @@ public class AsyncNettyHelperTest {
         channelMock = mock(Channel.class);
         ctxMock = mock(ChannelHandlerContext.class);
         stateAttributeMock = mock(Attribute.class);
+        proxyRouterStateAttrMock = mock(Attribute.class);
         state = new HttpProcessingState();
+        proxyRouterStateMock = mock(ProxyRouterProcessingState.class);
         requestInfoMock = mock(RequestInfo.class);
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttributeMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(state).when(stateAttributeMock).get();
+        doReturn(proxyRouterStateAttrMock).when(channelMock).attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY);
+        doReturn(proxyRouterStateMock).when(proxyRouterStateAttrMock).get();
         state.setRequestInfo(requestInfoMock);
 
         runnableMock = mock(Runnable.class);
@@ -481,6 +489,15 @@ public class AsyncNettyHelperTest {
         assertThat(AsyncNettyHelper.extractTracingAndMdcInfoFromChannelHandlerContext(null)).isNull();
     }
 
+    @Test
+    public void extractTracingAndMdcInfoFromChannelHandlerContext_returns_null_if_state_is_null() {
+        // given
+        doReturn(null).when(stateAttributeMock).get();
+
+        // expect
+        assertThat(AsyncNettyHelper.extractTracingAndMdcInfoFromChannelHandlerContext(ctxMock)).isNull();
+    }
+
     @DataProvider(value = {
         "true",
         "false"
@@ -750,15 +767,16 @@ public class AsyncNettyHelperTest {
     }
 
     @DataProvider(value = {
-        "true   |   true    |   true",
-        "false  |   true    |   true",
-        "false  |   true    |   false",
-        "false  |   false   |   true",
-        "false  |   false   |   false",
+        "true   |   true    |   true    |   true",
+        "false  |   true    |   true    |   true",
+        "false  |   true    |   false   |   true",
+        "false  |   false   |   true    |   true",
+        "false  |   false   |   false   |   true",
+        "false  |   false   |   false   |   false",
     }, splitBy = "\\|")
     @Test
     public void executeOnlyIfChannelIsActive_releases_request_resources_and_completes_trace_as_appropriate_when_channel_is_not_active(
-        boolean stateIsNull, boolean requestInfoIsNull, boolean isTraceCompletedOrScheduledSetup
+        boolean stateIsNull, boolean requestInfoIsNull, boolean isTraceCompletedOrScheduledSetup, boolean proxyRouterStateIsNull
     ) {
         // given
         Pair<Deque<Span>, Map<String, String>> stateInfo = setupStateWithTracingAndMdcInfo();
@@ -769,6 +787,9 @@ public class AsyncNettyHelperTest {
 
         if (requestInfoIsNull)
             state.setRequestInfo(null);
+
+        if (proxyRouterStateIsNull)
+            doReturn(null).when(proxyRouterStateAttrMock).get();
 
         state.setTraceCompletedOrScheduled(isTraceCompletedOrScheduledSetup);
 
@@ -789,6 +810,13 @@ public class AsyncNettyHelperTest {
             verify(requestInfoMock).releaseAllResources();
             assertThat(currentSpanStackWhenRequestResourcesReleased.get(0)).isEqualTo(stateInfo.getLeft());
             assertThat(currentMdcInfoWhenRequestResourcesReleased.get(0)).isEqualTo(stateInfo.getRight());
+        }
+
+        if (proxyRouterStateIsNull)
+            verifyZeroInteractions(proxyRouterStateMock);
+        else {
+            verify(proxyRouterStateMock).setStreamingFailed();
+            verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
         }
 
         if (!stateIsNull && !isTraceCompletedOrScheduledSetup)

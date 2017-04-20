@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 
@@ -16,6 +17,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests the functionality of {@link IncompleteHttpCallTimeoutHandler}.
@@ -36,18 +40,36 @@ public class IncompleteHttpCallTimeoutHandlerTest {
     }
 
     @Test
-    public void IncompleteHttpCallTimeoutHandler_throws_IncompleteHttpCallTimeoutException_when_channelIdle_is_called() throws Exception {
+    public void IncompleteHttpCallTimeoutHandler_throws_IncompleteHttpCallTimeoutException_and_sets_alreadyTriggeredException_to_true_when_channelIdle_is_called() throws Exception {
         // given
         long timeoutMillis = 4242;
-        IncompleteHttpCallTimeoutHandler handler = new IncompleteHttpCallTimeoutHandler(timeoutMillis);
+        IncompleteHttpCallTimeoutHandler handlerSpy = spy(new IncompleteHttpCallTimeoutHandler(timeoutMillis));
+        assertThat(handlerSpy.alreadyTriggeredException).isFalse();
 
         // when
-        Throwable ex = catchThrowable(() -> handler.channelIdle(ctxMock, ALL_IDLE_STATE_EVENT));
+        Throwable ex = catchThrowable(() -> handlerSpy.channelIdle(ctxMock, ALL_IDLE_STATE_EVENT));
 
         // then
         assertThat(ex).isInstanceOf(IncompleteHttpCallTimeoutException.class);
         IncompleteHttpCallTimeoutException timeoutEx = (IncompleteHttpCallTimeoutException)ex;
         assertThat(timeoutEx.timeoutMillis).isEqualTo(timeoutMillis);
+        assertThat(handlerSpy.alreadyTriggeredException).isTrue();
+        verify(handlerSpy).channelIdleTriggered(ctxMock, ALL_IDLE_STATE_EVENT);
     }
 
+    @Test
+    public void IncompleteHttpCallTimeoutHandler_does_nothing_if_alreadyTriggeredException_is_true() {
+        // given
+        long timeoutMillis = 4242;
+        IncompleteHttpCallTimeoutHandler handlerSpy = spy(new IncompleteHttpCallTimeoutHandler(timeoutMillis));
+        handlerSpy.alreadyTriggeredException = true;
+
+        // when
+        Throwable ex = catchThrowable(() -> handlerSpy.channelIdle(ctxMock, ALL_IDLE_STATE_EVENT));
+
+        // then
+        assertThat(ex).isNull();
+        verify(handlerSpy, never()).channelIdleTriggered(any(ChannelHandlerContext.class), any(IdleStateEvent.class));
+
+    }
 }

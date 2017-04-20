@@ -3,6 +3,7 @@ package com.nike.riposte.util;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.util.asynchelperwrapper.BiConsumerWithTracingAndMdcSupport;
 import com.nike.riposte.util.asynchelperwrapper.BiFunctionWithTracingAndMdcSupport;
@@ -466,10 +467,27 @@ public class AsyncNettyHelper {
                     + "Releasing resources and stopping request processing. channel_inactive_cannot_continue_marker={}",
                     markerForLogs
                 );
+
+                // Gather the stuff we want to try to release resources for.
                 HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
                 RequestInfo<?> requestInfo = (state == null) ? null : state.getRequestInfo();
+                ProxyRouterProcessingState proxyRouterState =
+                    ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
+
+                // Tell the RequestInfo it can release all its resources.
                 if (requestInfo != null)
                     requestInfo.releaseAllResources();
+
+                // Tell the ProxyRouterProcessingState that the stream failed and trigger its chunk streaming error
+                //      handling with an artificial exception. If the call had already succeeded previously then this
+                //      will do nothing, but if it hasn't already succeeded then it's not going to (since the connection
+                //      is closing) and doing this will cause any resources it's holding onto to be released.
+                if (proxyRouterState != null) {
+                    proxyRouterState.setStreamingFailed();
+                    proxyRouterState.triggerStreamingChannelErrorForChunks(
+                        new RuntimeException("Server worker channel closed")
+                    );
+                }
 
                 // Complete the trace only if there's no state, or if we have a state but the trace hasn't been
                 //      completed yet. If the state says the trace has already been completed we don't want to spit it

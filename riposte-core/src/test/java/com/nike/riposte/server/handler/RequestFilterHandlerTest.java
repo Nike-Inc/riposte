@@ -26,11 +26,12 @@ import java.util.function.BiFunction;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
-import io.netty.util.ReferenceCounted;
 
+import static com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport.HandlerMethodToExecute.DO_CHANNEL_READ;
 import static com.nike.riposte.server.handler.base.PipelineContinuationBehavior.CONTINUE;
 import static com.nike.riposte.server.handler.base.PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -506,10 +507,6 @@ public class RequestFilterHandlerTest {
         // The state is updated with the ResponseInfo returned by the filter.
         assertThat(state.getResponseInfo()).isSameAs(returnedResponseInfoMock);
 
-        // The given msg object's reference count is decremented (if it is ReferenceCounted).
-        if (args.msg instanceof ReferenceCounted)
-            verify((ReferenceCounted)args.msg).release();
-
         // The short circuiting "we're all done, return the response to the caller" event is fired down the pipeline.
         verify(ctxMock).fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
     }
@@ -566,11 +563,26 @@ public class RequestFilterHandlerTest {
         // The state is NOT updated with the ResponseInfo returned by the filter.
         assertThat(state.getResponseInfo()).isNull();
 
-        // The given msg object's reference count is NOT decremented (if it is ReferenceCounted).
-        if (args.msg instanceof ReferenceCounted)
-            verify((ReferenceCounted)args.msg, never()).release();
-
         // The short circuiting "we're all done, return the response to the caller" event is NOT fired down the pipeline.
         verify(ctxMock, never()).fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
+    }
+
+    @Test
+    public void argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo_only_returns_true_for_HttpRequest_or_LastHttpContent() {
+        // given
+        Object httpRequestMsg = mock(HttpRequest.class);
+        Object lastHttpContentMsg = mock(LastHttpContent.class);
+        Object httpMessageMsg = mock(HttpMessage.class);
+
+        // expect
+        assertThat(handlerSpy.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(
+            DO_CHANNEL_READ, ctxMock, httpRequestMsg, null)
+        ).isTrue();
+        assertThat(handlerSpy.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(
+            DO_CHANNEL_READ, ctxMock, lastHttpContentMsg, null)
+        ).isTrue();
+        assertThat(handlerSpy.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(
+            DO_CHANNEL_READ, ctxMock, httpMessageMsg, null)
+        ).isFalse();
     }
 }
