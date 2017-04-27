@@ -48,7 +48,6 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.concurrent.EventExecutor;
-import io.netty.util.internal.OneTimeTask;
 
 import static com.nike.fastbreak.CircuitBreakerForHttpStatusCode.getDefaultHttpStatusCodeCircuitBreakerForKey;
 import static com.nike.riposte.util.AsyncNettyHelper.executeOnlyIfChannelIsActive;
@@ -585,12 +584,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                     sendFirstChunkDownPipeline(state, responseInfo);
                                 }
                                 else {
-                                    executor.execute(new OneTimeTask() {
-                                        @Override
-                                        public void run() {
-                                            sendFirstChunkDownPipeline(state, responseInfo);
-                                        }
-                                    });
+                                    executor.execute(() -> sendFirstChunkDownPipeline(state, responseInfo));
                                 }
                             }
                         },
@@ -619,12 +613,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                         sendContentChunkDownPipeline(contentChunk, contentChunkToSend);
                     }
                     else {
-                        executor.execute(new OneTimeTask() {
-                            @Override
-                            public void run() {
-                                sendContentChunkDownPipeline(contentChunk, contentChunkToSend);
-                            }
-                        });
+                        executor.execute(() -> sendContentChunkDownPipeline(contentChunk, contentChunkToSend));
                     }
                 }
                 else {
@@ -691,12 +680,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                 sendUnrecoverableErrorDownPipeline(error);
             }
             else {
-                executor.execute(new OneTimeTask() {
-                    @Override
-                    public void run() {
-                        sendUnrecoverableErrorDownPipeline(error);
-                    }
-                });
+                executor.execute(() -> sendUnrecoverableErrorDownPipeline(error));
             }
         }
 

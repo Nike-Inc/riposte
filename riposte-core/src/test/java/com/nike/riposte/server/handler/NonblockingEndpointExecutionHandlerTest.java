@@ -32,7 +32,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.ScheduledFuture;
-import io.netty.util.internal.OneTimeTask;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
@@ -362,7 +361,7 @@ public class NonblockingEndpointExecutionHandlerTest {
     }
 
     @Test
-    public void asyncCallback_calls_setResponseInfoAndActivatePipelineForResponse_via_EventExecutor_with_OneTimeTask_if_we_are_not_in_executor_event_loop() {
+    public void asyncCallback_calls_setResponseInfoAndActivatePipelineForResponse_via_EventExecutor_if_we_are_not_in_executor_event_loop() {
         // given
         ResponseInfo<?> responseInfo = ResponseInfo.newBuilder().build();
         doReturn(false).when(eventExecutorMock).inEventLoop();
@@ -374,8 +373,8 @@ public class NonblockingEndpointExecutionHandlerTest {
         // Verify that the EventExecutor was passed a runnable and extract it so we can verify it.
         ArgumentCaptor<Runnable> eventExecutorArgCaptor = ArgumentCaptor.forClass(Runnable.class);
         verify(eventExecutorMock).execute(eventExecutorArgCaptor.capture());
-        assertThat(eventExecutorArgCaptor.getValue()).isInstanceOf(OneTimeTask.class);
-        OneTimeTask task = (OneTimeTask)eventExecutorArgCaptor.getValue();
+        assertThat(eventExecutorArgCaptor.getValue()).isNotNull();
+        Runnable task = eventExecutorArgCaptor.getValue();
 
         // Verify setResponseInfoAndActivatePipelineForResponse() not called yet
         verify(handlerSpy, never()).setResponseInfoAndActivatePipelineForResponse(

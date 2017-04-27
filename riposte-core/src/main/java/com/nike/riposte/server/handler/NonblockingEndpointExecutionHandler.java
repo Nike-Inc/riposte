@@ -23,7 +23,6 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.ScheduledFuture;
-import io.netty.util.internal.OneTimeTask;
 
 import static com.nike.riposte.util.AsyncNettyHelper.executeOnlyIfChannelIsActive;
 import static com.nike.riposte.util.AsyncNettyHelper.functionWithTracingAndMdc;
@@ -180,12 +179,7 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
                         setResponseInfoAndActivatePipelineForResponse(state, responseInfo, ctx);
                     }
                     else {
-                        executor.execute(new OneTimeTask() {
-                            @Override
-                            public void run() {
-                                setResponseInfoAndActivatePipelineForResponse(state, responseInfo, ctx);
-                            }
-                        });
+                        executor.execute(() -> setResponseInfoAndActivatePipelineForResponse(state, responseInfo, ctx));
                     }
                 }
             );
