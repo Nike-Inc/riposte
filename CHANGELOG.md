@@ -8,8 +8,17 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.9.x` Releases - [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
+- `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.9.4](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.4)
+
+Released on 2017-04-26.
+
+### Fixed
+
+- Removed usage of Netty internal class (`io.netty.util.internal.OneTimeTask`). This prevented use of newer versions of Netty where that class no longer existed.
+    - Reported by [Vic Bell][contrib_vicbell]. Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#52](https://github.com/Nike-Inc/riposte/pull/52). For issues [#50](https://github.com/Nike-Inc/riposte/issues/50) and [#51](https://github.com/Nike-Inc/riposte/issues/51).
 
 ## [0.9.3](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.3)
 
@@ -120,3 +129,4 @@ Released on 2016-11-03.
 [contrib_nicmunroe]: https://github.com/nicmunroe
 [contrib_palemorningdun]: https://github.com/palemorningdun
 [contrib_rabeyta]: https://github.com/rabeyta
+[contrib_vicbell]: https://github.com/vicbell
