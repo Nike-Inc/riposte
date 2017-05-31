@@ -476,7 +476,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         // INBOUND - Add RoutingHandler to figure out which endpoint should handle the request and set it on our request
         //           state for later execution
-        p.addLast(ROUTING_HANDLER_NAME, new RoutingHandler(endpoints));
+        p.addLast(ROUTING_HANDLER_NAME, new RoutingHandler(endpoints, maxRequestSizeInBytes));
 
         // INBOUND - Add SecurityValidationHandler to validate the RequestInfo object for the matching endpoint
         p.addLast(SECURITY_VALIDATION_HANDLER_NAME, new SecurityValidationHandler(requestSecurityValidator));
