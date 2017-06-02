@@ -497,4 +497,12 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
         return attributes;
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getPathTemplate() {
+        return this.pathTemplate == null ? "" : this.pathTemplate;
+    }
+
 }

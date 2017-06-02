@@ -448,6 +448,7 @@ public class RequestInfoImplTest {
         assertThat(requestInfo.getPathParam("param2"), is(expectedParam2));
         assertThat(requestInfo.getPathParams().get("param1"), is(expectedParam1));
         assertThat(requestInfo.getPathParams().get("param2"), is(expectedParam2));
+        assertThat(requestInfo.getPathTemplate(), is(pathTemplate));
     }
 
     @Test(expected = PathParameterMatchingException.class)
@@ -912,6 +913,18 @@ public class RequestInfoImplTest {
 
         // then
         assertThat(requestInfo.getRequestAttributes().get(attributeName), is(attributeValue));
+    }
+
+    @Test
+    public void getPathTemplate_returns_empty_string_when_null_value() {
+        // given
+        RequestInfoImpl<?> requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
+
+        // when
+        String pathTemplate = requestInfo.getPathTemplate();
+
+        // then
+        assertThat(pathTemplate, is(""));
     }
 
     public static class TestContentObject {

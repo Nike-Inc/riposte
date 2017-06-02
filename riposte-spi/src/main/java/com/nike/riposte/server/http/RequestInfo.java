@@ -43,6 +43,8 @@ public interface RequestInfo<T> {
      * The full URI associated with this request. This will be the raw, potentially encoded, value sent to the server.
      * It may include the query string (use {@link #getPath()} if you don't want the query string).
      *
+     * see {@link #getPathTemplate()} if you are looking for the matching template of the request
+     *
      * Will never be null - the empty string will be used if no URI information was provided.
      */
     public String getUri();
@@ -52,6 +54,8 @@ public interface RequestInfo<T> {
      * query string).
      *
      * The path value returned will be URL decoded before being returned.
+     *
+     * see {@link #getPathTemplate()} if you are looking for the matching template of the request
      *
      * Will never be null - the empty string will be used if no path information could be extracted.
      */
@@ -384,4 +388,18 @@ public interface RequestInfo<T> {
      * do not need to worry about this issue - it's a problem for the server to solve.
      */
     public void releaseMultipartData();
+
+    /**
+     * This will return the path template set by {@link #setPathParamsBasedOnPathTemplate(String)},
+     * which corresponds to an endpoint {@link com.nike.riposte.util.Matcher}'s path template and is automatically set
+     * when a request is matched to an endpoint.
+     *
+     * <p>Example path template: "/app/{appId}/user/{userId}".
+     * Note this different than {@link #getPath()}, which in this example might be "/app/foo/user/bar".
+     *
+     * <p>Will never be null - an empty string will be used if {@link #setPathParamsBasedOnPathTemplate(String)}
+     * was never called (should only happen in error cases where an endpoint was not called).
+     */
+    public String getPathTemplate();
+
 }

@@ -265,6 +265,11 @@ public class RequestInfoTest {
         }
 
         @Override
+        public String getPathTemplate() {
+            return null;
+        }
+
+        @Override
         public void addRequestAttribute(String attributeName, Object attributeValue) {
 
         }
