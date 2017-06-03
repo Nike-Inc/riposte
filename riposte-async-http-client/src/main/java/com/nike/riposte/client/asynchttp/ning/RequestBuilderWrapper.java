@@ -24,8 +24,8 @@ import io.netty.handler.codec.http.HttpMethod;
 @SuppressWarnings({"WeakerAccess", "OptionalUsedAsFieldOrParameterType"})
 public class RequestBuilderWrapper {
 
-    public final String url;
-    public final String httpMethod;
+    String url;
+    String httpMethod;
     public final AsyncHttpClient.BoundRequestBuilder requestBuilder;
     /**
      * An Optional containing a custom circuit breaker if a custom one should be used, or empty if the request sender
@@ -34,12 +34,12 @@ public class RequestBuilderWrapper {
      * (i.e. all calls to the same host will use the same circuit breaker). If you need something more (or less) fine
      * grained than that then you'll need to provide a custom circuit breaker.
      */
-    public final Optional<CircuitBreaker<Response>> customCircuitBreaker;
+    Optional<CircuitBreaker<Response>> customCircuitBreaker;
     /**
      * Set this to true if you don't want *any* circuit breaker to be used - if this is false then {@link
      * #customCircuitBreaker} will be used to determine which circuit breaker to use (custom vs. default).
      */
-    public final boolean disableCircuitBreaker;
+    boolean disableCircuitBreaker;
 
     private ChannelHandlerContext ctx;
 
@@ -66,4 +66,53 @@ public class RequestBuilderWrapper {
     void setCtx(ChannelHandlerContext ctx) {
         this.ctx = ctx;
     }
+
+    public void setCustomCircuitBreaker(Optional<CircuitBreaker<Response>> customCircuitBreaker) {
+        this.customCircuitBreaker = customCircuitBreaker;
+    }
+
+    public Optional<CircuitBreaker<Response>> getCustomCircuitBreaker() {
+        return customCircuitBreaker;
+    }
+
+    public void setDisableCircuitBreaker(boolean disableCircuitBreaker) {
+        this.disableCircuitBreaker = disableCircuitBreaker;
+    }
+
+    public boolean isDisableCircuitBreaker() {
+        return disableCircuitBreaker;
+    }
+
+    /**
+     * <p>Use this method to update the url stored inside this {@link RequestBuilderWrapper}
+     * and the wrapped {@link AsyncHttpClient.BoundRequestBuilder}
+     *
+     * <p>Setting the url only on the wrapped {@link AsyncHttpClient.BoundRequestBuilder} will impact logging
+     * and circuit breakers potentially. Use this method to keep the two in sync.
+     */
+    public void setUrl(String url) {
+        this.url = url;
+        requestBuilder.setUrl(url);
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    /**
+     * <p>Use this method to update the httpMethod stored inside this {@link RequestBuilderWrapper}
+     * and the wrapped {@link AsyncHttpClient.BoundRequestBuilder}
+     *
+     * <p>Setting the httpMethod only on the wrapped {@link AsyncHttpClient.BoundRequestBuilder} will impact logging
+     * and circuit breakers potentially. Use this method to keep the two in sync.
+     */
+    public void setHttpMethod(String httpMethod) {
+        this.httpMethod = httpMethod;
+        requestBuilder.setMethod(httpMethod);
+    }
+
+    public String getHttpMethod() {
+        return httpMethod;
+    }
+
 }
