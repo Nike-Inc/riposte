@@ -4,7 +4,6 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
-import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
@@ -18,6 +17,9 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
+
+import static com.nike.riposte.util.HttpUtils.getConfiguredMaxRequestSize;
+import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled;
 
 /**
  * Monitors the incoming messages - when it sees a {@link HttpRequest} then it creates a new {@link RequestInfo} from it
@@ -76,7 +78,7 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
                 }
 
                 int currentRequestLengthInBytes = requestInfo.addContentChunk(httpContentMsg);
-                int configuredMaxRequestSize = getConfiguredMaxRequestSize(state);
+                int configuredMaxRequestSize = getConfiguredMaxRequestSize(state.getEndpointForExecution(), globalConfiguredMaxRequestSizeInBytes);
 
                 if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
                     && currentRequestLengthInBytes > configuredMaxRequestSize) {
@@ -102,21 +104,6 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
         if (httpObject.getDecoderResult() != null && httpObject.getDecoderResult().isFailure()) {
             throw new InvalidHttpRequestException("Detected HttpObject that was not successfully decoded.", httpObject.getDecoderResult().cause());
         }
-    }
-
-    private boolean isMaxRequestSizeValidationDisabled(int configuredMaxRequestSize) {
-        return configuredMaxRequestSize <= 0;
-    }
-
-    private int getConfiguredMaxRequestSize(HttpProcessingState state) {
-        Endpoint<?> endpoint = state.getEndpointForExecution();
-
-        //if the endpoint is null or the endpoint is not overriding, we should return the globally configured value
-        if (endpoint == null || endpoint.maxRequestSizeInBytesOverride() == null) {
-            return globalConfiguredMaxRequestSizeInBytes;
-        }
-
-        return endpoint.maxRequestSizeInBytesOverride();
     }
 
     @Override

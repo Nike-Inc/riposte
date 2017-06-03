@@ -17,7 +17,12 @@ import java.util.List;
 import java.util.Optional;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.TooLongFrameException;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
+
+import static com.nike.riposte.util.HttpUtils.getConfiguredMaxRequestSize;
+import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled;
 
 /**
  * Handles the logic of determining which {@link Endpoint} matches the {@link RequestInfo} in the channel's current
@@ -32,12 +37,14 @@ import io.netty.handler.codec.http.HttpRequest;
 public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
     private final Collection<Endpoint<?>> endpoints;
+    private final int globalConfiguredMaxRequestSizeInBytes;
 
-    public RoutingHandler(Collection<Endpoint<?>> endpoints) {
+    public RoutingHandler(Collection<Endpoint<?>> endpoints, int globalMaxRequestSizeInBytes) {
         if (endpoints == null || endpoints.isEmpty())
             throw new IllegalArgumentException("endpoints cannot be empty");
 
         this.endpoints = endpoints;
+        this.globalConfiguredMaxRequestSizeInBytes = globalMaxRequestSizeInBytes;
     }
 
     /**
@@ -104,12 +111,24 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
             RequestInfo request = state.getRequestInfo();
             Pair<Endpoint<?>, String> endpointForExecution = findSingleEndpointForExecution(request);
 
+            throwExceptionIfContentLengthHeaderIsLargerThanConfiguredMaxRequestSize((HttpRequest) msg, endpointForExecution.getLeft());
+
             request.setPathParamsBasedOnPathTemplate(endpointForExecution.getRight());
 
             state.setEndpointForExecution(endpointForExecution.getLeft(), endpointForExecution.getRight());
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    private void throwExceptionIfContentLengthHeaderIsLargerThanConfiguredMaxRequestSize(HttpRequest msg, Endpoint<?> endpoint) {
+        int configuredMaxRequestSize = getConfiguredMaxRequestSize(endpoint, globalConfiguredMaxRequestSizeInBytes);
+
+        if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
+                && HttpHeaders.isContentLengthSet(msg)
+                && HttpHeaders.getContentLength(msg) > configuredMaxRequestSize) {
+            throw new TooLongFrameException("Content-Length header value exceeded configured max request size of " + configuredMaxRequestSize);
+        }
     }
 
     @Override
