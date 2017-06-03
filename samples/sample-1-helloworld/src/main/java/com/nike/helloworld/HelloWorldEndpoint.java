@@ -6,6 +6,8 @@ import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.util.AsyncNettyHelper;
 import com.nike.riposte.util.Matcher;
 
+import io.netty.handler.codec.http.DefaultHttpContent;
+import io.netty.handler.codec.http.DefaultLastHttpContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +24,7 @@ import static com.nike.riposte.util.AsyncNettyHelper.supplierWithTracingAndMdc;
  * A basic {@link StandardEndpoint} that listends for GET calls at the root path "/" and simply responds with
  * "Hello, world" in text/plain mime type.
  */
-public class HelloWorldEndpoint extends StandardEndpoint<Void,String> {
+public class HelloWorldEndpoint extends StandardEndpoint<Void,Void> {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
     private final Matcher matcher = Matcher.match("/", HttpMethod.GET);
@@ -50,11 +52,15 @@ public class HelloWorldEndpoint extends StandardEndpoint<Void,String> {
      * incoming request.
      */
     @Override
-    public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+    public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
         return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(
             () -> {
                 logger.debug("Processing Request...");
-                return ResponseInfo.newBuilder("Hello, world!").withDesiredContentWriterMimeType("text/plain").build();
+                return ResponseInfo.newChunkedResponseBuilder().withDesiredContentWriterMimeType("text/plain").withContentProvider((provider) -> {
+                    provider.accept(new DefaultHttpContent(ctx.alloc().buffer().writeBytes("Hello".getBytes())));
+                    provider.accept(new DefaultLastHttpContent(ctx.alloc().buffer().writeBytes(", world!".getBytes())));
+                }).build();
+//                return ResponseInfo.newBuilder("Hello, world!").withDesiredContentWriterMimeType("text/plain").build();
             }, ctx)
         );
     }

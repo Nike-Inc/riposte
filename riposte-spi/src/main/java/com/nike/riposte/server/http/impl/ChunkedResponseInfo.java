@@ -2,7 +2,9 @@ package com.nike.riposte.server.http.impl;
 
 import java.nio.charset.Charset;
 import java.util.Set;
+import java.util.function.Consumer;
 
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.cookie.Cookie;
 
@@ -16,6 +18,8 @@ import io.netty.handler.codec.http.cookie.Cookie;
 @SuppressWarnings("WeakerAccess")
 public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
 
+    public Consumer<Consumer<HttpContent>> writer;
+
     /**
      * The "populate everything" constructor. It's recommended that you use the {@link ChunkedResponseInfoBuilder}
      * instead.
@@ -24,17 +28,19 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
                                String desiredContentWriterMimeType,
                                Charset desiredContentWriterEncoding,
                                Set<Cookie> cookies,
-                               boolean preventCompressedOutput) {
+                               boolean preventCompressedOutput,
+                               Consumer<Consumer<HttpContent>> writer) {
 
         super(httpStatusCode, headers, desiredContentWriterMimeType, desiredContentWriterEncoding, cookies,
               preventCompressedOutput);
+        this.writer = writer;
     }
 
     /**
      * Creates a new blank instance. Identical to calling {@code newBuilder().build()}.
      */
     public ChunkedResponseInfo() {
-        this(null, null, null, null, null, false);
+        this(null, null, null, null, null, false, null);
     }
 
     /**
@@ -66,6 +72,8 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
 
         public ChunkedResponseInfoBuilder() {
         }
+
+        private Consumer<Consumer<HttpContent>> contentProvider;
 
         @Override
         public ChunkedResponseInfoBuilder withHttpStatusCode(Integer httpStatusCode) {
@@ -103,6 +111,15 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
             return this;
         }
 
+        public ChunkedResponseInfoBuilder withContentProvider(Consumer<Consumer<HttpContent>> writer) {
+            this.contentProvider = writer;
+            return this;
+        }
+
+        public Consumer<Consumer<HttpContent>> getContentProvider() {
+            return contentProvider;
+        }
+
         /**
          * @return A {@link ChunkedResponseInfo} setup with all the values contained in this builder.
          */
@@ -113,9 +130,9 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
                 getDesiredContentWriterMimeType(),
                 getDesiredContentWriterEncoding(),
                 getCookies(),
-                isPreventCompressedOutput()
+                isPreventCompressedOutput(),
+                getContentProvider()
             );
         }
     }
-
 }

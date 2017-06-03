@@ -1,7 +1,7 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
-import com.nike.riposte.server.channelpipeline.message.LastOutboundMessageSendFullResponseInfo;
+import com.nike.riposte.server.channelpipeline.message.*;
 import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFutureTimedOut;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
@@ -11,6 +11,7 @@ import com.nike.riposte.server.http.NonblockingEndpoint;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 
+import com.nike.riposte.server.http.impl.ChunkedResponseInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -158,12 +159,21 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
         HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
 
         if (responseInfo.isChunkedResponse()) {
-            // Whoops, chunked responses are not allowed for this endpoint type.
-            asyncErrorCallback(
-                ctx,
-                new Exception("NonblockingEndpoint execution resulted in a chunked ResponseInfo, when only full "
-                              + "ResponseInfos are allowed. offending_endpoint_class=" +
-                              state.getEndpointForExecution().getClass().getName())
+            state.setResponseInfo(responseInfo);
+            executeOnlyIfChannelIsActive(
+                    ctx, "NonblockingEndpointExecutionHandler-asyncCallback",
+                    () -> {
+                        ctx.fireChannelRead(OutboundMessageSendHeadersChunkFromResponseInfo.INSTANCE);
+                        ChunkedResponseInfo info = (ChunkedResponseInfo) responseInfo;
+                        info.writer.accept(content -> {
+                            if (content instanceof LastHttpContent) {
+                                ctx.fireChannelRead(new LastOutboundMessageSendLastContentChunk((LastHttpContent) content));
+                            }
+                            else {
+                                ctx.fireChannelRead(new OutboundMessageSendContentChunk(content));
+                            }
+                        });
+                    }
             );
         }
         else {
