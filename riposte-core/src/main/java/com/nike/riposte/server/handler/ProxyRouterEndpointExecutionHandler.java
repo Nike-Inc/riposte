@@ -147,7 +147,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                     );
                     if (throwable != null) {
                         // Something blew up trying to determine the first chunk info.
-                        callback.unrecoverableErrorOccurred(throwable);
+                        callback.unrecoverableErrorOccurred(throwable, true);
                     }
                     else if (!ctx.channel().isOpen()) {
                         // The channel was closed for some reason before we were able to start streaming.
@@ -158,7 +158,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             () -> logger.warn(errorMsg),
                             ctx
                         ).run();
-                        callback.unrecoverableErrorOccurred(channelClosedException);
+                        callback.unrecoverableErrorOccurred(channelClosedException, true);
                     }
                     else {
                         try {
@@ -210,7 +210,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                     }
                                     else {
                                         // Something blew up while connecting to the downstream server.
-                                        callback.unrecoverableErrorOccurred(cause);
+                                        callback.unrecoverableErrorOccurred(cause, true);
                                     }
                                 });
                                 // Set the streaming channel future on the state so it can be connected to.
@@ -219,11 +219,11 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             else {
                                 // Circuit breaker is tripped (or otherwise threw an unexpected exception). Immediately
                                 //      short circuit the error back to the client.
-                                callback.unrecoverableErrorOccurred(circuitBreakerException);
+                                callback.unrecoverableErrorOccurred(circuitBreakerException, true);
                             }
                         }
                         catch (Throwable t) {
-                            callback.unrecoverableErrorOccurred(t);
+                            callback.unrecoverableErrorOccurred(t, true);
                         }
                     }
                 });
@@ -276,12 +276,19 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                               + "downstream_channel_id=" + sc.getChannel().toString();
                             Throwable errorToFire = new WrapperException(errorMsg, future.cause());
                             StreamingCallback callback = proxyRouterState.getStreamingCallback();
-                            if (callback != null)
-                                callback.unrecoverableErrorOccurred(errorToFire);
+                            if (callback != null) {
+                                // This doesn't necessarily guarantee a broken downstream response in the case where
+                                //      the downstream system returned a response before receiving all request chunks
+                                //      (e.g. short circuit error response), so we'll call unrecoverableErrorOccurred()
+                                //      with false for the guaranteesBrokenDownstreamResponse argument. This will give
+                                //      the downstream system a chance to fully send its response if it had started
+                                //      but not yet completed by the time we hit this code on the request chunk.
+                                callback.unrecoverableErrorOccurred(errorToFire, false);
+                            }
                             else {
-                                // We have to set proxyRouterState.setStreamingFailed() here since we couldn't
+                                // We have to call proxyRouterState.cancelRequestStreaming() here since we couldn't
                                 //      call callback.unrecoverableErrorOccurred(...);
-                                proxyRouterState.setStreamingFailed();
+                                proxyRouterState.cancelRequestStreaming(errorToFire, ctx);
                                 runnableWithTracingAndMdc(
                                     () -> logger.error(
                                         "Unrecoverable error occurred and somehow the StreamingCallback was "
@@ -301,6 +308,11 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             // Close down the StreamingChannel so its Channel can be released back to the pool.
                             sc.closeChannelDueToUnrecoverableError(future.cause());
                         }
+                    }
+                    else if (msgContent instanceof LastHttpContent) {
+                        // This msgContent was the last chunk and it was streamed successfully, so mark the proxy router
+                        //      state as having completed successfully.
+                        proxyRouterState.setRequestStreamingCompletedSuccessfully();
                     }
                 });
             }
@@ -332,8 +344,15 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                     Throwable errorToFire = new WrapperException(errorMsg, cause);
 
                     StreamingCallback callback = proxyRouterState.getStreamingCallback();
-                    if (callback != null)
-                        callback.unrecoverableErrorOccurred(errorToFire);
+                    if (callback != null) {
+                        // This doesn't necessarily guarantee a broken downstream response in the case where
+                        //      the downstream system returned a response before receiving all request chunks
+                        //      (e.g. short circuit error response), so we'll call unrecoverableErrorOccurred()
+                        //      with false for the guaranteesBrokenDownstreamResponse argument. This will give
+                        //      the downstream system a chance to fully send its response if it had started
+                        //      but not yet completed by the time we hit this code on the request chunk.
+                        callback.unrecoverableErrorOccurred(errorToFire, false);
+                    }
                     else {
                         runnableWithTracingAndMdc(
                             () -> logger.error(
@@ -388,7 +407,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
     protected boolean releaseContentChunkIfStreamAlreadyFailed(
         HttpContent content, ProxyRouterProcessingState proxyRouterState
     ) {
-        if (proxyRouterState.isStreamingFailed()) {
+        if (proxyRouterState.isRequestStreamingCancelled()) {
             // A previous chunk failed to stream, and we marked the proxyRouterState as having failed.
             //      The previous chunk would have already caused the failure response to be sent to the
             //      caller, therefore we don't need to do anything else for *this* chunk except release it.
@@ -464,6 +483,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         private boolean firstChunkSent = false;
         private boolean lastChunkSent = false;
         private boolean downstreamCallTimeSet = false;
+        private boolean cancelStreamingToOriginalCaller = false;
 
         private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -526,19 +546,19 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         }
 
         @Override
+        public void cancelStreamingToOriginalCaller() {
+            this.cancelStreamingToOriginalCaller = true;
+        }
+
+        @Override
         public void messageReceived(HttpObject msg) {
-            if (!channelIsActive)
+            if (!channelIsActive || cancelStreamingToOriginalCaller)
                 return;
 
-            if (proxyRouterProcessingState.isStreamingFailed()) {
-                if (logger.isDebugEnabled()) {
-                    runnableWithTracingAndMdc(
-                        () -> logger.debug("ProxyRouter processing has failed - ignoring chunk from downstream call."),
-                        ctx
-                    ).run();
-                }
-                return;
-            }
+            // NOTE: We do *not* want to short circuit on proxyRouterProcessingState.isRequestStreamingCancelled(). The
+            //      only thing that should prevent us from attempting to send a chunk from the downstream call back to
+            //      the original caller is if an error response was sent prior to us receiving anything from the
+            //      downstream call, and that logic is handled further down.
 
             channelIsActive = executeOnlyIfChannelIsActive(ctx, "StreamingCallbackForCtx-messageReceived", () -> {
                 HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
@@ -556,9 +576,20 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             // Do debug logging on the original HttpResponse
                             logResponseFirstChunk(httpResponse);
 
-                            // Give the endpoint the option of handling the HttpResponse
-                            //      before sending it on to the client.
-                            endpoint.handleDownstreamResponseFirstChunk(httpResponse, requestInfo);
+                            try {
+                                // Give the endpoint the option of handling the HttpResponse
+                                //      before sending it on to the client.
+                                endpoint.handleDownstreamResponseFirstChunk(httpResponse, requestInfo);
+                            }
+                            catch(Throwable t) {
+                                logger.error(
+                                    "An error occurred while calling the endpoint's handleDownstreamResponseFirstChunk() "
+                                    + "method. This will be ignored, but represents a bug in the endpoint code that needs "
+                                    + "to be fixed. endpoint_class={}",
+                                    endpoint.getClass().getName(), t
+                                );
+                            }
+
                             // Convert the HttpResponse to a ResponseInfo, set the ResponseInfo on our
                             //      HttpProcessingState so it can be streamed back to the client, and fire a pipeline
                             //      event to kick off sending the response back to the client.
@@ -604,16 +635,15 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                         : new OutboundMessageSendContentChunk(contentChunk);
 
                     if (contentChunk instanceof LastHttpContent) {
-                        lastChunkSent = true;
                         setDownstreamCallTimeOnRequestAttributesIfNotAlreadyDone();
                     }
 
                     EventExecutor executor = ctx.executor();
                     if (executor.inEventLoop()) {
-                        sendContentChunkDownPipeline(contentChunk, contentChunkToSend);
+                        sendContentChunkDownPipeline(contentChunk, contentChunkToSend, state);
                     }
                     else {
-                        executor.execute(() -> sendContentChunkDownPipeline(contentChunk, contentChunkToSend));
+                        executor.execute(() -> sendContentChunkDownPipeline(contentChunk, contentChunkToSend, state));
                     }
                 }
                 else {
@@ -626,16 +656,23 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         }
 
         protected void sendFirstChunkDownPipeline(HttpProcessingState state, ResponseInfo<?> responseInfo) {
-            if (state.isRequestHandled()) {
+            if (state.isRequestHandled() || cancelStreamingToOriginalCaller) {
                 runnableWithTracingAndMdc(
                     () -> logger.warn("The request has already been handled, likely due to an error, so the downstream "
                                       + "call's response will be ignored."),
                     ctx
                 ).run();
-                proxyRouterProcessingState.setStreamingFailed();
-                proxyRouterProcessingState.triggerStreamingChannelErrorForChunks(
-                    new RuntimeException("Request already handled.")
+
+                Throwable requestAlreadyHandledException = new RuntimeException(
+                    "A response has already been sent to the original caller (likely an error response) - "
+                    + "ignoring proxied response first chunk."
                 );
+                // Stop streaming request chunks downstream.
+                proxyRouterProcessingState.cancelRequestStreaming(requestAlreadyHandledException, ctx);
+
+                // And since we know we will never be able to use anything from the downstream call,
+                //      cancel response streaming from the downstream call as well.
+                proxyRouterProcessingState.cancelDownstreamRequest(requestAlreadyHandledException);
             }
             else {
                 state.setResponseInfo(responseInfo);
@@ -647,45 +684,69 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         }
 
         protected void sendContentChunkDownPipeline(HttpContent contentChunk,
-                                                    OutboundMessageSendContentChunk contentChunkToSend) {
-            if (proxyRouterProcessingState.isStreamingFailed()) {
+                                                    OutboundMessageSendContentChunk contentChunkToSend,
+                                                    HttpProcessingState state) {
+            boolean stateResponseSendingLastChunkSent = state != null && state.isResponseSendingLastChunkSent();
+            if (lastChunkSent || stateResponseSendingLastChunkSent || cancelStreamingToOriginalCaller) {
+                // A full response has already been sent to the user, so there's no point in firing this content chunk
+                //      down the pipeline. The response was likely an error response due to an error that occurred
+                //      before any of the downstream proxied response was received. We'll log a message here for
+                //      debugging purposes, but otherwise ignore this content chunk.
                 runnableWithTracingAndMdc(
-                    () -> logger.warn("ProxyRouter processing has failed. Ignoring content chunk from "
-                                      + "downstream call."),
+                    () -> logger.warn(
+                        "Ignoring response content chunk from the downstream call because a full response was already "
+                        + "sent to the user (likely an error response)."
+                    ),
                     ctx
                 ).run();
-                // Since this won't be written and flushed down the channel we have to release the message
+                // Since this chunk won't be written and flushed down the channel we have to release the message
                 //      here to avoid a memory leak.
                 contentChunk.release();
+
+                Throwable requestAlreadyHandledException = new RuntimeException(
+                    "A response has already been sent to the original caller (likely an error response) - "
+                    + "ignoring proxied response content chunk."
+                );
+                // Stop streaming request chunks downstream.
+                proxyRouterProcessingState.cancelRequestStreaming(requestAlreadyHandledException, ctx);
+
+                // And since we know we will never be able to use anything from the downstream call,
+                //      cancel response streaming from the downstream call as well.
+                proxyRouterProcessingState.cancelDownstreamRequest(requestAlreadyHandledException);
             }
-            else
+            else {
+                // We haven't already sent a last chunk to the user, which means no error response has occurred.
+                //      Therefore the in-progress response is still the downstream call's response, and we are free to
+                //      send this response chunk from the downstream call back to the original caller.
+                if (contentChunk instanceof LastHttpContent) 
+                    lastChunkSent = true;
+
                 ctx.fireChannelRead(contentChunkToSend);
+            }
         }
 
         @Override
-        public void unrecoverableErrorOccurred(Throwable error) {
-            // Mark the downstream call as having failed on the proxy/router state so it stops trying to send data
-            //      downstream.
-            proxyRouterProcessingState.setStreamingFailed();
-            // Notify the proxy/router state of the error to trigger unwinding any backed-up chunks. This may do
-            //      nothing if the chunk streaming had already started, but that's ok. The important thing is that the
-            //      CompletableFuture controlling the chunk stream is started *at some point* so that chunk resources
-            //      can be released.
-            proxyRouterProcessingState.triggerStreamingChannelErrorForChunks(error);
+        public void unrecoverableErrorOccurred(Throwable error, boolean guaranteesBrokenDownstreamResponse) {
+            // Cancel request streaming so it stops trying to send data downstream and releases any chunks we've been
+            //      holding onto. This holds true no matter the value of guaranteesBrokenDownstreamResponse
+            //      (i.e. we want to stop sending data downstream no matter what). Note that this does not stop the
+            //      downstream call's response, and that is intentional to support use cases where the downstream
+            //      system can still successfully send a full response even though the request wasn't fully sent.
+            proxyRouterProcessingState.cancelRequestStreaming(error, ctx);
 
             setDownstreamCallTimeOnRequestAttributesIfNotAlreadyDone();
 
             EventExecutor executor = ctx.executor();
             if (executor.inEventLoop()) {
-                sendUnrecoverableErrorDownPipeline(error);
+                sendUnrecoverableErrorDownPipeline(error, guaranteesBrokenDownstreamResponse);
             }
             else {
-                executor.execute(() -> sendUnrecoverableErrorDownPipeline(error));
+                executor.execute(() -> sendUnrecoverableErrorDownPipeline(error, guaranteesBrokenDownstreamResponse));
             }
         }
 
-        protected void sendUnrecoverableErrorDownPipeline(Throwable error) {
-            if (!channelIsActive)
+        protected void sendUnrecoverableErrorDownPipeline(Throwable error, boolean guaranteesBrokenDownstreamResponse) {
+            if (!channelIsActive || cancelStreamingToOriginalCaller)
                 return;
 
             channelIsActive =
@@ -707,20 +768,34 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             logger.warn(
                                 "A secondary exception occurred after the response had already been sent to the user. "
                                 + "Not necessarily anything to worry about but in case it helps debugging: "
-                                + "secondary_exception=\"{}\"", error.toString()
+                                + "secondary_exception=\"{}\", secondary_exception_cause=\"{}\"",
+                                error.toString(), String.valueOf(error.getCause())
                             );
                         }
                         else if (firstChunkSent || stateResponseSendingStarted) {
-                            // A partial response has been sent to the user, but something broke on the downstream call
-                            //      before the full response was sent.
-                            logger.warn(
-                                "The downstream system failed with an unrecoverable error after a partial response was "
-                                + "sent to the original caller. The downstream system will not be sending any more "
-                                + "data so the caller will be left with an incomplete response. "
-                                + "downstream_unrecoverable_error=\"{}\"", error.toString()
-                            );
-                            // Nothing we can do - this channel is unrecoverable, so close it.
-                            ctx.close();
+                            // A partial response from the downstream call has been sent to the user, but something
+                            //      unexpected happened before the full response was sent. This may or may not be
+                            //      recoverable - we use the guaranteesBrokenDownstreamResponse arg to determine what
+                            //      happens at this point.
+                            if (guaranteesBrokenDownstreamResponse) {
+                                logger.warn(
+                                    "The downstream system failed with an unrecoverable error after a partial response was "
+                                    + "sent to the original caller. The downstream system will not be sending any more "
+                                    + "data so the caller will be left with an incomplete response. "
+                                    + "downstream_unrecoverable_error=\"{}\"", error.toString()
+                                );
+                                // Nothing we can do - this channel is unrecoverable, so close it.
+                                ctx.close();
+                            }
+                            else {
+                                // There's still a chance the downstream system might send the full response. Nothing to
+                                //      do now except log for debugging purposes.
+                                logger.info(
+                                    "An error occurred after a partial response was sent to the original caller. The "
+                                    + "downstream system might still successfully send a full response however, so we "
+                                    + "will allow it to finish. error=\"{}\"", error.toString()
+                                );
+                            }
                         }
                         else {
                             // The caller has not received any response yet, so we can send this error down the pipeline
@@ -737,10 +812,11 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                 );
                             }
                             finally {
+                                lastChunkSent = true;
+                                
                                 // Propagate the error down the pipeline, which will send the appropriate error response
                                 //      to the client.
                                 ctx.fireExceptionCaught(error);
-                                lastChunkSent = true;
                             }
                         }
                     }

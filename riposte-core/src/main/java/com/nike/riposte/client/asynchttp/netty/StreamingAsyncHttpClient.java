@@ -143,6 +143,7 @@ public class StreamingAsyncHttpClient {
         protected final Deque<Span> distributedTracingSpanStack;
         protected final Map<String, String> distributedTracingMdcInfo;
         protected boolean channelClosedDueToUnrecoverableError = false;
+        private boolean alreadyLoggedMessageAboutIgnoringCloseDueToError = false;
 
         StreamingChannel(Channel channel,
                          ChannelPool pool,
@@ -277,6 +278,10 @@ public class StreamingAsyncHttpClient {
             return channel;
         }
 
+        public boolean isDownstreamCallActive() {
+            return callActiveHolder.heldObject;
+        }
+
         public void closeChannelDueToUnrecoverableError(Throwable cause) {
             try {
                 // Ignore subsequent calls to this method, and only try to do something if the call is still active.
@@ -285,12 +290,13 @@ public class StreamingAsyncHttpClient {
                 if (!channelClosedDueToUnrecoverableError && callActiveHolder.heldObject) {
                     // Schedule the close on the channel's event loop.
                     channel.eventLoop().execute(() -> doCloseChannelDueToUnrecoverableError(cause));
+                    return;
                 }
 
-                if (logger.isDebugEnabled()) {
+                if (!alreadyLoggedMessageAboutIgnoringCloseDueToError && logger.isDebugEnabled()) {
                     runnableWithTracingAndMdc(
                         () -> logger.debug(
-                            "Ignoring call to StreamingChannel.closeChannelDueToUnrecoverableError() because it "
+                            "Ignoring calls to StreamingChannel.closeChannelDueToUnrecoverableError() because it "
                             + "has already been called, or the call is no longer active. "
                             + "previously_called={}, call_is_active={}",
                             channelClosedDueToUnrecoverableError, callActiveHolder.heldObject
@@ -298,6 +304,8 @@ public class StreamingAsyncHttpClient {
                         distributedTracingSpanStack, distributedTracingMdcInfo
                     ).run();
                 }
+
+                alreadyLoggedMessageAboutIgnoringCloseDueToError = true;
             }
             finally {
                 channelClosedDueToUnrecoverableError = true;
@@ -341,7 +349,9 @@ public class StreamingAsyncHttpClient {
 
         void messageReceived(HttpObject msg);
 
-        void unrecoverableErrorOccurred(Throwable error);
+        void unrecoverableErrorOccurred(Throwable error, boolean guaranteesBrokenDownstreamResponse);
+
+        void cancelStreamingToOriginalCaller();
     }
 
     /**
@@ -863,7 +873,7 @@ public class StreamingAsyncHttpClient {
                         );
                     }
 
-                    callback.unrecoverableErrorOccurred(cause);
+                    callback.unrecoverableErrorOccurred(cause, true);
                 }
                 else {
                     if (cause instanceof DownstreamIdleChannelTimeoutException) {

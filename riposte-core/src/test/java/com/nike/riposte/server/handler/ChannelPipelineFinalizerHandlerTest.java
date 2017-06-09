@@ -387,8 +387,8 @@ public class ChannelPipelineFinalizerHandlerTest {
         Assertions.assertThat(state.isTraceCompletedOrScheduled()).isTrue();
 
         verify(requestInfoMock).releaseAllResources();
-        verify(proxyRouterStateMock).setStreamingFailed();
-        verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 
@@ -438,8 +438,8 @@ public class ChannelPipelineFinalizerHandlerTest {
         if (proxyRouterStateIsNull)
             verifyZeroInteractions(proxyRouterStateMock);
         else {
-            verify(proxyRouterStateMock).setStreamingFailed();
-            verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
+            verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+            verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         }
         
         Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
@@ -475,8 +475,8 @@ public class ChannelPipelineFinalizerHandlerTest {
         else
             verify(requestInfoMock).releaseAllResources();
         
-        verify(proxyRouterStateMock).setStreamingFailed();
-        verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 
@@ -499,8 +499,8 @@ public class ChannelPipelineFinalizerHandlerTest {
         Assertions.assertThat(span.getDurationNanos()).isEqualTo(durationNanosBefore);
 
         verify(requestInfoMock).releaseAllResources();
-        verify(proxyRouterStateMock).setStreamingFailed();
-        verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 
@@ -514,8 +514,8 @@ public class ChannelPipelineFinalizerHandlerTest {
 
         // then
         verify(requestInfoMock).releaseAllResources();
-        verify(proxyRouterStateMock).setStreamingFailed();
-        verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
     

@@ -11,14 +11,10 @@ import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
+import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientRequestBuilder;
+import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpVersion;
+
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -29,8 +25,12 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpMethod;
+
 import static com.nike.backstopper.apierror.sample.SampleCoreApiError.MALFORMED_REQUEST;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.executeRequest;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.verifyErrorReceived;
 import static com.nike.riposte.util.AsyncNettyHelper.supplierWithTracingAndMdc;
 import static java.lang.Thread.sleep;
@@ -65,17 +65,17 @@ public class VerifyDecoderFailedResultIsHandledTest {
     public void proxy_endpoints_should_handle_decode_exception() throws Exception {
         // given
         int payloadSize = 10000;
-        ByteBuf payload = ComponentTestUtils.createByteBufPayload(payloadSize);
+        String payload = generatePayload(payloadSize);
 
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, RouterEndpoint.MATCHING_PATH, payload
-        );
-
-        //leave off content-length and transfer-encoding to trigger DecoderFailedResult
-        request.headers().set(HttpHeaders.Names.HOST, "localhost");
+        //leave off content-length and transfer-encoding headers to trigger DecoderFailedResult
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(RouterEndpoint.MATCHING_PATH)
+            .withPaylod(payload);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, proxyServerConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(),
+                                                                 incompleteCallTimeoutMillis);
 
         // then
         assertErrorResponse(serverResponse);
@@ -85,25 +85,25 @@ public class VerifyDecoderFailedResultIsHandledTest {
     public void standardEndpoint_should_handle_decode_exception() throws Exception {
         // given
         int payloadSize = 100000;
-        ByteBuf payload = ComponentTestUtils.createByteBufPayload(payloadSize);
-
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, DownstreamEndpoint.MATCHING_PATH, payload
-        );
+        String payload = generatePayload(payloadSize);
 
         //leave off content-length and transfer-encoding to trigger DecoderFailedResult
-        request.headers().set(HttpHeaders.Names.HOST, "localhost");
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(DownstreamEndpoint.MATCHING_PATH)
+            .withPaylod(payload);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, downstreamServerConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(downstreamServerConfig.endpointsPort(),
+                                                                 incompleteCallTimeoutMillis);
 
         // then
         assertErrorResponse(serverResponse);
     }
 
-    private void assertErrorResponse(Pair<Integer, String> serverResponse) throws IOException {
+    private void assertErrorResponse(NettyHttpClientResponse serverResponse) throws IOException {
         ApiError expectedApiError = new ApiErrorWithMetadata(MALFORMED_REQUEST, Pair.of("cause", "Invalid HTTP request"));
-        verifyErrorReceived(serverResponse.getRight(), serverResponse.getLeft(), expectedApiError);
+        verifyErrorReceived(serverResponse.payload, serverResponse.statusCode, expectedApiError);
     }
 
     private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {

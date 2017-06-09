@@ -10,7 +10,10 @@ import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
+import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterEndpoint;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.impl.FullResponseInfo;
@@ -27,6 +30,7 @@ import java.util.Map;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpRequest;
 
+import static com.nike.riposte.server.channelpipeline.ChannelAttributes.getProxyRouterProcessingStateForChannel;
 import static com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport.HandlerMethodToExecute.DO_EXCEPTION_CAUGHT;
 import static com.nike.riposte.util.AsyncNettyHelper.callableWithTracingAndMdc;
 
@@ -69,11 +73,15 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
         //      processError call.
         HttpProcessingState state = getStateAndCreateIfNeeded(ctx, cause);
         if (state.isResponseSendingStarted()) {
-            logger.info(
+            String infoMessage =
                 "A response has already been started. Ignoring this exception since it's secondary. NOTE: This often "
                 + "occurs when an error happens repeatedly on multiple chunks of a request or response - only the "
                 + "first one is processed into the error sent to the user. The original error is probably higher up in "
-                + "the logs. ignored_secondary_exception=\"{}\"", cause.toString());
+                + "the logs. ignored_secondary_exception=\"{}\"";
+            if (cause instanceof NullPointerException)
+                logger.info(infoMessage, cause.toString(), cause);
+            else
+                logger.info(infoMessage, cause.toString());
 
             return PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
         }
@@ -84,6 +92,17 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
                 responseInfo.setForceConnectionCloseAfterResponseSent(true);
 
             state.setResponseInfo(responseInfo);
+
+            // We're about to send a full error response back to the original caller, so any proxy/router streaming is
+            //      invalid. Cancel request and response streaming for proxy/router endpoints.
+            Endpoint<?> endpoint = state.getEndpointForExecution();
+            if (endpoint != null && endpoint instanceof ProxyRouterEndpoint) {
+                ProxyRouterProcessingState proxyRouterState = getProxyRouterProcessingStateForChannel(ctx).get();
+                if (proxyRouterState != null) {
+                    proxyRouterState.cancelRequestStreaming(cause, ctx);
+                    proxyRouterState.cancelDownstreamRequest(cause);
+                }
+            }
         }
 
         return PipelineContinuationBehavior.CONTINUE;

@@ -483,10 +483,9 @@ public class AsyncNettyHelper {
                 //      will do nothing, but if it hasn't already succeeded then it's not going to (since the connection
                 //      is closing) and doing this will cause any resources it's holding onto to be released.
                 if (proxyRouterState != null) {
-                    proxyRouterState.setStreamingFailed();
-                    proxyRouterState.triggerStreamingChannelErrorForChunks(
-                        new RuntimeException("Server worker channel closed")
-                    );
+                    Throwable reason = new RuntimeException("Cannot execute - Server worker channel closed");
+                    proxyRouterState.cancelRequestStreaming(reason, ctx);
+                    proxyRouterState.cancelDownstreamRequest(reason);
                 }
 
                 // Complete the trace only if there's no state, or if we have a state but the trace hasn't been

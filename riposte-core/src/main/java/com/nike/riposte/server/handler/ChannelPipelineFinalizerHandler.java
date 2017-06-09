@@ -49,6 +49,8 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
     private final ResponseSender responseSender;
     private final MetricsListener metricsListener;
     private final long workerChannelIdleTimeoutMillis;
+    private static final Throwable ARTIFICIAL_SERVER_WORKER_CHANNEL_CLOSED_EXCEPTION =
+        new RuntimeException("Server worker channel closed");
 
     /**
      * @param exceptionHandlingHandler
@@ -238,7 +240,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                     logger.error("Found a channel where HttpProcessingState was null, but ProxyRouterProcessingState "
                                  + "was not null. This should not be possible! "
                                  + "current_span={}", Tracer.getInstance().getCurrentSpan());
-                    releaseProxyRouterStateResources(proxyRouterState);
+                    releaseProxyRouterStateResources(proxyRouterState, ctx);
                 }
 
                 // With httpState null, there's nothing left for us to do.
@@ -293,7 +295,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             if (requestInfo != null)
                 requestInfo.releaseAllResources();
 
-            releaseProxyRouterStateResources(proxyRouterState);
+            releaseProxyRouterStateResources(proxyRouterState, ctx);
         }
         catch(Throwable t) {
             runnableWithTracingAndMdc(
@@ -308,19 +310,24 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
     }
 
     /**
-     * Tell the ProxyRouterProcessingState that the stream failed and trigger its chunk streaming error handling with an
-     * artificial exception. If the call had already succeeded previously then this will do nothing, but if it hasn't
-     * already succeeded then it's not going to (since the connection is closing) and doing this will cause any
-     * resources it's holding onto to be released.
+     * Tell the ProxyRouterProcessingState that the request streaming is cancelled so that it will trigger its chunk
+     * streaming error handling with an artificial exception. If the call had already succeeded previously then this
+     * will do nothing, but if it hasn't already succeeded then it's not going to (since the connection is closing) and
+     * doing this will cause any resources it's holding onto to be released.
+     *
+     * <p>Also tell ProxyRouterProcessingState to cancel any downstream call. If the downstream call had already
+     * finished this would do nothing.
      *
      * @param proxyRouterState The state to cleanup.
      */
-    protected void releaseProxyRouterStateResources(ProxyRouterProcessingState proxyRouterState) {
+    protected void releaseProxyRouterStateResources(ProxyRouterProcessingState proxyRouterState,
+                                                    ChannelHandlerContext ctx) {
         if (proxyRouterState != null) {
-            proxyRouterState.setStreamingFailed();
-            proxyRouterState.triggerStreamingChannelErrorForChunks(
-                new RuntimeException("Server worker channel closed")
+            proxyRouterState.cancelRequestStreaming(
+                ARTIFICIAL_SERVER_WORKER_CHANNEL_CLOSED_EXCEPTION,
+                ctx
             );
+            proxyRouterState.cancelDownstreamRequest(ARTIFICIAL_SERVER_WORKER_CHANNEL_CLOSED_EXCEPTION);
         }
     }
 }
