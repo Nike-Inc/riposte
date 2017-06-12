@@ -2,6 +2,7 @@ package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.HttpProcessingState;
@@ -12,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -83,7 +83,7 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
                 if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
                     && currentRequestLengthInBytes > configuredMaxRequestSize) {
-                    throw new TooLongFrameException(
+                    throw new RequestTooBigException(
                         "Request raw content length exceeded configured max request size of "
                         + configuredMaxRequestSize
                     );

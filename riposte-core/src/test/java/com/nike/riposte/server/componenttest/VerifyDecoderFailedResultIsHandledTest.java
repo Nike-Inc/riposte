@@ -102,7 +102,10 @@ public class VerifyDecoderFailedResultIsHandledTest {
     }
 
     private void assertErrorResponse(NettyHttpClientResponse serverResponse) throws IOException {
-        ApiError expectedApiError = new ApiErrorWithMetadata(MALFORMED_REQUEST, Pair.of("cause", "Invalid HTTP request"));
+        ApiError expectedApiError = new ApiErrorWithMetadata(
+            MALFORMED_REQUEST,
+            Pair.of("cause", "The request contained an HTTP headers line or other HTTP line that was longer than the maximum allowed")
+        );
         verifyErrorReceived(serverResponse.payload, serverResponse.statusCode, expectedApiError);
     }
 

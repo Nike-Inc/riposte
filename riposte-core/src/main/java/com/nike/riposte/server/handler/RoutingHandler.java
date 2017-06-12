@@ -5,6 +5,7 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
@@ -17,7 +18,6 @@ import java.util.List;
 import java.util.Optional;
 
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 
@@ -127,7 +127,7 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
         if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
                 && HttpHeaders.isContentLengthSet(msg)
                 && HttpHeaders.getContentLength(msg) > configuredMaxRequestSize) {
-            throw new TooLongFrameException("Content-Length header value exceeded configured max request size of " + configuredMaxRequestSize);
+            throw new RequestTooBigException("Content-Length header value exceeded configured max request size of " + configuredMaxRequestSize);
         }
     }
 
