@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -99,6 +100,12 @@ public class ComponentTestUtils {
     }
 
     public static CompletableFuture<NettyHttpClientResponse> setupNettyHttpClientResponseHandler(Channel ch) {
+        return setupNettyHttpClientResponseHandler(ch, null);
+    }
+
+    public static CompletableFuture<NettyHttpClientResponse> setupNettyHttpClientResponseHandler(
+        Channel ch, Consumer<ChannelPipeline> pipelineAdjuster
+    ) {
         CompletableFuture<NettyHttpClientResponse> responseFromServerFuture = new CompletableFuture<>();
         ch.pipeline().replace("clientResponseHandler", "clientResponseHandler", new SimpleChannelInboundHandler<HttpObject>() {
             @Override
@@ -113,14 +120,24 @@ public class ComponentTestUtils {
                 }
             }
         });
+
+        if (pipelineAdjuster != null)
+            pipelineAdjuster.accept(ch.pipeline());
+        
         return responseFromServerFuture;
     }
 
     public static NettyHttpClientResponse executeNettyHttpClientCall(
         Channel ch, FullHttpRequest request, long incompleteCallTimeoutMillis
     ) throws ExecutionException, InterruptedException, TimeoutException {
-        
-        CompletableFuture<NettyHttpClientResponse> responseFuture = setupNettyHttpClientResponseHandler(ch);
+        return executeNettyHttpClientCall(ch, request, incompleteCallTimeoutMillis, null);
+    }
+
+    public static NettyHttpClientResponse executeNettyHttpClientCall(
+        Channel ch, FullHttpRequest request, long incompleteCallTimeoutMillis, Consumer<ChannelPipeline> pipelineAdjuster
+    ) throws ExecutionException, InterruptedException, TimeoutException {
+
+        CompletableFuture<NettyHttpClientResponse> responseFuture = setupNettyHttpClientResponseHandler(ch, pipelineAdjuster);
 
         // Send the request.
         ch.writeAndFlush(request);
@@ -146,13 +163,19 @@ public class ComponentTestUtils {
     public static NettyHttpClientResponse executeRequest(
         FullHttpRequest request, int port, long incompleteCallTimeoutMillis
     ) throws InterruptedException, TimeoutException, ExecutionException {
+        return executeRequest(request, port, incompleteCallTimeoutMillis, null);
+    }
+
+    public static NettyHttpClientResponse executeRequest(
+        FullHttpRequest request, int port, long incompleteCallTimeoutMillis, Consumer<ChannelPipeline> pipelineAdjuster
+    ) throws InterruptedException, TimeoutException, ExecutionException {
         Bootstrap bootstrap = createNettyHttpClientBootstrap();
         try {
             // Connect to the proxyServer.
             Channel ch = connectNettyHttpClientToLocalServer(bootstrap, port);
 
             try {
-                return executeNettyHttpClientCall(ch, request, incompleteCallTimeoutMillis);
+                return executeNettyHttpClientCall(ch, request, incompleteCallTimeoutMillis, pipelineAdjuster);
             }
             finally {
                 ch.close();
@@ -171,6 +194,7 @@ public class ComponentTestUtils {
         private String uri;
         private String payload;
         private HttpHeaders headers = new DefaultHttpHeaders();
+        private Consumer<ChannelPipeline> pipelineAdjuster;
 
         public NettyHttpClientRequestBuilder withMethod(HttpMethod method) {
             this.method = method;
@@ -214,6 +238,11 @@ public class ComponentTestUtils {
             return this;
         }
 
+        public NettyHttpClientRequestBuilder withPipelineAdjuster(Consumer<ChannelPipeline> pipelineAdjuster) {
+            this.pipelineAdjuster = pipelineAdjuster;
+            return this;
+        }
+
         public FullHttpRequest build() {
             ByteBuf content;
             if (payload != null)
@@ -230,11 +259,11 @@ public class ComponentTestUtils {
         }
 
         public NettyHttpClientResponse execute(int port, long incompleteCallTimeoutMillis) throws Exception {
-            return executeRequest(build(), port, incompleteCallTimeoutMillis);
+            return executeRequest(build(), port, incompleteCallTimeoutMillis, pipelineAdjuster);
         }
 
         public NettyHttpClientResponse execute(Channel ch, long incompleteCallTimeoutMillis) throws InterruptedException, ExecutionException, TimeoutException {
-            return executeNettyHttpClientCall(ch, build(), incompleteCallTimeoutMillis);
+            return executeNettyHttpClientCall(ch, build(), incompleteCallTimeoutMillis, pipelineAdjuster);
         }
     }
 
