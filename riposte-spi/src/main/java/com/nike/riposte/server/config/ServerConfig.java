@@ -388,8 +388,8 @@ public interface ServerConfig {
     }
 
     /**
-     * @return The maximum allowed request size in bytes. If netty receives a request larger than this then it will
-     * throw a {@link io.netty.handler.codec.TooLongFrameException}.
+     * @return The maximum allowed request size in bytes. If Riposte receives a request larger than this then it will
+     * throw a {@link com.nike.riposte.server.error.exception.RequestTooBigException}.
      *
      * This value is an integer, so the max you can set it to is {@link Integer#MAX_VALUE}, which corresponds to 2^31-1,
      * or 2147483647 (around 2 GB).

@@ -244,7 +244,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
      *     handle normal non-SSL (HTTP) requests.
      * @param maxRequestSizeInBytes
      *     The max allowed request size in bytes. If a request exceeds this value then a {@link
-     *     io.netty.handler.codec.TooLongFrameException} will be thrown.
+     *     com.nike.riposte.server.error.exception.RequestTooBigException} will be thrown.
      *     WARNING: Not currently implemented - this argument will do nothing for now.
      * @param endpoints
      *     The list of endpoints that should be registered with each channel. Cannot be null or empty.

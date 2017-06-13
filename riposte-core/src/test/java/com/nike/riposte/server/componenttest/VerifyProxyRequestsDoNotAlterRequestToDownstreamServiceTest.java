@@ -1,6 +1,5 @@
 package com.nike.riposte.server.componenttest;
 
-import com.nike.internal.util.Pair;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.hooks.PipelineCreateHook;
@@ -10,19 +9,10 @@ import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
+import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientRequestBuilder;
+import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
-import io.netty.util.CharsetUtil;
-import org.apache.commons.lang3.RandomUtils;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -39,7 +29,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
-import static com.nike.riposte.server.testutils.ComponentTestUtils.executeRequest;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
+
+import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singleton;
@@ -99,23 +97,22 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
     public void proxy_endpoints_should_honor_chunked_transfer_encoding() throws Exception {
         // given
         int payloadSize = 10000;
-        ByteBuf payload = createPayload(payloadSize);
-        String payloadString = payload.toString(CharsetUtil.UTF_8);
+        String payload = generatePayload(payloadSize);
 
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, RouterEndpoint.MATCHING_PATH, payload
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "localhost");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, HttpHeaders.Values.CHUNKED);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(RouterEndpoint.MATCHING_PATH)
+            .withPaylod(payload)
+            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, HttpHeaders.Values.CHUNKED)
+            .withHeader(HttpHeaders.Names.HOST, "localhost");
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, proxyServerConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getRight()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
+        assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
         assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded();
 
         String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
@@ -134,31 +131,30 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(proxyBodyMinusChunkInfo).isEqualTo(downstreamBodyMinusChunkInfo);
 
         //assert input payload matches proxy and downstream payloads
-        assertThat(proxyBodyMinusChunkInfo).isEqualTo(payloadString);
-        assertThat(downstreamBodyMinusChunkInfo).isEqualTo(payloadString);
+        assertThat(proxyBodyMinusChunkInfo).isEqualTo(payload);
+        assertThat(downstreamBodyMinusChunkInfo).isEqualTo(payload);
     }
 
     @Test
     public void proxy_endpoints_should_honor_non_chunked_transfer_encoding() throws Exception {
         // given
         int payloadSize = 10000;
-        ByteBuf payload = createPayload(payloadSize);
-        String payloadString = payload.toString(CharsetUtil.UTF_8);
+        String payload = generatePayload(payloadSize);
 
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, RouterEndpoint.MATCHING_PATH, payload
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "localhost");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.CONTENT_LENGTH, payloadSize);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(RouterEndpoint.MATCHING_PATH)
+            .withPaylod(payload)
+            .withHeader(HttpHeaders.Names.CONTENT_LENGTH, payloadSize)
+            .withHeader(HttpHeaders.Names.HOST, "localhost");
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, proxyServerConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getRight()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
+        assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
         assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded();
 
         String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
@@ -173,8 +169,8 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(proxyBody).isEqualTo(downstreamBody);
 
         //assert input payload matches proxy and downstream payloads
-        assertThat(proxyBody).isEqualTo(payloadString);
-        assertThat(downstreamBody).isEqualTo(payloadString);
+        assertThat(proxyBody).isEqualTo(payload);
+        assertThat(downstreamBody).isEqualTo(payload);
     }
 
     private String extractBodyFromRawRequest(String request) {
@@ -185,10 +181,6 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         return stream(substringsBetween(downstreamBody, "\r\n", "\r\n")) //get all chunks
                 .filter(chunk -> containsOnly(chunk, payloadDictionary)) //filter out chunk sizes
                 .collect(Collectors.joining());
-    }
-
-    private ByteBuf createPayload(int payloadSize) {
-        return Unpooled.wrappedBuffer(generatePayloadOfSizeInBytes(payloadSize).getBytes(UTF_8));
     }
 
     private Map<String, Object> extractHeaders(String requestHeaderString) {
@@ -218,17 +210,6 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(downstreamHeaders.get("X-B3-TraceId")).isNotNull();
         assertThat(downstreamHeaders.get("X-B3-SpanId")).isNotNull();
         assertThat(downstreamHeaders.get("X-B3-SpanName")).isNotNull();
-    }
-
-    private static String generatePayloadOfSizeInBytes(int length) {
-        StringBuilder payload = new StringBuilder();
-
-        for(int i = 0; i < length; i++) {
-            int randomInt = RandomUtils.nextInt(0, payloadDictionary.length() - 1);
-            payload.append(payloadDictionary.charAt(randomInt));
-        }
-
-        return payload.toString();
     }
 
     private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {

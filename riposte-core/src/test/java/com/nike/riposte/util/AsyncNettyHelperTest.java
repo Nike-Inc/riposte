@@ -815,8 +815,8 @@ public class AsyncNettyHelperTest {
         if (proxyRouterStateIsNull)
             verifyZeroInteractions(proxyRouterStateMock);
         else {
-            verify(proxyRouterStateMock).setStreamingFailed();
-            verify(proxyRouterStateMock).triggerStreamingChannelErrorForChunks(any(Throwable.class));
+            verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+            verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         }
 
         if (!stateIsNull && !isTraceCompletedOrScheduledSetup)

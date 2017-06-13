@@ -2,6 +2,7 @@ package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.HttpProcessingState;
@@ -12,12 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 
+import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 import static com.nike.riposte.util.HttpUtils.getConfiguredMaxRequestSize;
 import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled;
 
@@ -82,7 +83,7 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
                 if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
                     && currentRequestLengthInBytes > configuredMaxRequestSize) {
-                    throw new TooLongFrameException(
+                    throw new RequestTooBigException(
                         "Request raw content length exceeded configured max request size of "
                         + configuredMaxRequestSize
                     );
@@ -104,6 +105,28 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
         if (httpObject.getDecoderResult() != null && httpObject.getDecoderResult().isFailure()) {
             throw new InvalidHttpRequestException("Detected HttpObject that was not successfully decoded.", httpObject.getDecoderResult().cause());
         }
+    }
+
+    @Override
+    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        // If this method is called, there's a chance that the HttpProcessingState does not have a RequestInfo set on it
+        //      (i.e. if this exception was caused by a bad HTTP call and throwExceptionIfNotSuccessfullyDecoded()
+        //      threw a InvalidHttpRequestException). Things like access logger and metrics listener need a RequestInfo
+        //      in order to function, so we should create a synthetic one.
+        HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
+        if (state != null && state.getRequestInfo() == null) {
+            state.setRequestInfo(RequestInfoImpl.dummyInstanceForUnknownRequests());
+            runnableWithTracingAndMdc(
+                () -> logger.warn(
+                    "An error occurred before a RequestInfo could be created, so a synthetic RequestInfo indicating an "
+                    + "error will be used instead. This can happen when the request cannot be decoded as a valid HTTP "
+                    + "request.", cause
+                ),
+                ctx
+            ).run();
+        }
+
+        return super.doExceptionCaught(ctx, cause);
     }
 
     @Override

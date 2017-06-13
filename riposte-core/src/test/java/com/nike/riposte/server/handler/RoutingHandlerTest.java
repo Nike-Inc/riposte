@@ -5,6 +5,7 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
@@ -212,7 +213,7 @@ public class RoutingHandlerTest {
         Throwable thrownException = Assertions.catchThrowable(() -> handlerSpy.doChannelRead(ctxMock, msg));
 
         // then
-        assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
+        assertThat(thrownException).isExactlyInstanceOf(RequestTooBigException.class);
         assertThat(thrownException.getMessage()).isEqualTo("Content-Length header value exceeded configured max request size of 10");
     }
 
@@ -233,7 +234,7 @@ public class RoutingHandlerTest {
         Throwable thrownException = Assertions.catchThrowable(() -> handlerSpy.doChannelRead(ctxMock, msg));
 
         // then
-        assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
+        assertThat(thrownException).isExactlyInstanceOf(RequestTooBigException.class);
         assertThat(thrownException.getMessage()).isEqualTo("Content-Length header value exceeded configured max request size of 100");
     }
 

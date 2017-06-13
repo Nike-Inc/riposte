@@ -2,6 +2,7 @@ package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
@@ -192,7 +193,7 @@ public class RequestInfoSetterHandlerTest {
         Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
 
         // then
-        assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
+        assertThat(thrownException).isExactlyInstanceOf(RequestTooBigException.class);
         verify(httpContentMock).release();
     }
 
@@ -264,7 +265,7 @@ public class RequestInfoSetterHandlerTest {
         Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
 
         // then
-        assertThat(thrownException).isExactlyInstanceOf(TooLongFrameException.class);
+        assertThat(thrownException).isExactlyInstanceOf(RequestTooBigException.class);
         verify(httpContentMock).release();
     }
 

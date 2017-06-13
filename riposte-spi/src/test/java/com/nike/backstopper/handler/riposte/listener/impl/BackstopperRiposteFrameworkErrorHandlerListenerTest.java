@@ -13,9 +13,9 @@ import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpected
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.Forbidden403Exception;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
-import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
+import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
@@ -23,17 +23,22 @@ import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFut
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.util.Collections;
+import java.util.UUID;
 
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.HttpMethod;
@@ -47,6 +52,7 @@ import static org.mockito.Mockito.mock;
 /**
  * Unit test for {@link BackstopperRiposteFrameworkErrorHandlerListener}
  */
+@RunWith(DataProviderRunner.class)
 public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
 
     private static final ProjectApiErrors testProjectApiErrors = ProjectApiErrorsForTesting.withProjectSpecificData(null, null);
@@ -192,7 +198,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new TooLongFrameException());
         assertThat(result.shouldHandleResponse).isTrue();
         assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
-        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("The request exceeded the maximum payload size allowed");
+        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo(listener.TOO_LONG_FRAME_METADATA_MESSAGE);
     }
 
     @Test
@@ -221,17 +227,56 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("null");
     }
 
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
     @Test
-    public void shouldHandleInvalidHttpRequestExceptionWithNonNullCause() {
-        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new InvalidHttpRequestException("message", new RuntimeException("runtime exception")));
+    public void shouldHandleInvalidHttpRequestExceptionWithNonNullCause(boolean useTooLongFrameExceptionAsCause) {
+        // given
+        Throwable cause = (useTooLongFrameExceptionAsCause)
+                          ? new TooLongFrameException("TooLongFrameException occurred")
+                          : new RuntimeException("runtime exception");
+        String expectedCauseMetadataMessage = (useTooLongFrameExceptionAsCause)
+                                              ? listener.TOO_LONG_FRAME_METADATA_MESSAGE
+                                              : "Invalid HTTP request";
+        String outerExceptionMessage = "message - " + UUID.randomUUID().toString();
+
+        // when
+        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(
+            new InvalidHttpRequestException(outerExceptionMessage, cause)
+        );
+
+        // then
         assertThat(result.shouldHandleResponse).isTrue();
         assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
-        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("Invalid HTTP request");
+        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo(expectedCauseMetadataMessage);
 
         assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
-        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("message");
+        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo(outerExceptionMessage);
 
         assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("cause_details");
-        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("java.lang.RuntimeException: runtime exception");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo(cause.toString());
+    }
+
+    @Test
+    public void should_handle_RequestTooBigException() {
+        // given
+        String exMsg = UUID.randomUUID().toString();
+        RequestTooBigException ex = new RequestTooBigException(exMsg);
+
+        // when
+        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(ex);
+
+        // then
+        assertThat(result.shouldHandleResponse).isTrue();
+        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("The request exceeded the maximum payload size allowed");
+
+        assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("decoder_exception");
+        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("true");
+
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("decoder_exception_message");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo(exMsg);
     }
 }

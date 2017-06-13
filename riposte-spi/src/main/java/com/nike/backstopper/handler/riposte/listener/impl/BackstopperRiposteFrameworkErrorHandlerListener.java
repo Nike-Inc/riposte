@@ -26,6 +26,7 @@ import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFut
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
+import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 
@@ -55,6 +56,9 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
     public final ApiError CIRCUIT_BREAKER_GENERIC_API_ERROR;
     public final ApiError CIRCUIT_BREAKER_OPEN_API_ERROR;
     public final ApiError CIRCUIT_BREAKER_TIMEOUT_API_ERROR;
+
+    protected final String TOO_LONG_FRAME_METADATA_MESSAGE =
+        "The request contained an HTTP headers line or other HTTP line that was longer than the maximum allowed";
 
     protected final ProjectApiErrors projectApiErrors;
 
@@ -115,12 +119,25 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
         }
 
         if (ex instanceof DecoderException) {
-            // TODO: TooLongFrameException should result in a 413 Payload Too Large error instead of generic 400 malformed request.
-            //       For now, we can at least let the caller know why it failed via error metadata.
             ApiError errorToUse = (ex instanceof TooLongFrameException)
-                    ? new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
-                                Pair.of("cause", "The request exceeded the maximum payload size allowed"))
-                    : projectApiErrors.getMalformedRequestApiError();
+                                  ? generateTooLongFrameApiError()
+                                  : projectApiErrors.getMalformedRequestApiError();
+            return ApiExceptionHandlerListenerResult.handleResponse(
+                singletonError(errorToUse),
+                Arrays.asList(
+                    Pair.of("decoder_exception", "true"),
+                    Pair.of("decoder_exception_message", ex.getMessage())
+                )
+            );
+        }
+
+        if (ex instanceof RequestTooBigException) {
+            // TODO: RequestTooBigException should result in a 413 Payload Too Large error instead of generic 400 malformed request.
+            //       For now, we can at least let the caller know why it failed via error metadata.
+            ApiError errorToUse = new ApiErrorWithMetadata(
+                projectApiErrors.getMalformedRequestApiError(),
+                Pair.of("cause", "The request exceeded the maximum payload size allowed")
+            );
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(errorToUse),
                 Arrays.asList(
@@ -251,17 +268,25 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             InvalidHttpRequestException theEx = (InvalidHttpRequestException)ex;
             Throwable cause = theEx.getCause();
             String causeAsString = cause == null ? "null" : cause.toString();
+
+            ApiError apiErrorToUse = (cause instanceof TooLongFrameException)
+                                     ? generateTooLongFrameApiError()
+                                     : new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
+                                                                Pair.of("cause", "Invalid HTTP request"));
+
             return ApiExceptionHandlerListenerResult.handleResponse(
-                    singletonError(
-                            new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
-                                    Pair.of("cause", "Invalid HTTP request"))
-                    ),
+                    singletonError(apiErrorToUse),
                     Arrays.asList(Pair.of("exception_message", theEx.getMessage()),
-                                    Pair.of("cause_details", causeAsString))
+                                  Pair.of("cause_details", causeAsString))
             );
         }
 
         return ApiExceptionHandlerListenerResult.ignoreResponse();
+    }
+
+    protected ApiError generateTooLongFrameApiError() {
+        return new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
+                                        Pair.of("cause", TOO_LONG_FRAME_METADATA_MESSAGE));
     }
 
     protected SortedApiErrorSet singletonError(ApiError apiError) {

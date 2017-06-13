@@ -1,23 +1,19 @@
 package com.nike.riposte.server.componenttest;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nike.internal.util.Pair;
-import com.nike.riposte.server.http.*;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpVersion;
-import io.restassured.response.ExtractableResponse;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.http.Endpoint;
+import com.nike.riposte.server.http.RequestInfo;
+import com.nike.riposte.server.http.ResponseInfo;
+import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
+import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientRequestBuilder;
+import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpResponseStatus;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -29,10 +25,15 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.restassured.response.ExtractableResponse;
+
 import static com.nike.riposte.server.componenttest.VerifyRequestSizeValidationComponentTest.RequestSizeValidationConfig.GLOBAL_MAX_REQUEST_SIZE;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.executeRequest;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
 import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
-import static io.netty.util.CharsetUtil.UTF_8;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -154,92 +155,87 @@ public class VerifyRequestSizeValidationComponentTest {
 
     @Test
     public void should_return_bad_request_when_chunked_request_exceeds_global_configured_max_request_size() throws Exception {
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, BasicEndpoint.MATCHING_PATH, Unpooled.wrappedBuffer(generatePayloadOfSizeInBytes(GLOBAL_MAX_REQUEST_SIZE + 1).getBytes(UTF_8))
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "127.0.0.1");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(BasicEndpoint.MATCHING_PATH)
+            .withPaylod(generatePayloadOfSizeInBytes(GLOBAL_MAX_REQUEST_SIZE + 1))
+            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, serverConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(serverConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.BAD_REQUEST.code());
-        assertBadRequestErrorMessageAndMetadata(serverResponse.getRight());
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.BAD_REQUEST.code());
+        assertBadRequestErrorMessageAndMetadata(serverResponse.payload);
     }
 
     @Test
     public void should_return_expected_response_when_chunked_request_not_exceeding_global_request_size() throws Exception {
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, BasicEndpoint.MATCHING_PATH, Unpooled.wrappedBuffer(generatePayloadOfSizeInBytes(GLOBAL_MAX_REQUEST_SIZE).getBytes(UTF_8))
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "127.0.0.1");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(BasicEndpoint.MATCHING_PATH)
+            .withPaylod(generatePayloadOfSizeInBytes(GLOBAL_MAX_REQUEST_SIZE))
+            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, serverConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(serverConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
-        assertThat(serverResponse.getRight()).isEqualTo(BasicEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
+        assertThat(serverResponse.payload).isEqualTo(BasicEndpoint.RESPONSE_PAYLOAD);
     }
 
     @Test
     public void should_return_bad_request_when_chunked_request_exceeds_endpoint_overridden_configured_max_request_size() throws Exception {
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, BasicEndpointWithRequestSizeValidationOverride.MATCHING_PATH, Unpooled.wrappedBuffer(generatePayloadOfSizeInBytes(BasicEndpointWithRequestSizeValidationOverride.MAX_REQUEST_SIZE + 1).getBytes(UTF_8))
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "127.0.0.1");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(BasicEndpointWithRequestSizeValidationOverride.MATCHING_PATH)
+            .withPaylod(generatePayloadOfSizeInBytes(BasicEndpointWithRequestSizeValidationOverride.MAX_REQUEST_SIZE + 1))
+            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, serverConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(serverConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.BAD_REQUEST.code());
-        assertBadRequestErrorMessageAndMetadata(serverResponse.getRight());
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.BAD_REQUEST.code());
+        assertBadRequestErrorMessageAndMetadata(serverResponse.payload);
     }
 
     @Test
     public void should_return_expected_response_when_chunked_request_not_exceeding_endpoint_overridden_request_size() throws Exception {
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, BasicEndpointWithRequestSizeValidationOverride.MATCHING_PATH, Unpooled.wrappedBuffer(generatePayloadOfSizeInBytes(BasicEndpointWithRequestSizeValidationOverride.MAX_REQUEST_SIZE).getBytes(UTF_8))
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "127.0.0.1");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(BasicEndpointWithRequestSizeValidationOverride.MATCHING_PATH)
+            .withPaylod(generatePayloadOfSizeInBytes(BasicEndpointWithRequestSizeValidationOverride.MAX_REQUEST_SIZE))
+            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, serverConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(serverConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
-        assertThat(serverResponse.getRight()).isEqualTo(BasicEndpointWithRequestSizeValidationOverride.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
+        assertThat(serverResponse.payload).isEqualTo(BasicEndpointWithRequestSizeValidationOverride.RESPONSE_PAYLOAD);
     }
 
     @Test
     public void should_return_expected_response_when_endpoint_disabled_chunked_request_size_validation() throws Exception {
-        HttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, BasicEndpointWithRequestSizeValidationDisabled.MATCHING_PATH, Unpooled.wrappedBuffer(generatePayloadOfSizeInBytes(GLOBAL_MAX_REQUEST_SIZE + 100).getBytes(UTF_8))
-        );
-
-        request.headers().set(HttpHeaders.Names.HOST, "127.0.0.1");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
-        request.headers().set(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.POST)
+            .withUri(BasicEndpointWithRequestSizeValidationDisabled.MATCHING_PATH)
+            .withPaylod(generatePayloadOfSizeInBytes(GLOBAL_MAX_REQUEST_SIZE + 100))
+            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, CHUNKED);
 
         // when
-        Pair<Integer, String> serverResponse = executeRequest(request, serverConfig.endpointsPort(), incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(serverConfig.endpointsPort(),
+                                                                incompleteCallTimeoutMillis);
 
         // then
-        assertThat(serverResponse.getLeft()).isEqualTo(HttpResponseStatus.OK.code());
-        assertThat(serverResponse.getRight()).isEqualTo(BasicEndpointWithRequestSizeValidationDisabled.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
+        assertThat(serverResponse.payload).isEqualTo(BasicEndpointWithRequestSizeValidationDisabled.RESPONSE_PAYLOAD);
     }
 
     private void assertBadRequestErrorMessageAndMetadata(String response) throws IOException {
