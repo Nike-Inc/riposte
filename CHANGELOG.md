@@ -8,8 +8,27 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.10.x` Releases - [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.10.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.10.0)
+
+Released on 2017-06-12.
+
+### Fixed
+- Fail-fast on too-big request sizes when possible. If content-length header is larger than the configured max request size we will fail immediately without processing the full request payload.
+    - Reported by [Nic Munroe][contrib_nicmunroe]. Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#59](https://github.com/Nike-Inc/riposte/pull/59). For issue [#37](https://github.com/Nike-Inc/riposte/issues/37).
+- Added methods to `RequestBuilderWrapper` to enable a user to set the wrapped content (url and method) and then subsequently updated the wrapped `AsyncHttpClient.BoundRequestBuilder` to keep the two in sync. This removed public fields and now they need to be accessed through getter/setter instead.
+    - Reported by [Robert Abeyta][contrib_rabeyta]. Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#57](https://github.com/Nike-Inc/riposte/pull/57). For issue [#56](https://github.com/Nike-Inc/riposte/issues/56).
+- Fixed more corner-case error handling related to `ProxyRouterEndpoint` endpoints. 
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#60](https://github.com/Nike-Inc/riposte/pull/60)
+- Improved handling of invalid HTTP calls - they will now show up in access logs and metrics. 
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#60](https://github.com/Nike-Inc/riposte/pull/60)
+    
+### Added
+- Added `getPathTemplate` method to `RequestInfo` to enable users to get the matching path template used for the request
+     - Reported by [Ferhat Sobay][contrib_ferhatsb]. Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#58](https://github.com/Nike-Inc/riposte/pull/58). For issue [#55](https://github.com/Nike-Inc/riposte/issues/55).
 
 ## [0.9.4](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.9.4)
 
@@ -130,3 +149,4 @@ Released on 2016-11-03.
 [contrib_palemorningdun]: https://github.com/palemorningdun
 [contrib_rabeyta]: https://github.com/rabeyta
 [contrib_vicbell]: https://github.com/vicbell
+[contrib_ferhatsb]: https://github.com/ferhatsb
