@@ -587,7 +587,13 @@ public class StreamingAsyncHttpClient {
     ) {
         CompletableFuture<StreamingChannel> streamingChannel = new CompletableFuture<>();
 
-        initialRequestChunk.headers().set(HttpHeaders.Names.HOST, downstreamHost);
+        // set host header. include port in value when it is a non-default port
+        boolean isDefaultPort = (downstreamPort == 80 && !isSecureHttpsCall)
+                             || (downstreamPort == 443 && isSecureHttpsCall);
+        String hostHeaderValue = (isDefaultPort)
+                                 ? downstreamHost
+                                 : downstreamHost + ":" + downstreamPort;
+        initialRequestChunk.headers().set(HttpHeaders.Names.HOST, hostHeaderValue);
 
         boolean performSubSpanAroundDownstreamCalls = true;
 
