@@ -203,7 +203,7 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(proxyHeaders.get(HttpHeaders.Names.HOST)).isEqualTo("localhost");
         assertThat(proxyHeaders.get(HttpHeaders.Names.CONTENT_LENGTH)).isEqualTo(downstreamHeaders.get(HttpHeaders.Names.CONTENT_LENGTH));
         assertThat(proxyHeaders.get(HttpHeaders.Names.TRANSFER_ENCODING)).isEqualTo(downstreamHeaders.get(HttpHeaders.Names.TRANSFER_ENCODING));
-        assertThat(downstreamHeaders.get(HttpHeaders.Names.HOST)).isEqualTo("127.0.0.1");
+        assertThat(downstreamHeaders.get(HttpHeaders.Names.HOST)).isEqualTo("127.0.0.1:" + downstreamServerConfig.endpointsPort());
 
         //assert trace info added to downstream call
         assertThat(downstreamHeaders.get("X-B3-Sampled")).isNotNull();

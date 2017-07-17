@@ -1,12 +1,19 @@
 package com.nike.riposte.client.asynchttp.netty;
 
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.ObjectHolder;
+import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingCallback;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingChannel;
+import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -28,6 +35,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import static com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.CHANNEL_IS_BROKEN_ATTR;
+import static io.netty.handler.codec.http.HttpHeaders.Names.HOST;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
@@ -41,6 +49,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests the functionality of {@link StreamingAsyncHttpClient}.
@@ -409,6 +418,39 @@ public class StreamingAsyncHttpClientTest {
             verify(channelMock, never()).close();
         }
 
+    }
+
+    @DataProvider(value = {
+            "80   | false | localhost | localhost",
+            "80   | true  | localhost | localhost:80",
+            "8080 | false | localhost | localhost:8080",
+            "443  | true  | localhost | localhost",
+            "443  | false | localhost | localhost:443",
+            "8080 | true  | localhost | localhost:8080",
+    }, splitBy = "\\|")
+    @Test
+    public void streamDownstreamCall_setsHostHeaderCorrectly(int downstreamPort, boolean isSecure, String downstreamHost, String expectedHostHeader) {
+        // given
+        DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "");
+        ChannelHandlerContext ctx = mockChannelHandlerContext();
+        StreamingCallback streamingCallback = mock(StreamingCallback.class);
+
+        // when
+        new StreamingAsyncHttpClient(200, 200, true)
+                .streamDownstreamCall(downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, ctx);
+
+        // then
+        assertThat(request.headers().get(HOST)).isEqualTo(expectedHostHeader);
+    }
+
+    private ChannelHandlerContext mockChannelHandlerContext() {
+        ChannelHandlerContext mockContext = mock(ChannelHandlerContext.class);
+        when(mockContext.channel()).thenReturn(mock(Channel.class));
+        @SuppressWarnings("unchecked")
+        Attribute<HttpProcessingState> mockAttribute = mock(Attribute.class);
+        when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY)).thenReturn(mockAttribute);
+        when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY).get()).thenReturn(mock(HttpProcessingState.class));
+        return mockContext;
     }
 
     private void verifyChannelReleasedBackToPool(ObjectHolder<Boolean> callActiveHolder,
