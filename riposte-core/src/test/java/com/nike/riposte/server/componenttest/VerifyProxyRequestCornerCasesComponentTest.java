@@ -364,7 +364,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
                 if ("true".equals(state.getRequestInfo().getHeaders().get(INTENTIONAL_EXPLOSION_AFTER_LAST_CHUNK_HEADER_KEY))) {
                     ctx.channel().eventLoop().schedule(() -> {
                         ctx.fireExceptionCaught(new ApiException(INTENTIONAL_EXPLOSION_AFTER_LAST_CHUNK_API_ERROR));
-                    }, 1, TimeUnit.MILLISECONDS);
+                    }, 100, TimeUnit.MILLISECONDS);
                 }
             }
 
