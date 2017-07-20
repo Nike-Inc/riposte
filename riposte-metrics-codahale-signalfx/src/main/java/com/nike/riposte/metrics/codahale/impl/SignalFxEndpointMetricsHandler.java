@@ -9,6 +9,7 @@ import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
@@ -18,7 +19,6 @@ import com.signalfx.codahale.metrics.MetricBuilder;
 import com.signalfx.codahale.reporter.MetricMetadata;
 import com.signalfx.codahale.reporter.SignalFxReporter;
 
-import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -254,6 +254,32 @@ public class SignalFxEndpointMetricsHandler implements EndpointMetricsHandler {
         @Override
         public boolean isInstance(Metric metric) {
             return Timer.class.isInstance(metric);
+        }
+    }
+
+    /**
+     * A {@link MetricBuilder} for {@link Histogram}s that constructs the histogram to have a {@link
+     * SlidingTimeWindowReservoir} with the given sliding window time values. i.e. if you constructed an instance of
+     * this class via {@code new RollingWindowHistogramBuilder(10L, TimeUnit.SECONDS} then a histogram generated with
+     * that instance would always give you data for *only* the 10 seconds previous to whenever you requested the data.
+     */
+    public static class RollingWindowHistogramBuilder implements MetricBuilder<Histogram> {
+        protected final long amount;
+        protected final TimeUnit timeUnit;
+
+        public RollingWindowHistogramBuilder(long amount, TimeUnit timeUnit) {
+            this.amount = amount;
+            this.timeUnit = timeUnit;
+        }
+
+        @Override
+        public Histogram newMetric() {
+            return new Histogram(new SlidingTimeWindowReservoir(amount, timeUnit));
+        }
+
+        @Override
+        public boolean isInstance(Metric metric) {
+            return Histogram.class.isInstance(metric);
         }
     }
 
