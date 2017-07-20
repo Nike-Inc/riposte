@@ -8,15 +8,35 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.10.x` Releases - [0.10.0](#0100)
+- `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.10.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.10.1)
+
+Released on 2017-07-19.
+
+### Fixed
+
+- Fixed `ProxyRouterEndpoint` processing to include the port in the `Host` header for the downstream call if the port is not the default for the scheme as per the [HTTP spec](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.23).
+    - Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#62](https://github.com/Nike-Inc/riposte/pull/62).
+    
+### Added
+
+- Added `SignalFxAwareCodahaleMetricsCollector` - a `CodahaleMetricsCollector` that uses SignalFx mechanisms for creating metrics so that they will be tagged with the appropriate global/unique dimensions for your application.
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#65](https://github.com/Nike-Inc/riposte/pull/65).
+
+### Project Build
+
+- Upgraded to Gradle 4.0.1.
+    - Done by [Nic Munroe][contrib_nicmunroe] in pull request [#64](https://github.com/Nike-Inc/riposte/pull/64)
 
 ## [0.10.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.10.0)
 
 Released on 2017-06-12.
 
 ### Fixed
+
 - Fail-fast on too-big request sizes when possible. If content-length header is larger than the configured max request size we will fail immediately without processing the full request payload.
     - Reported by [Nic Munroe][contrib_nicmunroe]. Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#59](https://github.com/Nike-Inc/riposte/pull/59). For issue [#37](https://github.com/Nike-Inc/riposte/issues/37).
 - Added methods to `RequestBuilderWrapper` to enable a user to set the wrapped content (url and method) and then subsequently updated the wrapped `AsyncHttpClient.BoundRequestBuilder` to keep the two in sync. This removed public fields and now they need to be accessed through getter/setter instead.
@@ -27,6 +47,7 @@ Released on 2017-06-12.
     - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#60](https://github.com/Nike-Inc/riposte/pull/60)
     
 ### Added
+
 - Added `getPathTemplate` method to `RequestInfo` to enable users to get the matching path template used for the request
      - Reported by [Ferhat Sobay][contrib_ferhatsb]. Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#58](https://github.com/Nike-Inc/riposte/pull/58). For issue [#55](https://github.com/Nike-Inc/riposte/issues/55).
 
