@@ -5,6 +5,7 @@ import com.nike.riposte.metrics.codahale.contrib.SignalFxReporterFactory;
 import com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.ChainedMetricDimensionConfigurator;
 import com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator;
 import com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.MetricDimensionConfigurator;
+import com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.RollingWindowHistogramBuilder;
 import com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.RollingWindowTimerBuilder;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
@@ -514,6 +515,73 @@ public class SignalFxEndpointMetricsHandlerTest {
 
         // when
         boolean result = rwtb.isInstance(metric);
+
+        // then
+        assertThat(result).isEqualTo(expectedResult);
+    }
+    
+    @Test
+    public void RollingWindowHistogramBuilder_constructor_sets_fields_as_expected() {
+        // given
+        long amount = 42;
+        TimeUnit timeUnit = TimeUnit.DAYS;
+
+        // when
+        RollingWindowHistogramBuilder rwhb = new RollingWindowHistogramBuilder(amount, timeUnit);
+
+        // then
+        assertThat(rwhb.amount).isEqualTo(amount);
+        assertThat(rwhb.timeUnit).isEqualTo(timeUnit);
+    }
+
+    @DataProvider(value = {
+        "42     |   DAYS",
+        "123    |   SECONDS",
+        "999    |   MILLISECONDS",
+        "3      |   HOURS"
+    }, splitBy = "\\|")
+    @Test
+    public void RollingWindowHistogramBuilder_newMetric_creates_new_histogram_with_SlidingTimeWindowReservoir_with_expected_values(
+        long amount, TimeUnit timeUnit
+    ) {
+        // given
+        RollingWindowHistogramBuilder rwhb = new RollingWindowHistogramBuilder(amount, timeUnit);
+
+        // when
+        Histogram histogram = rwhb.newMetric();
+
+        // then
+        Reservoir reservoir = (Reservoir) getInternalState(histogram, "reservoir");
+        assertThat(reservoir).isInstanceOf(SlidingTimeWindowReservoir.class);
+        // The expected value here comes from logic in the SlidingTimeWindowReservoir constructor.
+        assertThat(getInternalState(reservoir, "window")).isEqualTo(timeUnit.toNanos(amount) * 256);
+    }
+
+    @Test
+    public void RollingWindowHistogramBuilder_newMetric_creates_a_new_histogram_with_each_call() {
+        // given
+        RollingWindowHistogramBuilder rwhb = new RollingWindowHistogramBuilder(42, TimeUnit.DAYS);
+
+        // when
+        Histogram firstCallHistogram = rwhb.newMetric();
+        Histogram secondCallHistogram = rwhb.newMetric();
+
+        // then
+        assertThat(firstCallHistogram).isNotSameAs(secondCallHistogram);
+    }
+
+    @DataProvider(value = {
+        "true   |   true",
+        "false  |   false"
+    }, splitBy = "\\|")
+    @Test
+    public void RollingWindowHistogramBuilder_isInstance_works_as_expected(boolean useHistogram, boolean expectedResult) {
+        // given
+        Metric metric = (useHistogram) ? mock(Histogram.class) : mock(Gauge.class);
+        RollingWindowHistogramBuilder rwhb = new RollingWindowHistogramBuilder(42, TimeUnit.DAYS);
+
+        // when
+        boolean result = rwhb.isInstance(metric);
 
         // then
         assertThat(result).isEqualTo(expectedResult);
