@@ -1,0 +1,84 @@
+
+ext {
+    // DEPENDENCY VERSIONS
+    riposteVersion = '0.10.0'
+    backstopperVersion = '0.11.1'
+    slf4jVersion = '1.7.21'
+    logbackVersion = '1.1.7'
+    restAssuredVersion = '3.0.3'
+    jacksonVersion = "2.8.9"
+    kotlinTestVersion = '2.0.5'
+}
+
+buildscript {
+    ext.kotlin_version = '1.1.3-2'
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath ( "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
+    }
+
+}
+
+apply plugin: "application"
+apply plugin: 'kotlin'
+
+mainClassName = "com.nike.todoservice.Main"
+
+run {
+    systemProperties = System.getProperties()
+}
+
+repositories {
+    jcenter()
+    mavenCentral()
+}
+
+dependencies {
+    compile(
+            "com.nike.riposte:riposte-spi:$riposteVersion",
+            "com.nike.riposte:riposte-core:$riposteVersion",
+            "com.nike.riposte:riposte-auth:$riposteVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion",
+            "ch.qos.logback:logback-core:$logbackVersion",
+            "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
+            "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion",
+            "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$jacksonVersion"
+    )
+
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+
+    testCompile (
+            //"junit:junit:$junitVersion",
+            "io.rest-assured:rest-assured:$restAssuredVersion",
+            "io.kotlintest:kotlintest:$kotlinTestVersion",
+            "com.google.truth:truth:0.34"
+    )
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+
+test {
+    testLogging {
+        events "failed"
+        exceptionFormat "short"
+
+        debug {
+            events "started", "skipped", "failed"
+            exceptionFormat "full"
+        }
+
+        info.events = ["failed", "skipped"]
+        showStandardStreams = true
+    }
+}
