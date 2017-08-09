@@ -81,7 +81,7 @@ ext {
     cgLibVersion = '3.1'
     objenesisVersion = '2.1'
     javassistVersion = '3.18.2-GA'
-    jacksonVersion = '2.4.4'
+    jacksonVersion = '2.8.9'
     ningAsyncHttpClientVersion = '1.9.38'
     guiceVersion = '4.0'
 

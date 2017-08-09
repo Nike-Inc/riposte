@@ -1,4 +1,4 @@
-package com.github.amitsk.roomratecalculator.error
+package com.nike.todoservice.error
 
 import com.nike.backstopper.apierror.ApiError
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectSpecificErrorCodeRange
@@ -10,10 +10,8 @@ import javax.inject.Singleton
 
 /**
  * Returns the project specific errors for this application.
-
  *
- * Individual projects should feel free to rename this class to something specific, e.g. [MyProject]ApiErrorsImpl
-
+ * Individual projects should feel free to rename this class to something specific, e.g. MyProjectApiErrorsImpl
  *
  * NOTE: This extends [SampleProjectApiErrorsBase] for a reasonable base of "core errors". You may want to
  * create a similar reusable base class to be used by this project (and potentially others) that uses error codes and
@@ -37,7 +35,6 @@ class ProjectApiErrorsImpl : SampleProjectApiErrorsBase() {
     }
 
     companion object {
-
         private val PROJECT_SPECIFIC_API_ERRORS = Arrays.asList<ApiError>(*ProjectApiError.values())
     }
 

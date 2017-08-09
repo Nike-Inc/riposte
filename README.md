@@ -57,6 +57,74 @@ public class MyAppMain {
 
 The [Hello World Sample](samples/sample-1-helloworld/) is similar to this but contains a few more niceties, and that sample's [README.md](samples/sample-1-helloworld/README.md) includes information on some of the features you can expect from Riposte, but again, please see the [template microservice project](https://github.com/Nike-Inc/riposte-microservice-template) for the recommended starter template project *and* usage documentation.
 
+### Riposte usage with other JVM-based languages
+
+Since Riposte is straight Java 8 with no bytecode manipulation, plugins, or other magic required it works seamlessly with whatever JVM language you prefer. Here's the same hello world app from above, but this time in Kotlin:
+
+``` kotlin
+fun main(args : Array<String>) {
+    val server = Server(AppServerConfig)
+    server.startup()
+}
+
+object AppServerConfig : ServerConfig {
+    private val endpoints = Collections.singleton(HelloWorldEndpoint)
+
+    override fun appEndpoints(): Collection<Endpoint<*>> {
+        return endpoints
+    }
+}
+
+object HelloWorldEndpoint : StandardEndpoint<Void, String>() {
+    override fun requestMatcher(): Matcher {
+        return Matcher.match("/hello")
+    }
+
+    override fun execute(request: RequestInfo<Void>,
+                         longRunningTaskExecutor: Executor,
+                         ctx: ChannelHandlerContext
+    ): CompletableFuture<ResponseInfo<String>> {
+
+        return CompletableFuture.completedFuture(
+                ResponseInfo.newBuilder("Hello, world!")
+                        .withDesiredContentWriterMimeType("text/plain")
+                        .build()
+        )
+    }
+}
+```
+
+And again in Scala:
+
+``` scala
+object Main extends App {
+  val server = new Server(AppServerConfig)
+  server.startup()
+}
+
+object AppServerConfig extends ServerConfig {
+  val endpoints: java.util.Collection[Endpoint[_]] = java.util.Collections.singleton(HelloWorldEndpoint)
+
+  override def appEndpoints(): java.util.Collection[Endpoint[_]] = endpoints
+}
+
+object HelloWorldEndpoint extends StandardEndpoint[Void, String] {
+  override def requestMatcher(): Matcher = Matcher.`match`("/hello")
+
+  override def execute(
+    request: RequestInfo[Void],
+    longRunningTaskExecutor: Executor,
+    ctx: ChannelHandlerContext): CompletableFuture[ResponseInfo[String]] =
+  {
+    CompletableFuture.completedFuture(
+      ResponseInfo.newBuilder("Hello, world!")
+        .withDesiredContentWriterMimeType("text/plain")
+        .build()
+    )
+  }
+}
+```
+
 ## Template Microservice Project
 
 It's been mentioned already, but it bears repeating: ***Please see the [template microservice project](https://github.com/Nike-Inc/riposte-microservice-template) for the recommended starter template project AND usage documentation.*** The template project is a production-ready microservice with a number of bells and whistles and the template project's [README.md](https://github.com/Nike-Inc/riposte-microservice-template/blob/master/README.md) contains in-depth usage information and should be consulted first when learning how to use Riposte. The rest of the documentation below in *this* readme will be focused on the Riposte core libraries.
@@ -69,6 +137,7 @@ Riposte is a collection of several libraries, mainly divided up based on depende
 * [riposte-core](riposte-core/) - Builds on `riposte-spi` to provide a fully functioning Riposte server.
 * [riposte-async-http-client](riposte-async-http-client/) - Contains [`AsyncHttpClientHelper`](https://github.com/Nike-Inc/riposte/blob/master/riposte-async-http-client/src/main/java/com/nike/riposte/client/asynchttp/ning/AsyncHttpClientHelper.java), an HTTP client for performing async nonblocking calls using `CompletableFuture`s with distributed tracing baked in.
 * [riposte-metrics-codahale](riposte-metrics-codahale/) - Contains metrics support for Riposte using the `io.dropwizard` version of Codahale metrics.
+* [riposte-metrics-codahale-signalfx](riposte-metrics-codahale-signalfx/) - Contains SignalFx-specific extensions of the `riposte-metrics-codahale` library module.
 * [riposte-auth](riposte-auth/) - Contains a few implementations of the Riposte [`RequestSecurityValidator`](https://github.com/Nike-Inc/riposte/blob/master/riposte-spi/src/main/java/com/nike/riposte/server/error/validation/RequestSecurityValidator.java), e.g. for basic auth and other security schemes.
 * [riposte-guice](riposte-guice/) - Contains helper classes for seamlessly integrating Riposte with Google Guice.
 * [riposte-typesafe-config](riposte-typesafe-config/) - Contains helper classes for seamlessly integrating Riposte with Typesafe Config for properties management.

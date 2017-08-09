@@ -14,8 +14,7 @@ import java.net.ServerSocket
 
 class TodoEndpointTest : FeatureSpec()  {
 
-    class AppServerConfigForTesting(private val port: Int) : Main.AppServerConfig() {
-
+    class AppServerConfigForTesting(private val port: Int) : AppServerConfig() {
         override fun endpointsPort(): Int {
             return port
         }
@@ -42,6 +41,7 @@ class TodoEndpointTest : FeatureSpec()  {
                 Truth.assertThat(todoRecord.name).isEqualTo("TaskOne")
                 Truth.assertThat(todoRecord.task).isEqualTo("My first task")
             }
+
             scenario("A TODO Item can be queried successfully") {
                 val response = given()
                             .port(serverConfig!!.endpointsPort())
@@ -49,7 +49,7 @@ class TodoEndpointTest : FeatureSpec()  {
                             .contentType("application/json")
                         .When()
                             .pathParam("todoId", todoIdCreated)
-                        .   get(pathWithParam )
+                            .get(pathWithParam )
                         .then()
                             .statusCode(200)
                             .contentType(JSON).extract()
@@ -59,12 +59,13 @@ class TodoEndpointTest : FeatureSpec()  {
             }
 
             scenario("A TODO Item can be updated") {
-                val response = given().port(serverConfig!!.endpointsPort())
+                val response = given()
+                        .port(serverConfig!!.endpointsPort())
                         .request().contentType("application/json")
-                        .When().pathParam("todoId", todoIdCreated)
+                    .When().pathParam("todoId", todoIdCreated)
                         .body(putPayload(todoIdCreated))
                         .put(pathWithParam )
-                        .then().statusCode(200).contentType(JSON).extract()
+                    .then().statusCode(200).contentType(JSON).extract()
                 val todoRecord = response.`as`(TodoRecord::class.java)
                 Truth.assertThat(todoRecord.name).isEqualTo("TaskTwo")
                 Truth.assertThat(todoRecord.task).isEqualTo("My New task")
@@ -107,7 +108,6 @@ class TodoEndpointTest : FeatureSpec()  {
                 teardown()
             }
         }
-
 
         @Throws(IOException::class)
         private fun findFreePort(): Int {

@@ -1,13 +1,8 @@
+evaluationDependsOn(':')
 
 ext {
-    // DEPENDENCY VERSIONS
-    riposteVersion = '0.10.0'
-    backstopperVersion = '0.11.1'
-    slf4jVersion = '1.7.21'
-    logbackVersion = '1.1.7'
-    restAssuredVersion = '3.0.3'
-    jacksonVersion = "2.8.9"
     kotlinTestVersion = '2.0.5'
+    googleTruthVersion = '0.34'
 }
 
 buildscript {
@@ -24,7 +19,7 @@ buildscript {
 apply plugin: "application"
 apply plugin: 'kotlin'
 
-mainClassName = "com.nike.todoservice.Main"
+mainClassName = "com.nike.todoservice.MainKt"
 
 run {
     systemProperties = System.getProperties()
@@ -37,12 +32,9 @@ repositories {
 
 dependencies {
     compile(
-            "com.nike.riposte:riposte-spi:$riposteVersion",
-            "com.nike.riposte:riposte-core:$riposteVersion",
-            "com.nike.riposte:riposte-auth:$riposteVersion",
+            project(":riposte-core"),
             "ch.qos.logback:logback-classic:$logbackVersion",
             "ch.qos.logback:logback-core:$logbackVersion",
-            "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
             "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion",
             "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$jacksonVersion"
     )
@@ -53,7 +45,7 @@ dependencies {
             //"junit:junit:$junitVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",
             "io.kotlintest:kotlintest:$kotlinTestVersion",
-            "com.google.truth:truth:0.34"
+            "com.google.truth:truth:${googleTruthVersion}"
     )
 }
 
