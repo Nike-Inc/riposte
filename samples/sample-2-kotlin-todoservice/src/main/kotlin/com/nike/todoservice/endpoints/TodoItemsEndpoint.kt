@@ -1,26 +1,22 @@
-package com.github.amitsk.roomratecalculator.endpoints
+package com.nike.todoservice.endpoints
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.nike.backstopper.apierror.sample.SampleCoreApiError
 import com.nike.backstopper.exception.ApiException
 import com.nike.riposte.server.http.RequestInfo
 import com.nike.riposte.server.http.ResponseInfo
 import com.nike.riposte.server.http.StandardEndpoint
 import com.nike.riposte.util.Matcher
-
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.github.amitsk.roomratecalculator.error.ProjectApiError
-
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
-
+import com.nike.todoservice.error.ProjectApiError
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpResponseStatus
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicLong
-
 
 object TodoItemsEndpoint {
     private val logger = LoggerFactory.getLogger(this.javaClass)
@@ -128,11 +124,11 @@ object TodoItemsEndpoint {
 
     private fun validateKeyExists(key: Long) {
         if (!todos.containsKey(key)) {
+            logger.info("Key {} Not found ", key)
             throw ApiException.newBuilder()
                     .withExceptionMessage("Key not found")
                     .withApiErrors(ProjectApiError.TODO_ITEM_NOT_FOUND_1)
                     .build()
-            logger.info("Key {} Not found ", key)
         }
     }
 }
