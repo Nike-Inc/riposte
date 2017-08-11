@@ -8,9 +8,31 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.11.x` Releases - [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.11.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.11.0)
+
+Released on 2017-08-11.
+
+### Added
+
+- Added helper methods to `SignalFxAwareCodahaleMetricsCollector` for easily creating dimensioned metrics. 
+	- Added by [Nic Munroe][contrib_nicmunroe] in pull request [#68](https://github.com/Nike-Inc/riposte/pull/68).
+- Added Kotlin-based sample (see `samples/sample-2-kotlin-todoservice`).
+    - Added by [amitsk][contrib_amitsk] in pull request [#67](https://github.com/Nike-Inc/riposte/pull/67). 
+    
+### Updated
+
+- Updated Jackson dependency version to 2.8.9.
+	- Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#68](https://github.com/Nike-Inc/riposte/pull/68).    
+    
+### Project Build
+
+- Upgraded to Gradle 4.1.
+    - Done by [Nic Munroe][contrib_nicmunroe] in pull request [#68](https://github.com/Nike-Inc/riposte/pull/68).    
 
 ## [0.10.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.10.1)
 
@@ -171,3 +193,4 @@ Released on 2016-11-03.
 [contrib_rabeyta]: https://github.com/rabeyta
 [contrib_vicbell]: https://github.com/vicbell
 [contrib_ferhatsb]: https://github.com/ferhatsb
+[contrib_amitsk]: https://github.com/amitsk
