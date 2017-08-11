@@ -201,6 +201,29 @@ public class CodahaleMetricsListenerTest {
 
             return metric;
         }).when(metricRegistryMock).register(anyString(), any(Metric.class));
+
+        doAnswer(invocation -> {
+            String name = invocation.getArgumentAt(0, String.class);
+            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            metricRegistryMock.register(name, metric);
+            return metric;
+        }).when(cmcMock).registerNamedMetric(anyString(), any(Metric.class));
+
+        doAnswer(
+            invocation -> metricRegistryMock.counter(invocation.getArgumentAt(0, String.class))
+        ).when(cmcMock).getNamedCounter(anyString());
+
+        doAnswer(
+            invocation -> metricRegistryMock.meter(invocation.getArgumentAt(0, String.class))
+        ).when(cmcMock).getNamedMeter(anyString());
+
+        doAnswer(
+            invocation -> metricRegistryMock.histogram(invocation.getArgumentAt(0, String.class))
+        ).when(cmcMock).getNamedHistogram(anyString());
+
+        doAnswer(
+            invocation -> metricRegistryMock.timer(invocation.getArgumentAt(0, String.class))
+        ).when(cmcMock).getNamedTimer(anyString());
     }
 
     @Test
@@ -304,28 +327,34 @@ public class CodahaleMetricsListenerTest {
         String prefix = ((DefaultMetricNamingStrategy)instance.serverStatsMetricNamingStrategy).prefix;
 
         assertThat(instance.getInflightRequests()).isSameAs(instance.inflightRequests);
+        verify(cmcMock).getNamedCounter(name(prefix, "inflight_requests"));
         verify(metricRegistryMock).counter(name(prefix, "inflight_requests"));
         assertThat(instance.inflightRequests).isSameAs(registeredCounterMocks.get(name(prefix, "inflight_requests")));
 
         assertThat(instance.getProcessedRequests()).isSameAs(instance.processedRequests);
+        verify(cmcMock).getNamedCounter(name(prefix, "processed_requests"));
         verify(metricRegistryMock).counter(name(prefix, "processed_requests"));
         assertThat(instance.processedRequests).isSameAs(registeredCounterMocks.get(name(prefix, "processed_requests")));
 
         assertThat(instance.getFailedRequests()).isSameAs(instance.failedRequests);
+        verify(cmcMock).getNamedCounter(name(prefix, "failed_requests"));
         verify(metricRegistryMock).counter(name(prefix, "failed_requests"));
         assertThat(instance.failedRequests).isSameAs(registeredCounterMocks.get(name(prefix, "failed_requests")));
 
         assertThat(instance.getResponseWriteFailed()).isSameAs(instance.responseWriteFailed);
+        verify(cmcMock).getNamedCounter(name(prefix, "response_write_failed"));
         verify(metricRegistryMock).counter(name(prefix, "response_write_failed"));
         assertThat(instance.responseWriteFailed).isSameAs(registeredCounterMocks.get(name(prefix, "response_write_failed")));
 
         assertThat(instance.getResponseSizes()).isSameAs(instance.responseSizes);
         verify(metricRegistryMock).register(name(prefix, "response_sizes"), instance.responseSizes);
         assertThat(instance.responseSizes).isSameAs(registeredHistogramMocks.get(name(prefix, "response_sizes")));
+        verify(cmcMock).registerNamedMetric(name(prefix, "response_sizes"), instance.responseSizes);
 
         assertThat(instance.getRequestSizes()).isSameAs(instance.requestSizes);
         verify(metricRegistryMock).register(name(prefix, "request_sizes"), instance.requestSizes);
         assertThat(instance.requestSizes).isSameAs(registeredHistogramMocks.get(name(prefix, "request_sizes")));
+        verify(cmcMock).registerNamedMetric(name(prefix, "request_sizes"), instance.requestSizes);
     }
 
     @Test
@@ -390,18 +419,26 @@ public class CodahaleMetricsListenerTest {
             assertThat(registeredGauges).containsKey(expectedBossThreadsGaugeName);
             assertThat(registeredGauges.get(expectedBossThreadsGaugeName).getValue())
                 .isEqualTo(serverConfig.numBossThreads());
+            verify(cmcMock).registerNamedMetric(expectedBossThreadsGaugeName,
+                                                registeredGauges.get(expectedBossThreadsGaugeName));
 
             assertThat(registeredGauges).containsKey(expectedWorkerThreadsGaugeName);
             assertThat(registeredGauges.get(expectedWorkerThreadsGaugeName).getValue())
                 .isEqualTo(serverConfig.numWorkerThreads());
+            verify(cmcMock).registerNamedMetric(expectedWorkerThreadsGaugeName,
+                                                registeredGauges.get(expectedWorkerThreadsGaugeName));
 
             assertThat(registeredGauges).containsKey(expectedMaxRequestSizeInBytesGaugeName);
             assertThat(registeredGauges.get(expectedMaxRequestSizeInBytesGaugeName).getValue())
                 .isEqualTo(serverConfig.maxRequestSizeInBytes());
+            verify(cmcMock).registerNamedMetric(expectedMaxRequestSizeInBytesGaugeName,
+                                                registeredGauges.get(expectedMaxRequestSizeInBytesGaugeName));
 
             assertThat(registeredGauges).containsKey(expectedEndpointsListGaugeName);
             assertThat(registeredGauges.get(expectedEndpointsListGaugeName).getValue())
                 .isEqualTo(expectedEndpointsListValue);
+            verify(cmcMock).registerNamedMetric(expectedEndpointsListGaugeName,
+                                                registeredGauges.get(expectedEndpointsListGaugeName));
         }
         else {
             // No server config values should have been registered.

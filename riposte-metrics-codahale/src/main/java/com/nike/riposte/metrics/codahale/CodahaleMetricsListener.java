@@ -189,22 +189,28 @@ public class CodahaleMetricsListener implements MetricsListener {
     }
 
     protected void addServerStatisticsMetrics() {
-        this.inflightRequests = metricsCollector.getMetricRegistry()
-                                                .counter(serverStatsMetricNamingStrategy.nameFor(INFLIGHT_REQUESTS));
-        this.processedRequests = metricsCollector.getMetricRegistry()
-                                                 .counter(serverStatsMetricNamingStrategy.nameFor(PROCESSED_REQUESTS));
-        this.failedRequests = metricsCollector.getMetricRegistry()
-                                              .counter(serverStatsMetricNamingStrategy.nameFor(FAILED_REQUESTS));
-        this.responseWriteFailed = metricsCollector.getMetricRegistry()
-                                                   .counter(
-                                                       serverStatsMetricNamingStrategy.nameFor(RESPONSE_WRITE_FAILED));
+        this.inflightRequests = metricsCollector.getNamedCounter(
+            serverStatsMetricNamingStrategy.nameFor(INFLIGHT_REQUESTS)
+        );
+        this.processedRequests = metricsCollector.getNamedCounter(
+            serverStatsMetricNamingStrategy.nameFor(PROCESSED_REQUESTS)
+        );
+        this.failedRequests = metricsCollector.getNamedCounter(
+            serverStatsMetricNamingStrategy.nameFor(FAILED_REQUESTS)
+        );
+        this.responseWriteFailed = metricsCollector.getNamedCounter(
+            serverStatsMetricNamingStrategy.nameFor(RESPONSE_WRITE_FAILED)
+        );
 
-        this.responseSizes = metricsCollector.getMetricRegistry()
-                                             .register(serverStatsMetricNamingStrategy.nameFor(RESPONSE_SIZES),
-                                                       requestAndResponseSizeHistogramSupplier.get());
-        this.requestSizes = metricsCollector.getMetricRegistry()
-                                            .register(serverStatsMetricNamingStrategy.nameFor(REQUEST_SIZES),
-                                                      requestAndResponseSizeHistogramSupplier.get());
+        this.responseSizes = metricsCollector.registerNamedMetric(
+            serverStatsMetricNamingStrategy.nameFor(RESPONSE_SIZES),
+            requestAndResponseSizeHistogramSupplier.get()
+        );
+
+        this.requestSizes = metricsCollector.registerNamedMetric(
+            serverStatsMetricNamingStrategy.nameFor(REQUEST_SIZES),
+            requestAndResponseSizeHistogramSupplier.get()
+        );
     }
 
     /**
@@ -213,18 +219,14 @@ public class CodahaleMetricsListener implements MetricsListener {
      */
     protected void addServerConfigMetrics(ServerConfig config) {
         // add server config gauges
-        Gauge<Integer> bossThreadsGauge = config::numBossThreads;
-        metricsCollector.getMetricRegistry()
-                        .register(serverConfigMetricNamingStrategy.nameFor(BOSS_THREADS), bossThreadsGauge);
+        metricsCollector.registerNamedMetric(serverConfigMetricNamingStrategy.nameFor(BOSS_THREADS),
+                                             (Gauge<Integer>)config::numBossThreads);
 
-        Gauge<Integer> workerThreadsGauge = config::numWorkerThreads;
-        metricsCollector.getMetricRegistry()
-                        .register(serverConfigMetricNamingStrategy.nameFor(WORKER_THREADS), workerThreadsGauge);
+        metricsCollector.registerNamedMetric(serverConfigMetricNamingStrategy.nameFor(WORKER_THREADS),
+                                             (Gauge<Integer>)config::numWorkerThreads);
 
-        Gauge<Integer> maxRequestSizeInBytesGauge = config::maxRequestSizeInBytes;
-        metricsCollector.getMetricRegistry()
-                        .register(serverConfigMetricNamingStrategy.nameFor(MAX_REQUEST_SIZE_IN_BYTES),
-                                  maxRequestSizeInBytesGauge);
+        metricsCollector.registerNamedMetric(serverConfigMetricNamingStrategy.nameFor(MAX_REQUEST_SIZE_IN_BYTES),
+                                             (Gauge<Integer>)config::maxRequestSizeInBytes);
 
         List<String> endpointsList =
             config.appEndpoints()
@@ -235,10 +237,9 @@ public class CodahaleMetricsListener implements MetricsListener {
                                   "-" + endpoint.requestMatcher().matchingPathTemplates()
                   )
                   .collect(Collectors.toList());
-        Gauge<List<String>> endpointsGauge = () -> endpointsList;
 
-        metricsCollector.getMetricRegistry()
-                        .register(serverConfigMetricNamingStrategy.nameFor(ENDPOINTS), endpointsGauge);
+        metricsCollector.registerNamedMetric(serverConfigMetricNamingStrategy.nameFor(ENDPOINTS),
+                                             (Gauge<List<String>>)() -> endpointsList);
     }
 
     @Override
