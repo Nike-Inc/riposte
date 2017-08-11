@@ -20,9 +20,9 @@ import java.util.function.Function;
 
 /**
  * This is a straightforward implementation of the {@link MetricsCollector} interface. The only additional API exposed
- * by this class is {@link #getMetricRegistry()} which allows consumers to gain access to the core {@link
- * MetricRegistry} and do things like register metrics like Gauges and Histograms which don't make sense in the fluent
- * style {@link MetricsCollector} interface.
+ * by this class is {@link #getMetricRegistry()} and some helper methods like {@link #getNamedTimer(String)} and
+ * {@link #registerNamedMetric(String, Metric)} which allows consumers to gain access to the core {@link
+ * MetricRegistry} and do things like register custom metrics.
  *
  * @author pevans
  */
@@ -49,7 +49,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
                 registerAll(prefix + "." + entry.getKey(), (MetricSet) entry.getValue());
             }
             else {
-                metricRegistry.register(prefix + "." + entry.getKey(), entry.getValue());
+                registerNamedMetric(prefix + "." + entry.getKey(), entry.getValue());
             }
         }
         return this;
@@ -69,6 +69,10 @@ public class CodahaleMetricsCollector implements MetricsCollector {
 
     public Histogram getNamedHistogram(String histogramName) {
         return metricRegistry.histogram(histogramName);
+    }
+
+    public <M extends Metric> M registerNamedMetric(String metricName, M metric) {
+        return metricRegistry.register(metricName, metric);
     }
 
     @Override
