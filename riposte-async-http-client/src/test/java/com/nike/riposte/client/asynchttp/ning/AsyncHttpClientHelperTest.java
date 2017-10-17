@@ -18,6 +18,7 @@ import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
 import com.ning.http.client.Request;
 import com.ning.http.client.Response;
+import com.ning.http.client.SignatureCalculator;
 import com.ning.http.client.uri.Uri;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
@@ -82,6 +83,7 @@ public class AsyncHttpClientHelperTest {
     private HttpProcessingState state;
     private EventLoop eventLoopMock;
     private AsyncCompletionHandlerWithTracingAndMdcSupport handlerWithTracingAndMdcDummyExample;
+    private SignatureCalculator signatureCalculator;
 
     @Before
     public void beforeMethod() {
@@ -91,6 +93,7 @@ public class AsyncHttpClientHelperTest {
         stateAttributeMock = mock(Attribute.class);
         state = new HttpProcessingState();
         eventLoopMock = mock(EventLoop.class);
+        signatureCalculator = mock(SignatureCalculator.class);
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttributeMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(state).when(stateAttributeMock).get();
@@ -119,6 +122,7 @@ public class AsyncHttpClientHelperTest {
         assertThat(config.getMaxRequestRetry()).isEqualTo(0);
         assertThat(config.getRequestTimeout()).isEqualTo(DEFAULT_REQUEST_TIMEOUT_MILLIS);
         assertThat(config.getConnectionTTL()).isEqualTo(DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS);
+        assertThat(Whitebox.getInternalState(instance.asyncHttpClient, "signatureCalculator")).isNull();
     }
 
     @Test
@@ -129,6 +133,19 @@ public class AsyncHttpClientHelperTest {
         // then
         assertThat(instance.performSubSpanAroundDownstreamCalls).isTrue();
         verifyDefaultUnderlyingClientConfig(instance);
+    }
+
+    @Test
+    public void fluent_setters_work_as_expected() {
+        // when
+        AsyncHttpClientHelper instance = new AsyncHttpClientHelper(false);
+        assertThat(instance.performSubSpanAroundDownstreamCalls).isFalse();
+        instance.setPerformSubSpanAroundDownstreamCalls(true)
+                .setDefaultSignatureCalculator(signatureCalculator);
+
+        // then
+        assertThat(instance.performSubSpanAroundDownstreamCalls).isTrue();
+        assertThat(Whitebox.getInternalState(instance.asyncHttpClient, "signatureCalculator")).isEqualTo(signatureCalculator);
     }
 
     @DataProvider(value = {
