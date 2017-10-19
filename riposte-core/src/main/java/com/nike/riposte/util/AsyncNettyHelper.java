@@ -1,5 +1,6 @@
 package com.nike.riposte.util;
 
+import com.nike.fastbreak.CircuitBreaker;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.http.HttpProcessingState;
@@ -22,6 +23,8 @@ import org.slf4j.MDC;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -62,6 +65,7 @@ import io.netty.channel.ChannelHandlerContext;
 public class AsyncNettyHelper {
 
     private static final Logger logger = LoggerFactory.getLogger(AsyncNettyHelper.class);
+    public static final Void VOID = null;
 
     // Intentionally protected - use the static methods.
     protected AsyncNettyHelper() { /* do nothing */ }
@@ -505,4 +509,88 @@ public class AsyncNettyHelper {
             }
         }
     }
+
+    /**
+     * Helper method for creating a `CompletableFuture` that is using the tracing helpers.
+     * <p>
+     * <pre>
+     * AsyncNettyHelper.supplyAsync(() -> {
+     *      //do some work in a background thread
+     *      return VOID;
+     * }, executor, ctx);
+     * </pre>
+     */
+    public static <U> CompletableFuture<U> supplyAsync(Supplier<U> f, Executor executor, ChannelHandlerContext ctx) {
+        return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(f, ctx), executor);
+    }
+
+    /**
+     * Helper method for creating a `CompletableFuture` that is using the tracing helpers and has the CompletableFuture
+     * wrapped in a `CircuitBreaker`
+     * <p>
+     * <pre>
+     * AsyncNettyHelper.supplyAsync(() -> {
+     *      //do some work in a background thread
+     *      return VOID;
+     * }, circuitBreaker, executor, ctx);
+     * </pre>
+     */
+    public static <U> CompletableFuture<U> supplyAsync(Supplier<U> f, CircuitBreaker<U> circuitBreaker, Executor executor, ChannelHandlerContext ctx) {
+        return circuitBreaker.executeAsyncCall(() -> supplyAsync(f, executor, ctx));
+    }
+
+    /**
+     * Helper method for creating a `CompletableFuture` that is wrapped by a CircuitBreaker and
+     * has the `Supplier` wrapped around a SubSpan.
+     * <p>
+     * You would prefer this method over {@link #supplyAsync(Supplier, Executor, ChannelHandlerContext)} or
+     * {@link #supplyAsync(Supplier, CircuitBreaker, Executor, ChannelHandlerContext)}
+     * when your `Supplier` has logic that makes an outbound/downstream call. This will net you distributed tracing logs.
+     * <p>
+     * An example would be using a client SDK that makes blocking HTTP calls.
+     * <p>
+     * The SubSpan purpose will be set to `CLIENT` as this is the typical use case when utilizing these helpers.
+     * <p>
+     * <pre>
+     * AsyncNettyHelper.supplyAsync("someWorkToBeDone", () -> {
+     *      //do some work in a background thread
+     *      return VOID;
+     * }, circuitBreaker, executor, ctx);
+     * </pre>
+     */
+    public static <U> CompletableFuture<U> supplyAsync(String subSpanName, Supplier<U> f, CircuitBreaker<U> circuitBreaker, Executor executor, ChannelHandlerContext ctx) {
+        return circuitBreaker.executeAsyncCall(() -> supplyAsync(subSpanName, f, executor, ctx));
+    }
+
+    /**
+     * Helper method for creating a `CompletableFuture` that has the `Supplier` wrapped around a SubSpan.
+     * <p>
+     * You would prefer this method over the above when your `Supplier` has logic that makes an outbound/downstream call
+     * and you do not want the use of a `CircuitBreaker`.
+     * <p>
+     * You would prefer this method over {@link #supplyAsync(String, Supplier, CircuitBreaker, Executor, ChannelHandlerContext)}
+     * when your `Supplier` has logic that you would like wrapped with distributed tracing logs and not use a {@link CircuitBreaker}
+     * <p>
+     * An example would be using a client SDK that makes blocking HTTP calls.
+     * <p>
+     * The SubSpan purpose will be set to `CLIENT` as this is the typical use case when utilizing these helpers.
+     * <p>
+     * <pre>
+     * AsyncNettyHelper.supplyAsync("someWorkToBeDone", () -> {
+     *      //do some work in a background thread
+     *      return VOID;
+     * }, executor, ctx);
+     * </pre>
+     */
+    public static <U> CompletableFuture<U> supplyAsync(String subSpanName, Supplier<U> f, Executor executor, ChannelHandlerContext ctx) {
+        return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(() -> {
+            try {
+                Tracer.getInstance().startSubSpan(subSpanName, Span.SpanPurpose.CLIENT);
+                return f.get();
+            } finally {
+                Tracer.getInstance().completeSubSpan();
+            }
+        }, ctx), executor);
+    }
+
 }
