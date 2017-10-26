@@ -149,6 +149,21 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         return false;
     }
 
+    /**
+     * content-length header should never be returned for status codes 1xx and 204
+     * https://tools.ietf.org/html/rfc7230#section-3.3.2
+     */
+    private boolean isContentLengthHeaderShouldBeMissingStatusCode(int statusCode) {
+
+        if (statusCode >= 100 && statusCode < 200)
+            return true;
+        else if (statusCode == 204) {
+            return true;
+        }
+
+        return false;
+    }
+
     @Test
     @UseDataProvider("responseStatusCodeScenariosDataProvider")
     public void verify_response_status_code_scenarios(int desiredStatusCode, boolean shouldReturnEmptyPayload) {
@@ -172,7 +187,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
             assertThat(response.header(CALL_ID_RESPONSE_HEADER_KEY)).isEqualTo(callId);
             if (isContentAlwaysEmptyStatusCode(desiredStatusCode)) {
                 assertThat(response.asString()).isNullOrEmpty();
-                assertThat(response.header(CONTENT_LENGTH)).isEqualTo("0");
+                if (isContentLengthHeaderShouldBeMissingStatusCode(desiredStatusCode)) {
+                    assertThat(response.header(CONTENT_LENGTH)).isNull();
+                } else {
+                    assertThat(response.header(CONTENT_LENGTH)).isEqualTo("0");
+                }
                 assertThat(response.header(TRANSFER_ENCODING)).isNull();
             } else {
                 assertThat(response.header(CONTENT_LENGTH)).isNull();
