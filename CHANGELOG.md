@@ -8,11 +8,28 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.11.x` Releases - [0.11.0](#0110)
+- `0.11.x` Releases - [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
 
+## [0.11.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.11.1)
+
+Released on 2017-10-26.
+
+### Added
+
+- Added the ability to set a default `SignatureCalculator` through `AsyncHttpClientHelper`. A `SignatureCalculator` is 
+executed immediately before the HTTP request is fired, allowing last-second adjustments like creating a request 
+signature header for auth purposes.
+    - Added by [Robert Abeyta][contrib_rabeyta] in pull request [#74](https://github.com/Nike-Inc/riposte/pull/74).
+- Added fluent style setters to `AsyncHttpClientHelper` for a default `SignatureCalculator` and 
+`performSubSpanAroundDownstreamCalls` value.
+    - Added by [Robert Abeyta][contrib_rabeyta] in pull request [#74](https://github.com/Nike-Inc/riposte/pull/74).
+- Added utility methods to `AsyncNettyHelper` to enable easily creating `CompletableFuture`s with distributed tracing 
+support built-in (with optional subspans) and optional circuit breaker protection.
+    - Added by [Robert Abeyta][contrib_rabeyta] in pull request [#72](https://github.com/Nike-Inc/riposte/pull/72).
+    
 ## [0.11.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.11.0)
 
 Released on 2017-08-11.
