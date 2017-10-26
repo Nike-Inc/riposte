@@ -8,10 +8,19 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.11.x` Releases - [0.11.1](#0111), [0.11.0](#0110)
+- `0.11.x` Releases - [0.11.2](#0112), [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.11.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.11.2)
+
+Released on 2017-10-26.
+
+### Updated
+
+- Updated Netty to version `4.0.52.Final`.
+    - Updated by [Todd Lisonbee][contrib_tlisonbee] in pull request [#73](https://github.com/Nike-Inc/riposte/pull/73).
 
 ## [0.11.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.11.1)
 
@@ -211,3 +220,4 @@ Released on 2016-11-03.
 [contrib_vicbell]: https://github.com/vicbell
 [contrib_ferhatsb]: https://github.com/ferhatsb
 [contrib_amitsk]: https://github.com/amitsk
+[contrib_tlisonbee]: https://github.com/tlisonbee
