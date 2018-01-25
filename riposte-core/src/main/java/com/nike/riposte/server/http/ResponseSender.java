@@ -1,5 +1,7 @@
 package com.nike.riposte.server.http;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.channelpipeline.message.ChunkedOutboundMessage;
 import com.nike.riposte.server.channelpipeline.message.OutboundMessageSendContentChunk;
@@ -12,17 +14,6 @@ import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceAndSpanIdGenerator;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.nio.charset.Charset;
-import java.util.UUID;
-import java.util.function.Consumer;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
@@ -39,6 +30,13 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.charset.Charset;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 import static com.nike.riposte.util.AsyncNettyHelper.consumerWithTracingAndMdc;
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
@@ -388,12 +386,11 @@ public class ResponseSender {
         actualResponseObject.headers().add(responseInfo.getHeaders());
 
         // Add cookies (if any)
-        if (responseInfo.getCookies() != null) {
-            for (Cookie cookie : responseInfo.getCookies()) {
-                actualResponseObject.headers().add(
-                    HttpHeaders.Names.SET_COOKIE, ServerCookieEncoder.LAX.encode(cookie.name(), cookie.value())
-                );
-            }
+        Set<Cookie> cookies = responseInfo.getCookies();
+        if (cookies != null && !cookies.isEmpty()) {
+            actualResponseObject.headers().add(
+                    HttpHeaders.Names.SET_COOKIE, ServerCookieEncoder.LAX.encode(cookies)
+            );
         }
     }
 
