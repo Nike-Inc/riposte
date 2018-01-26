@@ -1,6 +1,7 @@
 package com.nike.riposte.server.http;
 
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -72,6 +73,19 @@ public interface Endpoint<I> {
      */
     default boolean isValidateRequestContent(@SuppressWarnings("UnusedParameters") RequestInfo<?> request) {
         return true;
+    }
+
+    /**
+     * @return true if this endpoint wants validation on the {@link RequestInfo#getContent()} to ensure it always has
+     * content. If this returns true and there was no content passed,
+     * {@link MissingRequiredContentException} will be thrown,
+     * which is mapped to an appropriate HTTP status code 400 error response by the default riposte exception handler
+     * <p>
+     * By default this will return false when {@link #requestContentType()} is null or {@link Void} type (indicating you don't expect any content), true otherwise.
+     */
+    default boolean isRequireRequestContent() {
+        TypeReference<I> requestContentType = requestContentType();
+        return requestContentType != null && !Void.class.equals(requestContentType.getType());
     }
 
     /**

@@ -23,13 +23,16 @@ import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFut
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
+import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.nike.riposte.util.Matcher;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
@@ -279,4 +282,27 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("decoder_exception_message");
         assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo(exMsg);
     }
+
+    @Test
+    public void should_handle_RequestMissingContentException() {
+        // given
+        MissingRequiredContentException ex = new MissingRequiredContentException("/path", "POST", "TestEndpoint");
+
+        // when
+        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(ex);
+
+        // then
+        assertThat(result.shouldHandleResponse).isTrue();
+        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMissingExpectedContentApiError()));
+
+        assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("incoming_request_path");
+        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("/path");
+
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("incoming_request_method");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("POST");
+
+        assertThat(result.extraDetailsForLogging.get(2).getLeft()).isEqualTo("endpoint_class_name");
+        assertThat(result.extraDetailsForLogging.get(2).getRight()).startsWith("TestEndpoint");
+    }
+
 }

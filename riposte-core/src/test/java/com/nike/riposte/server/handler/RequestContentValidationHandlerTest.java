@@ -1,6 +1,7 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.validation.RequestValidator;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
@@ -21,6 +22,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -131,7 +133,7 @@ public class RequestContentValidationHandlerTest {
     }
 
     @Test
-    public void doChannelRead_does_nothing_if_content_is_null() throws Exception {
+    public void doChannelRead_does_nothing_if_content_is_null_and_require_content_is_false() throws Exception {
         // given
         doReturn(null).when(requestInfoMock).getContent();
 
@@ -141,6 +143,24 @@ public class RequestContentValidationHandlerTest {
         // then
         verifyNoMoreInteractions(requestValidatorMock);
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @Test
+    public void doChannelRead_throws_exception_if_content_is_null_and_endpoint_requires_content() throws Exception {
+        // given
+        doReturn(0).when(requestInfoMock).getRawContentLengthInBytes();
+        doReturn(true).when(endpointMock).isValidateRequestContent(requestInfoMock);
+        doReturn(true).when(endpointMock).isRequireRequestContent();
+
+        // when
+        Throwable ex = catchThrowable(() -> handler.doChannelRead(ctxMock, msg));
+
+        // then
+        assertThat(ex)
+                .isInstanceOf(MissingRequiredContentException.class);
+
+        // then
+        verifyNoMoreInteractions(requestValidatorMock);
     }
 
     @Test
@@ -173,19 +193,6 @@ public class RequestContentValidationHandlerTest {
     public void doChannelRead_does_nothing_if_request_isContentDeserializerSetup_returns_false() throws Exception {
         // given
         doReturn(false).when(requestInfoMock).isContentDeserializerSetup();
-
-        // when
-        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, msg);
-
-        // then
-        verifyNoMoreInteractions(requestValidatorMock);
-        assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
-    }
-
-    @Test
-    public void doChannelRead_does_nothing_if_request_getRawContentLengthInBytes_returns_0() throws Exception {
-        // given
-        doReturn(0).when(requestInfoMock).getRawContentLengthInBytes();
 
         // when
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, msg);
