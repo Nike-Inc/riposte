@@ -1,6 +1,7 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.validation.RequestValidator;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
@@ -61,23 +62,28 @@ public class RequestContentValidationHandler extends BaseInboundHandlerWithTraci
             HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             Endpoint<?> endpoint = state.getEndpointForExecution();
             RequestInfo<?> requestInfo = state.getRequestInfo();
-            if (endpoint != null
-                && endpoint.isValidateRequestContent(requestInfo)
-                && requestInfo.isCompleteRequestWithAllChunks() // Request must be complete
-                && requestInfo.isContentDeserializerSetup()     // Content deserialization must be possible
-                && requestInfo.getRawContentLengthInBytes() > 0 // Must have something to validate - TODO: This last rule for non-empty content might change depending on what we do about auto-validating null content.
-                ) {
-                if (endpoint.shouldValidateAsynchronously(requestInfo)) {
-                    // The endpoint has requested asynchronous validation, so split it off into the
-                    //      pre-endpoint-execution-work-chain.
-                    state.addPreEndpointExecutionWorkChainSegment(aVoid -> CompletableFuture.runAsync(
-                        () -> executeValidation(requestInfo, endpoint, ctx),
-                        ASYNC_VALIDATION_EXECUTOR)
-                    );
+
+            if (endpoint != null && requestInfo.isCompleteRequestWithAllChunks()) {
+                if (endpoint.isRequireRequestContent() && requestInfo.getRawContentLengthInBytes() == 0) {
+                    throw new MissingRequiredContentException(requestInfo, endpoint);
                 }
-                else {
-                    // This request can be validated synchronously, so do it now.
-                    executeValidation(requestInfo, endpoint, ctx);
+
+                if (endpoint.isValidateRequestContent(requestInfo)
+                        //TODO: Is this actually necessary? Does false indicate a misconfigured endpoint?
+                        && requestInfo.isContentDeserializerSetup()     // Content deserialization must be possible
+                        ) {
+                    if (endpoint.shouldValidateAsynchronously(requestInfo)) {
+                        // The endpoint has requested asynchronous validation, so split it off into the
+                        //      pre-endpoint-execution-work-chain.
+                        state.addPreEndpointExecutionWorkChainSegment(aVoid -> CompletableFuture.runAsync(
+                                () -> executeValidation(requestInfo, endpoint, ctx),
+                                ASYNC_VALIDATION_EXECUTOR)
+                        );
+                    }
+                    else {
+                        // This request can be validated synchronously, so do it now.
+                        executeValidation(requestInfo, endpoint, ctx);
+                    }
                 }
             }
         }
@@ -100,9 +106,7 @@ public class RequestContentValidationHandler extends BaseInboundHandlerWithTraci
             //      getContent() is called and will deserialize the payload here. For very large payloads it may take a
             //      while to deserialize, and if we're validating asynchronously we should be deserializing
             //      asynchronously as well.
-            // TODO: How do we want to deal with choosing whether null content is considered invalid? Boolean flag on
-            //       the endpoint and throw custom exception here if endpoint says null not allowed but content is null?
-            //       Error handlers would need to be updated as well.
+            // TODO: Is null check required here before validation now that we are doing a missing content check?
             if (requestInfo.getContent() != null) {
                 // We have an endpoint and validation is requested and the content has been deserialized.
                 //      Perform the validation.

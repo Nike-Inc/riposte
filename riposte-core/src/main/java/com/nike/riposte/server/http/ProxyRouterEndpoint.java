@@ -90,6 +90,15 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
     }
 
     /**
+     * Proxy router endpoints don't generally want to require request content due to the varied request types it can
+     * serve. This is similar and goes in sync with {@link #requestContentType()} and {@link #isValidateRequestContent(RequestInfo)}
+     */
+    @Override
+    public boolean isRequireRequestContent() {
+        return false;
+    }
+
+    /**
      * Helper method that generates a {@link HttpRequest} for the downstream call's first chunk that uses the given
      * downstreamPath and downstreamMethod, and the query string and headers from the incomingRequest will be added and
      * passed through without modification.

@@ -26,6 +26,7 @@ import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFut
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
@@ -209,6 +210,17 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(projectApiErrors.getForbiddenApiError()),
                 extraDetails
+            );
+        }
+
+        if (ex instanceof MissingRequiredContentException) {
+            MissingRequiredContentException theEx = (MissingRequiredContentException) ex;
+            return ApiExceptionHandlerListenerResult.handleResponse(
+                    singletonError(projectApiErrors.getMissingExpectedContentApiError()),
+                    Arrays.asList(Pair.of("incoming_request_path", theEx.path),
+                            Pair.of("incoming_request_method", theEx.method),
+                            Pair.of("endpoint_class_name", theEx.endpointClassName)
+                    )
             );
         }
 
