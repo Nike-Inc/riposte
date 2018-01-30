@@ -311,6 +311,11 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
             Type inputType = contentDeserializerTypeReference.getType();
             if (inputType instanceof Class) {
                 Class inputTypeClass = (Class) inputType;
+                // If they want a raw byte[] then return getRawContentBytes().
+                if (byte[].class.equals(inputTypeClass)) {
+                    return (T) getRawContentBytes();
+                }
+
                 // If they want a String or CharSequence then return the getRawContent() string.
                 if (String.class.equals(inputTypeClass) || CharSequence.class.equals(inputTypeClass)) {
                     //noinspection unchecked
