@@ -248,6 +248,10 @@ public interface RequestAndResponseFilter {
      * run even for a failed-security request then you must put it in the first chunk filter method, *and* this method
      * must return true so that it executes before the security validator runs.
      *
+     * <p>NOTE: Another side effect of setting this to true is that it will execute before even endpoint routing has
+     * been determined. This means that if this returns true then the first chunk filter method will execute before
+     * a 404 in the case where the caller uses a path that does not map to an endpoint.
+     *
      * @return true if this filter should execute before any {@link ServerConfig#requestSecurityValidator()} configured
      * for this application, false if it should execute after {@link ServerConfig#requestSecurityValidator()}.
      */

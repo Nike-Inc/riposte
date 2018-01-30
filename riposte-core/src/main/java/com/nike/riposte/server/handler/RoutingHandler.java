@@ -30,14 +30,20 @@ import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled
  * checking to make sure exactly 1 endpoint matches. See {@link #findSingleEndpointForExecution(RequestInfo)} for more
  * information on the error checking.
  * <p/>
- * This must come after {@link com.nike.riposte.server.handler.RequestInfoSetterHandler} in the pipeline.
+ * This must come before {@link SmartHttpContentDecompressor} in the pipeline so that it can turn off auto-decompression
+ * for endpoints that aren't supposed to do auto-decompression (e.g. {@link
+ * com.nike.riposte.server.http.ProxyRouterEndpoint}s). Consequently it must also come before {@link
+ * RequestInfoSetterHandler}, which means we have to do the creation of the {@link RequestInfo} from the incoming
+ * Netty {@link HttpRequest} message and set it on {@link HttpProcessingState} if the state didn't already have a
+ * {@link RequestInfo}.
  *
  * @author Nic Munroe
  */
 public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
-    private final Collection<Endpoint<?>> endpoints;
-    private final int globalConfiguredMaxRequestSizeInBytes;
+    protected final RiposteHandlerInternalUtil handlerUtils = RiposteHandlerInternalUtil.DEFAULT_IMPL;
+    protected final Collection<Endpoint<?>> endpoints;
+    protected final int globalConfiguredMaxRequestSizeInBytes;
 
     public RoutingHandler(Collection<Endpoint<?>> endpoints, int globalMaxRequestSizeInBytes) {
         if (endpoints == null || endpoints.isEmpty())
@@ -108,14 +114,18 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
             HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
-            RequestInfo request = state.getRequestInfo();
+            RequestInfo request = handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
+                (HttpRequest)msg,
+                state
+            );
             Pair<Endpoint<?>, String> endpointForExecution = findSingleEndpointForExecution(request);
 
-            throwExceptionIfContentLengthHeaderIsLargerThanConfiguredMaxRequestSize((HttpRequest) msg, endpointForExecution.getLeft());
-
             request.setPathParamsBasedOnPathTemplate(endpointForExecution.getRight());
-
             state.setEndpointForExecution(endpointForExecution.getLeft(), endpointForExecution.getRight());
+            
+            throwExceptionIfContentLengthHeaderIsLargerThanConfiguredMaxRequestSize(
+                (HttpRequest) msg, endpointForExecution.getLeft()
+            );
         }
 
         return PipelineContinuationBehavior.CONTINUE;
@@ -127,7 +137,9 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
         if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
                 && HttpHeaders.isContentLengthSet(msg)
                 && HttpHeaders.getContentLength(msg) > configuredMaxRequestSize) {
-            throw new RequestTooBigException("Content-Length header value exceeded configured max request size of " + configuredMaxRequestSize);
+            throw new RequestTooBigException(
+                "Content-Length header value exceeded configured max request size of " + configuredMaxRequestSize
+            );
         }
     }
 

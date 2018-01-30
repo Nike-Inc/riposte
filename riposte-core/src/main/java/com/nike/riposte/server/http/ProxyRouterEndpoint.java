@@ -247,4 +247,14 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
     public Integer maxRequestSizeInBytesOverride() {
         return 0;
     }
+
+    /**
+     * @return This returns false by default for proxy router endpoints so that the payload will reach the downstream
+     * target unchanged - override this method if you want the proxy router endpoint to automatically decompress the
+     * payload as it passes through.
+     */
+    @Override
+    public boolean isDecompressRequestPayloadAllowed(RequestInfo request) {
+        return false;
+    }
 }

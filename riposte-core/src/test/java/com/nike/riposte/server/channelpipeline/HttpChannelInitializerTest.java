@@ -28,6 +28,7 @@ import com.nike.riposte.server.handler.ResponseSenderHandler;
 import com.nike.riposte.server.handler.RoutingHandler;
 import com.nike.riposte.server.handler.SecurityValidationHandler;
 import com.nike.riposte.server.handler.SmartHttpContentCompressor;
+import com.nike.riposte.server.handler.SmartHttpContentDecompressor;
 import com.nike.riposte.server.hooks.PipelineCreateHook;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.ResponseSender;
@@ -78,6 +79,7 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.lessThan;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
@@ -375,10 +377,11 @@ public class HttpChannelInitializerTest {
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.DTRACE_START_HANDLER_NAME), any(DTraceStartHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.ACCESS_LOG_START_HANDLER_NAME), any(AccessLogStartHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME), any(SmartHttpContentCompressor.class));
+        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.ROUTING_HANDLER_NAME), any(RoutingHandler.class));
+        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SMART_HTTP_CONTENT_DECOMPRESSOR_HANDLER_NAME), any(SmartHttpContentDecompressor.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_INFO_SETTER_HANDLER_NAME), any(RequestInfoSetterHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.OPEN_CHANNEL_LIMIT_HANDLER_NAME), any(OpenChannelLimitHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_FILTER_BEFORE_SECURITY_HANDLER_NAME), any(RequestFilterHandler.class));
-        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.ROUTING_HANDLER_NAME), any(RoutingHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SECURITY_VALIDATION_HANDLER_NAME), any(SecurityValidationHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_FILTER_AFTER_SECURITY_HANDLER_NAME), any(RequestFilterHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_CONTENT_DESERIALIZER_HANDLER_NAME), any(RequestContentDeserializerHandler.class));
@@ -686,21 +689,23 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, RequestInfoSetterHandler> requestInfoSetterHandler = findChannelHandler(handlers, RequestInfoSetterHandler.class);
+        Pair<Integer, AccessLogStartHandler> accessLogStartHandler = findChannelHandler(handlers, AccessLogStartHandler.class);
         Pair<Integer, RequestFilterHandler> beforeSecurityRequestFilterHandler = findChannelHandler(handlers, RequestFilterHandler.class);
         Pair<Integer, RequestFilterHandler> afterSecurityRequestFilterHandler = findChannelHandler(handlers, RequestFilterHandler.class, true);
         Pair<Integer, RoutingHandler> routingHandler = findChannelHandler(handlers, RoutingHandler.class);
         Pair<Integer, SecurityValidationHandler> securityValidationHandler = findChannelHandler(handlers, SecurityValidationHandler.class);
         Pair<Integer, RequestContentDeserializerHandler> requestContentDeserializerHandler = findChannelHandler(handlers, RequestContentDeserializerHandler.class);
 
-        assertThat(requestInfoSetterHandler, notNullValue());
+        assertThat(accessLogStartHandler, notNullValue());
         assertThat(beforeSecurityRequestFilterHandler, notNullValue());
         assertThat(routingHandler, notNullValue());
         assertThat(afterSecurityRequestFilterHandler, notNullValue());
         assertThat(securityValidationHandler, notNullValue());
         assertThat(requestContentDeserializerHandler, notNullValue());
 
-        Assertions.assertThat(beforeSecurityRequestFilterHandler.getLeft()).isGreaterThan(requestInfoSetterHandler.getLeft());
+        Assertions.assertThat(beforeSecurityRequestFilterHandler.getLeft()).isGreaterThan(accessLogStartHandler.getLeft());
+        Assertions.assertThat(beforeSecurityRequestFilterHandler.getLeft()).isLessThan(securityValidationHandler.getLeft());
+        // beforeSecurityRequestFilterHandler must come before RoutingHandler as well (so that it is executed before any 404 gets thrown)
         Assertions.assertThat(beforeSecurityRequestFilterHandler.getLeft()).isLessThan(routingHandler.getLeft());
 
         Assertions.assertThat(afterSecurityRequestFilterHandler.getLeft()).isGreaterThan(securityValidationHandler.getLeft());
@@ -715,7 +720,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_RoutingHandler_after_RequestInfoSetterHandler_and_uses_endpoints_collection() {
+    public void initChannel_adds_RoutingHandler_after_AccessLogStartHandler_and_before_SmartHttpContentDecompressor_and_uses_endpoints_collection() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
@@ -726,18 +731,45 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, RequestInfoSetterHandler> requestInfoSetterHandler = findChannelHandler(handlers, RequestInfoSetterHandler.class);
+        Pair<Integer, AccessLogStartHandler> accessLogStartHandler = findChannelHandler(handlers, AccessLogStartHandler.class);
         Pair<Integer, RoutingHandler> routingHandler = findChannelHandler(handlers, RoutingHandler.class);
+        Pair<Integer, SmartHttpContentDecompressor> smartDecompressionHandler = findChannelHandler(handlers, SmartHttpContentDecompressor.class);
 
-        assertThat(requestInfoSetterHandler, notNullValue());
+        assertThat(accessLogStartHandler, notNullValue());
         assertThat(routingHandler, notNullValue());
+        assertThat(smartDecompressionHandler, notNullValue());
 
-        assertThat(routingHandler.getLeft(), is(greaterThan(requestInfoSetterHandler.getLeft())));
+        assertThat(routingHandler.getLeft(), is(greaterThan(accessLogStartHandler.getLeft())));
+        assertThat(routingHandler.getLeft(), is(lessThan(smartDecompressionHandler.getLeft())));
 
         // and then
         Collection<Endpoint<?>> expectedEndpoints = extractField(hci, "endpoints");
         Collection<Endpoint<?>> actualEndpoints = (Collection<Endpoint<?>>) Whitebox.getInternalState(routingHandler.getRight(), "endpoints");
         assertThat(actualEndpoints, is(expectedEndpoints));
+    }
+
+    @Test
+    public void initChannel_adds_SmartHttpContentDecompressor_after_RoutingHandler_and_before_RequestInfoSetterHandler() {
+        // given
+        HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
+
+        // when
+        hci.initChannel(socketChannelMock);
+
+        // then
+        ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
+        verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
+        List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
+        Pair<Integer, RoutingHandler> routingHandler = findChannelHandler(handlers, RoutingHandler.class);
+        Pair<Integer, SmartHttpContentDecompressor> smartDecompressionHandler = findChannelHandler(handlers, SmartHttpContentDecompressor.class);
+        Pair<Integer, RequestInfoSetterHandler> requestInfoSetterhandler = findChannelHandler(handlers, RequestInfoSetterHandler.class);
+
+        assertThat(routingHandler, notNullValue());
+        assertThat(smartDecompressionHandler, notNullValue());
+        assertThat(requestInfoSetterhandler, notNullValue());
+
+        assertThat(smartDecompressionHandler.getLeft(), is(greaterThan(routingHandler.getLeft())));
+        assertThat(smartDecompressionHandler.getLeft(), is(lessThan(requestInfoSetterhandler.getLeft())));
     }
 
     @Test

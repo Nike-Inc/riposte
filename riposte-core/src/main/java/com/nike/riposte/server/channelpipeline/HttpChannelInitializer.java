@@ -32,6 +32,7 @@ import com.nike.riposte.server.handler.ResponseSenderHandler;
 import com.nike.riposte.server.handler.RoutingHandler;
 import com.nike.riposte.server.handler.SecurityValidationHandler;
 import com.nike.riposte.server.handler.SmartHttpContentCompressor;
+import com.nike.riposte.server.handler.SmartHttpContentDecompressor;
 import com.nike.riposte.server.hooks.PipelineCreateHook;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
@@ -128,6 +129,10 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
      * The name of the {@link SmartHttpContentCompressor} handler in the pipeline.
      */
     public static final String SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME = "SmartHttpContentCompressorHandler";
+    /**
+     * The name of the {@link SmartHttpContentDecompressor} handler in the pipeline.
+     */
+    public static final String SMART_HTTP_CONTENT_DECOMPRESSOR_HANDLER_NAME = "SmartHttpContentDecompressorHandler";
     /**
      * The name of the {@link RequestInfoSetterHandler} handler in the pipeline.
      */
@@ -461,7 +466,22 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // TODO: Make the threshold configurable
         p.addLast(SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME, new SmartHttpContentCompressor(500));
 
-        // INBOUND - Add RequestInfoSetterHandler to populate our request state with a RequestInfo object
+        // INBOUND - Add the "before security" RequestFilterHandler before security and even before routing
+        //      (if we have any filters to apply). This is here before RoutingHandler so that it can intercept requests
+        //      before RoutingHandler throws 404s/405s.
+        if (beforeSecurityRequestFilterHandler != null)
+            p.addLast(REQUEST_FILTER_BEFORE_SECURITY_HANDLER_NAME, beforeSecurityRequestFilterHandler);
+
+        // INBOUND - Add RoutingHandler to figure out which endpoint should handle the request and set it on our request
+        //           state for later execution
+        p.addLast(ROUTING_HANDLER_NAME, new RoutingHandler(endpoints, maxRequestSizeInBytes));
+
+        // INBOUND - Add SmartHttpContentDecompressor for automatic content decompression if the request indicates it
+        //           is compressed *and* the target endpoint (determined by the previous RoutingHandler) is one that
+        //           is eligible for auto-decompression.
+        p.addLast(SMART_HTTP_CONTENT_DECOMPRESSOR_HANDLER_NAME, new SmartHttpContentDecompressor());
+
+        // INBOUND - Add RequestInfoSetterHandler to populate our RequestInfo's content.
         p.addLast(REQUEST_INFO_SETTER_HANDLER_NAME, new RequestInfoSetterHandler(maxRequestSizeInBytes));
         // INBOUND - Add OpenChannelLimitHandler to limit the number of open incoming server channels, but only if
         //           maxOpenChannelsThreshold is not -1.
@@ -469,14 +489,6 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
             p.addLast(OPEN_CHANNEL_LIMIT_HANDLER_NAME,
                       new OpenChannelLimitHandler(openChannelsGroup, maxOpenChannelsThreshold));
         }
-
-        // INBOUND - Add the RequestFilterHandler for before security (if we have any filters to apply).
-        if (beforeSecurityRequestFilterHandler != null)
-            p.addLast(REQUEST_FILTER_BEFORE_SECURITY_HANDLER_NAME, beforeSecurityRequestFilterHandler);
-
-        // INBOUND - Add RoutingHandler to figure out which endpoint should handle the request and set it on our request
-        //           state for later execution
-        p.addLast(ROUTING_HANDLER_NAME, new RoutingHandler(endpoints, maxRequestSizeInBytes));
 
         // INBOUND - Add SecurityValidationHandler to validate the RequestInfo object for the matching endpoint
         p.addLast(SECURITY_VALIDATION_HANDLER_NAME, new SecurityValidationHandler(requestSecurityValidator));
