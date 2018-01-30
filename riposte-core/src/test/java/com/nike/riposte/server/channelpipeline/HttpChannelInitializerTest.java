@@ -154,13 +154,15 @@ public class HttpChannelInitializerTest {
         int maxOpenChannelsThreshold = 1000;
         boolean debugChannelLifecycleLoggingEnabled = true;
         List<String> userIdHeaderKeys = mock(List.class);
+        int responseCompressionThresholdBytes = 5678;
 
         // when
         HttpChannelInitializer hci = new HttpChannelInitializer(
             sslCtx, maxRequestSizeInBytes, endpoints, reqResFilters, longRunningTaskExecutor, riposteErrorHandler, riposteUnhandledErrorHandler,
             validationService, requestContentDeserializer, responseSender, metricsListener, defaultCompletableFutureTimeoutMillis, accessLogger,
             pipelineCreateHooks, requestSecurityValidator, workerChannelIdleTimeoutMillis, proxyRouterConnectTimeoutMillis,
-            incompleteHttpCallTimeoutMillis, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled, userIdHeaderKeys);
+            incompleteHttpCallTimeoutMillis, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled, userIdHeaderKeys,
+            responseCompressionThresholdBytes);
 
         // then
         assertThat(extractField(hci, "sslCtx"), is(sslCtx));
@@ -182,6 +184,7 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(hci, "maxOpenChannelsThreshold"), is(maxOpenChannelsThreshold));
         assertThat(extractField(hci, "debugChannelLifecycleLoggingEnabled"), is(debugChannelLifecycleLoggingEnabled));
         assertThat(extractField(hci, "userIdHeaderKeys"), is(userIdHeaderKeys));
+        assertThat(extractField(hci, "responseCompressionThresholdBytes"), is(responseCompressionThresholdBytes));
 
         StreamingAsyncHttpClient sahc = extractField(hci, "streamingAsyncHttpClientForProxyRouterEndpoints");
         assertThat(extractField(sahc, "idleChannelTimeoutMillis"), is(workerChannelIdleTimeoutMillis));
@@ -206,7 +209,8 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 321, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null,
+            123);
 
         // then
         assertThat(extractField(hci, "sslCtx"), nullValue());
@@ -236,7 +240,8 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
-                null, null, 121, 42, 321, 100, false, null);
+                null, null, 121, 42, 321, 100, false, null,
+                123);
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
@@ -259,7 +264,8 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = new HttpChannelInitializer(
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
-                null, null, 121, 42, 321, 100, false, null);
+                null, null, 121, 42, 321, 100, false, null,
+                123);
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
@@ -277,7 +283,8 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, null, null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 321, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null,
+            123);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -286,7 +293,8 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Collections.emptyList(), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 321, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null,
+            123);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -295,7 +303,8 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, null, mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 321, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null,
+            123);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -304,7 +313,8 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), null,
             null, null, mock(ResponseSender.class), null, 4242L, null,
-            null, null, 121, 42, 321, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null,
+            123);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -313,7 +323,8 @@ public class HttpChannelInitializerTest {
         new HttpChannelInitializer(
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, null, null, 4242L, null,
-            null, null, 121, 42, 321, 100, false, null);
+            null, null, 121, 42, 321, 100, false, null,
+            123);
     }
 
     private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind, boolean findLast) {
@@ -347,7 +358,7 @@ public class HttpChannelInitializerTest {
             sslCtx, 42, Arrays.asList(getMockEndpoint("/some/path")), requestAndResponseFilters, null, mock(RiposteErrorHandler.class),
             mock(RiposteUnhandledErrorHandler.class), validationService, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, workerChannelIdleTimeoutMillis, 4200, 1234, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled,
-            null);
+            null, 123);
     }
 
     @Test
@@ -585,7 +596,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_HttpContentCompressor_before_HttpResponseEncoder_for_outbound_handler() {
+    public void initChannel_adds_SmartHttpContentCompressor_before_HttpResponseEncoder_for_outbound_handler() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
@@ -596,19 +607,24 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, HttpContentCompressor> httpContentCompressor = findChannelHandler(handlers, HttpContentCompressor.class);
+        Pair<Integer, SmartHttpContentCompressor> httpContentCompressor = findChannelHandler(handlers, SmartHttpContentCompressor.class);
         Pair<Integer, HttpResponseEncoder> httpResponseEncoder = findChannelHandler(handlers, HttpResponseEncoder.class);
 
         assertThat(httpContentCompressor, notNullValue());
         assertThat(httpResponseEncoder, notNullValue());
 
-        // HttpContentCompressor's index should be later than HttpResponseEncoder's index to verify that it comes BEFORE HttpResponseEncoder on the OUTBOUND handlers
-        // (since the outbound handlers are processed in reverse order).
+        // SmartHttpContentCompressor's index should be later than HttpResponseEncoder's index to verify that it comes
+        //      BEFORE HttpResponseEncoder on the OUTBOUND handlers (since the outbound handlers are processed in
+        //      reverse order).
         assertThat(httpContentCompressor.getLeft(), is(greaterThan(httpResponseEncoder.getLeft())));
+        // Verify that SmartHttpContentCompressor's threshold is set to the specified config value.
+        long expectedThresholdValue = ((Integer)extractField(hci, "responseCompressionThresholdBytes")).longValue();
+        assertThat(extractField(httpContentCompressor.getRight(), "responseSizeThresholdBytes"),
+                   is(expectedThresholdValue));
     }
 
     @Test
-    public void initChannel_adds_RequestInfoSetterHandler_after_HttpContentCompressor() {
+    public void initChannel_adds_RequestInfoSetterHandler_after_SmartHttpContentCompressor() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
@@ -619,7 +635,7 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, HttpContentCompressor> httpContentCompressor = findChannelHandler(handlers, HttpContentCompressor.class);
+        Pair<Integer, SmartHttpContentCompressor> httpContentCompressor = findChannelHandler(handlers, SmartHttpContentCompressor.class);
         Pair<Integer, RequestInfoSetterHandler> requestInfoSetterHandler = findChannelHandler(handlers, RequestInfoSetterHandler.class);
 
         assertThat(httpContentCompressor, notNullValue());

@@ -8,6 +8,7 @@ import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.http.impl.SimpleProxyRouterEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
+import com.nike.riposte.server.testutils.ComponentTestUtils.CompressionType;
 import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -20,23 +21,12 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.function.Function;
-import java.util.zip.DataFormatException;
-import java.util.zip.Deflater;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
-import java.util.zip.Inflater;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -45,6 +35,12 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.restassured.response.ExtractableResponse;
 
 import static com.nike.riposte.server.componenttest.VerifyAutoPayloadDecompressionComponentTest.DeserializationEndpointWithDecompressionEnabled.SOME_OBJ_FIELD_VALUE_HEADER_KEY;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.base64Decode;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.base64Encode;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.deflatePayload;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.gzipPayload;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.inflatePayload;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.ungzipPayload;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
@@ -116,35 +112,6 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         assertThat(response.header(RECEIVED_CONTENT_ENCODING_HEADER)).isEqualTo(expectedContentEncoding);
         assertThat(response.header(RECEIVED_CONTENT_LENGTH_HEADER)).isEqualTo(expectedContentLength);
         assertThat(response.header(RECEIVED_TRANSFER_ENCODING_HEADER)).isEqualTo(expectedTransferEncoding);
-    }
-
-    private enum CompressionType {
-        GZIP(VerifyAutoPayloadDecompressionComponentTest::gzipPayload,
-             VerifyAutoPayloadDecompressionComponentTest::ungzipPayload,
-             HttpHeaders.Values.GZIP),
-        DEFLATE(VerifyAutoPayloadDecompressionComponentTest::deflatePayload,
-                VerifyAutoPayloadDecompressionComponentTest::inflatePayload,
-                HttpHeaders.Values.DEFLATE);
-
-        private final Function<String, byte[]> compressionFunction;
-        private final Function<byte[], String> decompressionFunction;
-        public final String contentEncodingHeaderValue;
-
-        CompressionType(Function<String, byte[]> compressionFunction,
-                        Function<byte[], String> decompressionFunction,
-                        String contentEncodingHeaderValue) {
-            this.compressionFunction = compressionFunction;
-            this.decompressionFunction = decompressionFunction;
-            this.contentEncodingHeaderValue = contentEncodingHeaderValue;
-        }
-
-        public byte[] compress(String s) {
-            return compressionFunction.apply(s);
-        }
-
-        public String decompress(byte[] compressed) {
-            return decompressionFunction.apply(compressed);
-        }
     }
 
     @DataProvider(value = {
@@ -309,84 +276,6 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         assertThat(inflated).isEqualTo(orig);
 
         assertThat(gzipped).isNotEqualTo(deflated);
-    }
-
-    private static byte[] gzipPayload(String payload) {
-        ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(bytesOut)) {
-            byte[] payloadBytes = payload.getBytes(UTF_8);
-            gzipOutputStream.write(payloadBytes);
-            gzipOutputStream.finish();
-            return bytesOut.toByteArray();
-        }
-        catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static String ungzipPayload(byte[] compressed) {
-        try {
-            if ((compressed == null) || (compressed.length == 0)) {
-                throw new RuntimeException("Null/empty compressed payload. is_null=" + (compressed == null));
-            }
-
-            final StringBuilder outStr = new StringBuilder();
-            final GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(compressed));
-            final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(gis, "UTF-8"));
-
-            String line;
-            while ((line = bufferedReader.readLine()) != null) {
-                outStr.append(line);
-            }
-
-            return outStr.toString();
-        }
-        catch(IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    private static byte[] deflatePayload(String payload) {
-        Deflater deflater = new Deflater(6, false);
-        byte[] payloadBytes = payload.getBytes(UTF_8);
-        deflater.setInput(payloadBytes);
-        deflater.finish();
-
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        while (!deflater.finished()) {
-            int count = deflater.deflate(buffer);
-            outputStream.write(buffer, 0, count);
-        }
-
-        return outputStream.toByteArray();
-    }
-
-    private static String inflatePayload(byte[] compressed) {
-        Inflater inflater = new Inflater();
-        inflater.setInput(compressed);
-
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        while (!inflater.finished()) {
-            try {
-                int count = inflater.inflate(buffer);
-                outputStream.write(buffer, 0, count);
-            }
-            catch (DataFormatException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        return new String(outputStream.toByteArray(), UTF_8);
-    }
-
-    private static String base64Encode(byte[] bytes) {
-        return Base64.getEncoder().encodeToString(bytes);
-    }
-
-    private static byte[] base64Decode(String encodedStr) {
-        return Base64.getDecoder().decode(encodedStr);
     }
 
     private static final String RECEIVED_PAYLOAD_BYTES_AS_BASE64_RESPONSE_HEADER_KEY = "received-payload-bytes-base-64";

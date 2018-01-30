@@ -234,6 +234,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final int maxOpenChannelsThreshold;
     private final ChannelGroup openChannelsGroup;
     private final boolean debugChannelLifecycleLoggingEnabled;
+    private final int responseCompressionThresholdBytes;
 
     private final StreamingAsyncHttpClient streamingAsyncHttpClientForProxyRouterEndpoints;
 
@@ -338,7 +339,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
                                   long incompleteHttpCallTimeoutMillis,
                                   int maxOpenChannelsThreshold,
                                   boolean debugChannelLifecycleLoggingEnabled,
-                                  List<String> userIdHeaderKeys) {
+                                  List<String> userIdHeaderKeys,
+                                  int responseCompressionThresholdBytes) {
         if (endpoints == null || endpoints.isEmpty())
             throw new IllegalArgumentException("endpoints cannot be empty");
 
@@ -418,6 +420,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         cachedResponseFilterHandler = (hasReqResFilters) ? new ResponseFilterHandler(requestAndResponseFilters) : null;
         this.userIdHeaderKeys = userIdHeaderKeys;
+        this.responseCompressionThresholdBytes = responseCompressionThresholdBytes;
     }
 
     @Override
@@ -463,8 +466,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         //          request/response/size threshold). This must be after HttpRequestDecoder on the incoming pipeline and
         //          before HttpResponseEncoder on the outbound pipeline (keep in mind that "before" on outbound means
         //          later in the list since outbound is processed in reverse order).
-        // TODO: Make the threshold configurable
-        p.addLast(SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME, new SmartHttpContentCompressor(500));
+        p.addLast(SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME,
+                  new SmartHttpContentCompressor(responseCompressionThresholdBytes));
 
         // INBOUND - Add the "before security" RequestFilterHandler before security and even before routing
         //      (if we have any filters to apply). This is here before RoutingHandler so that it can intercept requests

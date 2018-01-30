@@ -401,6 +401,18 @@ public interface ServerConfig {
     }
 
     /**
+     * @return The size threshold (in bytes) above which response payloads are eligible for gzip/deflate compression.
+     * Compressing small payloads can actually result in a "compressed" payload that is larger than the original and
+     * in that case you're using extra CPU for a worse outcome. If a response payload's size is smaller than the
+     * byte threshold value returned by this method then it will not be automatically compressed. You can also disable
+     * compression on a per-response basis by setting {@link
+     * com.nike.riposte.server.http.ResponseInfo#setPreventCompressedOutput(boolean)} to true.
+     */
+    default int responseCompressionThresholdBytes() {
+        return 500;
+    }
+
+    /**
      * @return The {@link Executor} that should be used for long running tasks when non-blocking endpoints need to do
      * blocking I/O and there is no nonblocking driver/client, or if the endpoint needs to do serious number crunching
      * or anything else that shouldn't be done on the Netty worker thread. This can be null - if it is null then {@link
