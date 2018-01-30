@@ -160,7 +160,7 @@ public class HttpUtils {
         int bytesWrittenSoFar = 0;
         for (ByteBuf chunk : chunkByteBufs) {
             int numBytesInThisChunk = chunk.readableBytes();
-            chunk.getBytes(0, comboBytes, bytesWrittenSoFar, chunk.readableBytes());
+            chunk.getBytes(chunk.readerIndex(), comboBytes, bytesWrittenSoFar, chunk.readableBytes());
             bytesWrittenSoFar += numBytesInThisChunk;
         }
 
