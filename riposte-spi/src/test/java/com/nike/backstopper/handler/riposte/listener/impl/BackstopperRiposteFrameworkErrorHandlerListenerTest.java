@@ -226,8 +226,8 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
         assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("message");
 
-        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("cause_details");
-        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("null");
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("exception_cause_details");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("NO_CAUSE");
     }
 
     @DataProvider(value = {
@@ -258,7 +258,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
         assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo(outerExceptionMessage);
 
-        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("cause_details");
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("exception_cause_details");
         assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo(cause.toString());
     }
 
@@ -276,11 +276,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
         assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
         assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("The request exceeded the maximum payload size allowed");
 
-        assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("decoder_exception");
-        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("true");
+        assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
+        assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo(exMsg);
 
-        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("decoder_exception_message");
-        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo(exMsg);
+        assertThat(result.extraDetailsForLogging.get(1).getLeft()).isEqualTo("decoder_exception");
+        assertThat(result.extraDetailsForLogging.get(1).getRight()).isEqualTo("true");
     }
 
     @Test

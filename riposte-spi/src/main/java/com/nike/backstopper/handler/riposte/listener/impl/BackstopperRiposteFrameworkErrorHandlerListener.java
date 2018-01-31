@@ -5,6 +5,7 @@ import com.nike.backstopper.apierror.ApiErrorBase;
 import com.nike.backstopper.apierror.ApiErrorWithMetadata;
 import com.nike.backstopper.apierror.SortedApiErrorSet;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
+import com.nike.backstopper.handler.ApiExceptionHandlerUtils;
 import com.nike.backstopper.handler.listener.ApiExceptionHandlerListener;
 import com.nike.backstopper.handler.listener.ApiExceptionHandlerListenerResult;
 import com.nike.fastbreak.exception.CircuitBreakerException;
@@ -20,13 +21,13 @@ import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutExceptio
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
 import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFutureTimedOut;
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
-import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
@@ -125,9 +126,9 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
                                   : projectApiErrors.getMalformedRequestApiError();
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(errorToUse),
-                Arrays.asList(
-                    Pair.of("decoder_exception", "true"),
-                    Pair.of("decoder_exception_message", ex.getMessage())
+                withBaseExceptionMessage(
+                    ex,
+                    Pair.of("decoder_exception", "true")
                 )
             );
         }
@@ -141,22 +142,24 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             );
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(errorToUse),
-                Arrays.asList(
-                    Pair.of("decoder_exception", "true"),
-                    Pair.of("decoder_exception_message", ex.getMessage())
+                withBaseExceptionMessage(
+                    ex,
+                    Pair.of("decoder_exception", "true")
                 )
             );
         }
 
         if (ex instanceof HostnameResolutionException) {
             return ApiExceptionHandlerListenerResult.handleResponse(
-                singletonError(projectApiErrors.getTemporaryServiceProblemApiError())
+                singletonError(projectApiErrors.getTemporaryServiceProblemApiError()),
+                withBaseExceptionMessage(ex)
             );
         }
 
         if (ex instanceof NativeIoExceptionWrapper) {
             return ApiExceptionHandlerListenerResult.handleResponse(
-                singletonError(projectApiErrors.getTemporaryServiceProblemApiError())
+                singletonError(projectApiErrors.getTemporaryServiceProblemApiError()),
+                singletonList(causeDetailsForLogs(ex))
             );
         }
 
@@ -167,7 +170,8 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
                 Arrays.asList(
                     Pair.of("method", theEx.httpMethod),
                     Pair.of("request_path", theEx.requestPath),
-                    Pair.of("desired_object_type", theEx.desiredObjectType.getType().toString())
+                    Pair.of("desired_object_type", theEx.desiredObjectType.getType().toString()),
+                    causeDetailsForLogs(ex)
                 )
             );
         }
@@ -189,10 +193,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
 
         if (ex instanceof Unauthorized401Exception) {
             Unauthorized401Exception theEx = (Unauthorized401Exception) ex;
-            List<Pair<String, String>> extraDetails = new ArrayList<>();
-            extraDetails.add(Pair.of("message", ex.getMessage()));
-            extraDetails.add(Pair.of("incoming_request_path", theEx.requestPath));
-            extraDetails.add(Pair.of("authorization_header", theEx.authorizationHeader));
+            List<Pair<String, String>> extraDetails = withBaseExceptionMessage(
+                ex,
+                Pair.of("incoming_request_path", theEx.requestPath),
+                Pair.of("authorization_header", theEx.authorizationHeader)
+            );
             extraDetails.addAll((theEx).extraDetailsForLogging);
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(projectApiErrors.getUnauthorizedApiError()),
@@ -202,10 +207,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
         
         if (ex instanceof Forbidden403Exception) {
             Forbidden403Exception theEx = (Forbidden403Exception) ex;
-            List<Pair<String, String>> extraDetails = new ArrayList<>();
-            extraDetails.add(Pair.of("message", ex.getMessage()));
-            extraDetails.add(Pair.of("incoming_request_path", theEx.requestPath));
-            extraDetails.add(Pair.of("authorization_header", theEx.authorizationHeader));
+            List<Pair<String, String>> extraDetails = withBaseExceptionMessage(
+                ex,
+                Pair.of("incoming_request_path", theEx.requestPath),
+                Pair.of("authorization_header", theEx.authorizationHeader)
+            );
             extraDetails.addAll((theEx).extraDetailsForLogging);
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(projectApiErrors.getForbiddenApiError()),
@@ -271,15 +277,16 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
                     new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
                                              Pair.of("cause", "Unfinished/invalid HTTP request"))
                 ),
-                Arrays.asList(Pair.of("incomplete_http_call_timeout_millis", String.valueOf(theEx.timeoutMillis)),
-                              Pair.of("exception_message", theEx.getMessage()))
+                withBaseExceptionMessage(
+                    ex,
+                    Pair.of("incomplete_http_call_timeout_millis", String.valueOf(theEx.timeoutMillis))
+                )
             );
         }
 
         if (ex instanceof InvalidHttpRequestException) {
             InvalidHttpRequestException theEx = (InvalidHttpRequestException)ex;
             Throwable cause = theEx.getCause();
-            String causeAsString = cause == null ? "null" : cause.toString();
 
             ApiError apiErrorToUse = (cause instanceof TooLongFrameException)
                                      ? generateTooLongFrameApiError()
@@ -288,12 +295,33 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
 
             return ApiExceptionHandlerListenerResult.handleResponse(
                     singletonError(apiErrorToUse),
-                    Arrays.asList(Pair.of("exception_message", theEx.getMessage()),
-                                  Pair.of("cause_details", causeAsString))
+                    withBaseExceptionMessage(
+                        ex,
+                        causeDetailsForLogs(theEx)
+                    )
             );
         }
 
         return ApiExceptionHandlerListenerResult.ignoreResponse();
+    }
+
+    @SafeVarargs
+    protected final List<Pair<String, String>> withBaseExceptionMessage(
+        Throwable ex, Pair<String, String>... extraLogMessages
+    ) {
+        List<Pair<String, String>> logPairs = new ArrayList<>();
+        ApiExceptionHandlerUtils.DEFAULT_IMPL.addBaseExceptionMessageToExtraDetailsForLogging(ex, logPairs);
+        if (extraLogMessages != null) {
+            logPairs.addAll(Arrays.asList(extraLogMessages));
+        }
+        return logPairs;
+    }
+
+    protected final Pair<String, String> causeDetailsForLogs(Throwable orig) {
+        Throwable cause = orig.getCause();
+        String causeDetails = (cause == null) ? "NO_CAUSE" : cause.toString();
+        return Pair.of("exception_cause_details",
+                       ApiExceptionHandlerUtils.DEFAULT_IMPL.quotesToApostrophes(causeDetails));
     }
 
     protected ApiError generateTooLongFrameApiError() {
