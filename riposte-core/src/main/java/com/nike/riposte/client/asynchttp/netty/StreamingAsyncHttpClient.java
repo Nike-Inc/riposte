@@ -583,6 +583,7 @@ public class StreamingAsyncHttpClient {
     public CompletableFuture<StreamingChannel> streamDownstreamCall(
         String downstreamHost, int downstreamPort, HttpRequest initialRequestChunk, boolean isSecureHttpsCall,
         boolean relaxedHttpsValidation, StreamingCallback callback, long downstreamCallTimeoutMillis,
+        boolean performSubSpanAroundDownstreamCalls,
         ChannelHandlerContext ctx
     ) {
         CompletableFuture<StreamingChannel> streamingChannel = new CompletableFuture<>();
@@ -594,8 +595,6 @@ public class StreamingAsyncHttpClient {
                                  ? downstreamHost
                                  : downstreamHost + ":" + downstreamPort;
         initialRequestChunk.headers().set(HttpHeaders.Names.HOST, hostHeaderValue);
-
-        boolean performSubSpanAroundDownstreamCalls = true;
 
         ObjectHolder<Long> beforeConnectionStartTimeNanos = new ObjectHolder<>();
         beforeConnectionStartTimeNanos.heldObject = System.nanoTime();

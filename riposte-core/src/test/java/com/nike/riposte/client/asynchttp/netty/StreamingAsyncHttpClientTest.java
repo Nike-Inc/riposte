@@ -3,24 +3,48 @@ package com.nike.riposte.client.asynchttp.netty;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.ObjectHolder;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingCallback;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingChannel;
+import com.nike.riposte.server.Server;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.componenttest.VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest;
+import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.RequestInfo;
+import com.nike.riposte.server.http.ResponseInfo;
+import com.nike.riposte.server.http.StandardEndpoint;
+import com.nike.riposte.server.testutils.ComponentTestUtils;
+import com.nike.riposte.server.testutils.TestUtil;
+import com.nike.riposte.util.Matcher;
 import com.nike.wingtips.Span;
 
+import com.nike.wingtips.TraceHeaders;
+import com.nike.wingtips.Tracer;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
+import java.security.cert.CertificateException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -35,6 +59,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import static com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.CHANNEL_IS_BROKEN_ATTR;
+import static com.nike.wingtips.Span.SpanPurpose.SERVER;
 import static io.netty.handler.codec.http.HttpHeaders.Names.HOST;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -74,6 +99,10 @@ public class StreamingAsyncHttpClientTest {
 
     private ChannelFuture failedFutureMock;
 
+    private static Server backendServer;
+    private static ServerConfig backendServerConfig;
+    private static int backendServerPort;
+
     @Before
     public void beforeMethod() {
         channelMock = mock(Channel.class);
@@ -105,6 +134,20 @@ public class StreamingAsyncHttpClientTest {
 
         failedFutureMock = mock(ChannelFuture.class);
         doReturn(failedFutureMock).when(channelMock).newFailedFuture(any(Throwable.class));
+    }
+
+    @BeforeClass
+    public static void startupServer() throws IOException, CertificateException, InterruptedException {
+        backendServerPort = ComponentTestUtils.findFreePort();
+        backendServerConfig = new BackendServerConfig(backendServerPort);
+        backendServer = new Server(backendServerConfig);
+        backendServer.startup();
+    }
+
+    @AfterClass
+    public static void stopServer() throws InterruptedException {
+        backendServerPort = -1;
+        backendServer.shutdown();
     }
 
     @Test
@@ -432,25 +475,54 @@ public class StreamingAsyncHttpClientTest {
     public void streamDownstreamCall_setsHostHeaderCorrectly(int downstreamPort, boolean isSecure, String downstreamHost, String expectedHostHeader) {
         // given
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "");
-        ChannelHandlerContext ctx = mockChannelHandlerContext();
+        ChannelHandlerContext ctx = TestUtil.mockChannelHandlerContext().mockContext;
         StreamingCallback streamingCallback = mock(StreamingCallback.class);
 
         // when
         new StreamingAsyncHttpClient(200, 200, true)
-                .streamDownstreamCall(downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, ctx);
+                .streamDownstreamCall(downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, true, ctx);
 
         // then
         assertThat(request.headers().get(HOST)).isEqualTo(expectedHostHeader);
     }
 
-    private ChannelHandlerContext mockChannelHandlerContext() {
-        ChannelHandlerContext mockContext = mock(ChannelHandlerContext.class);
-        when(mockContext.channel()).thenReturn(mock(Channel.class));
-        @SuppressWarnings("unchecked")
-        Attribute<HttpProcessingState> mockAttribute = mock(Attribute.class);
-        when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY)).thenReturn(mockAttribute);
-        when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY).get()).thenReturn(mock(HttpProcessingState.class));
-        return mockContext;
+    @DataProvider(value = {
+            "false",
+            "true"
+    }, splitBy = "\\|")
+    @Test
+    public void streamDownstreamCall_createsSubSpanAroundDownstreamCallBasedOnFlag(boolean performSubSpanAroundDownstreamCalls) throws InterruptedException, ExecutionException {
+        // given
+        DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "");
+        ChannelHandlerContext ctx = TestUtil.mockChannelHandlerContextWithTraceInfo().mockContext;
+        StreamingCallback streamingCallback = mock(StreamingCallback.class);
+        Span currentSpan = Tracer.getInstance().getCurrentSpan();
+
+        // when
+        new StreamingAsyncHttpClient(200, 200, true)
+                .streamDownstreamCall("localhost", backendServerPort, request, false, false, streamingCallback, 200, performSubSpanAroundDownstreamCalls, ctx).get();
+
+        // then
+        if (performSubSpanAroundDownstreamCalls) {
+            assertThat(request.headers().get(TraceHeaders.TRACE_SAMPLED)).isEqualTo(String.valueOf(currentSpan.isSampleable())); // should match
+            assertThat(request.headers().get(TraceHeaders.TRACE_ID)).isEqualTo(currentSpan.getTraceId()); // should match
+            assertThat(request.headers().get(TraceHeaders.SPAN_ID)).isNotEqualTo(currentSpan.getSpanId()); // should have generated a new one
+            assertThat(request.headers().get(TraceHeaders.PARENT_SPAN_ID)).isEqualTo(currentSpan.getSpanId()); // parent equals our starting spanId
+            assertThat(request.headers().get(TraceHeaders.SPAN_NAME)).isEqualTo("async_downstream_call-GET_localhost:" + backendServerPort); // generated span name for new SubSpan
+        } else {
+            assertDefaultTraceHeadersWereAddedToRequest(request, currentSpan);
+        }
+
+        // cleanup after this test
+        Tracer.getInstance().completeRequestSpan();
+    }
+
+    private void assertDefaultTraceHeadersWereAddedToRequest(DefaultHttpRequest request, Span currentSpan) {
+        assertThat(request.headers().get(TraceHeaders.TRACE_SAMPLED)).isEqualTo(String.valueOf(currentSpan.isSampleable()));
+        assertThat(request.headers().get(TraceHeaders.TRACE_ID)).isEqualTo(currentSpan.getTraceId());
+        assertThat(request.headers().get(TraceHeaders.SPAN_ID)).isEqualTo(currentSpan.getSpanId());
+        assertThat(request.headers().get(TraceHeaders.PARENT_SPAN_ID)).isNullOrEmpty(); // no parent since only request span is started
+        assertThat(request.headers().get(TraceHeaders.SPAN_NAME)).isEqualTo("mockChannelHandlerContext");
     }
 
     private void verifyChannelReleasedBackToPool(ObjectHolder<Boolean> callActiveHolder,
@@ -460,4 +532,49 @@ public class StreamingAsyncHttpClientTest {
         verify(theChannelPoolMock).release(theChannelMock);
     }
 
+    public static class BackendServerConfig implements ServerConfig {
+        private final int port;
+        private final Endpoint<?> backendEndpoint;
+
+        public BackendServerConfig(int port) {
+            this.port = port;
+            this.backendEndpoint = new BackendEndpoint();
+        }
+
+        @Override
+        public Collection<Endpoint<?>> appEndpoints() {
+            return Collections.singleton(backendEndpoint);
+        }
+
+        @Override
+        public int endpointsPort() {
+            return port;
+        }
+
+        @Override
+        public long workerChannelIdleTimeoutMillis() {
+            return -1;
+        }
+    }
+
+    public static class BackendEndpoint extends StandardEndpoint<Void, String> {
+
+        public static final String MATCHING_PATH = "/";
+
+        @Override
+        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+            return CompletableFuture.completedFuture(
+                    ResponseInfo.newBuilder("{\"success\":true}")
+                            .withHttpStatusCode(200)
+                            .withDesiredContentWriterMimeType("application/json")
+                            .build()
+            );
+        }
+
+        @Override
+        public Matcher requestMatcher() {
+            return Matcher.match(MATCHING_PATH, HttpMethod.GET);
+        }
+
+    }
 }
