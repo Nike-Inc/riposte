@@ -2,6 +2,7 @@ package com.nike.riposte.server.handler;
 
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
@@ -12,20 +13,15 @@ import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.util.Matcher;
+
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.TooLongFrameException;
-import io.netty.handler.codec.http.DefaultHttpHeaders;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.util.Attribute;
+
 import org.assertj.core.api.Assertions;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.Whitebox;
 
 import java.util.ArrayList;
@@ -34,6 +30,16 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
 
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.DecoderResult;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.Attribute;
+
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
@@ -41,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -304,6 +311,57 @@ public class RoutingHandlerTest {
     @Test
     public void argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo_returns_false() {
         assertThat(handlerSpy.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(null,null,null,null)).isFalse();
+    }
+
+    @Test
+    public void doChannelRead_HttpRequest_throws_exception_when_failed_decoder_result() {
+        // given
+        HttpRequest msgMock = mock(HttpRequest.class);
+        DecoderResult decoderResult = mock(DecoderResult.class);
+        doReturn(true).when(decoderResult).isFailure();
+        doReturn(decoderResult).when(msgMock).getDecoderResult();
+        doReturn(null).when(stateMock).getRequestInfo();
+
+        // when
+        Throwable thrownException = Assertions.catchThrowable(() -> handlerSpy.doChannelRead(ctxMock, msgMock));
+
+        // then
+        assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+    }
+
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
+    @Test
+    public void doChannelRead_creates_and_sets_RequestInfo_on_state_only_if_state_not_already_set(
+        boolean requestInfoAlreadySetOnState
+    ) {
+        // given
+        HttpRequest msgMock = mock(HttpRequest.class);
+        String uri = "/some/url";
+        HttpHeaders headers = new DefaultHttpHeaders();
+        doReturn(uri).when(msgMock).getUri();
+        doReturn(headers).when(msgMock).headers();
+        doReturn(HttpVersion.HTTP_1_1).when(msgMock).getProtocolVersion();
+        RequestInfo<?> requestInfoAlreadyOnState = (requestInfoAlreadySetOnState) ? requestInfoMock : null;
+        doReturn(Optional.of(uri)).when(matcherMock).matchesPath(any(RequestInfo.class));
+        doReturn(requestInfoAlreadyOnState).when(stateMock).getRequestInfo();
+
+        // when
+        PipelineContinuationBehavior result = handlerSpy.doChannelRead(ctxMock, msgMock);
+
+        // then
+        if (requestInfoAlreadySetOnState) {
+            verify(stateMock, never()).setRequestInfo(any(RequestInfo.class));
+        }
+        else {
+            ArgumentCaptor<RequestInfo> requestInfoArgumentCaptor = ArgumentCaptor.forClass(RequestInfo.class);
+            verify(stateMock).setRequestInfo(requestInfoArgumentCaptor.capture());
+            RequestInfo requestInfo = requestInfoArgumentCaptor.getValue();
+            assertThat(requestInfo.getUri()).isEqualTo(uri);
+            assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+        }
     }
 
 }

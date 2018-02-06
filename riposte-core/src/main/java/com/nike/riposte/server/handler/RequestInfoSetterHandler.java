@@ -1,7 +1,6 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
-import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
@@ -14,7 +13,6 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 
@@ -28,8 +26,8 @@ import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled
  * the incoming request is chunked then the later chunks are added to the stored request info via {@link
  * RequestInfo#addContentChunk(HttpContent)}.
  * <p/>
- * This handler should come after {@link io.netty.handler.codec.http.HttpRequestDecoder} and {@link
- * SmartHttpContentCompressor} in the pipeline.
+ * This handler should come after {@link io.netty.handler.codec.http.HttpRequestDecoder}, {@link
+ * SmartHttpContentCompressor}, and {@link SmartHttpContentDecompressor} in the pipeline.
  *
  * The request size is tracked and if it exceeds the configured global or a given endpoint's override, an exception
  * will be thrown.
@@ -40,7 +38,8 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
     private static final Logger logger = LoggerFactory.getLogger(RequestInfoSetterHandler.class);
 
-    private final int globalConfiguredMaxRequestSizeInBytes;
+    protected final RiposteHandlerInternalUtil handlerUtils = RiposteHandlerInternalUtil.DEFAULT_IMPL;
+    protected final int globalConfiguredMaxRequestSizeInBytes;
 
     public RequestInfoSetterHandler(int globalConfiguredMaxRequestSizeInBytes) {
         this.globalConfiguredMaxRequestSizeInBytes = globalConfiguredMaxRequestSizeInBytes;
@@ -62,14 +61,16 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
             // We have a HttpProcessingState. Process the message and continue the pipeline processing.
             if (msg instanceof HttpRequest) {
-                throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
-                RequestInfo<?> requestInfo = new RequestInfoImpl<>((HttpRequest) msg);
-                state.setRequestInfo(requestInfo);
+                // This should be done by RoutingHandler already but it doesn't hurt to double check here, and it
+                //      keeps this handler independent in case things get refactored again in the future.
+                handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
+                    (HttpRequest)msg, state
+                );
             }
             else if (msg instanceof HttpContent) {
                 HttpContent httpContentMsg = (HttpContent) msg;
 
-                throwExceptionIfNotSuccessfullyDecoded(httpContentMsg);
+                handlerUtils.throwExceptionIfNotSuccessfullyDecoded(httpContentMsg);
                 RequestInfo<?> requestInfo = state.getRequestInfo();
                 if (requestInfo == null) {
                     throw new IllegalStateException(
@@ -98,12 +99,6 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
             //      requestInfo.releaseAllResources() is called), or an exception has been thrown. In any case, we
             //      are done with any message from a pipeline perspective and can reduce its reference count.
             ReferenceCountUtil.release(msg);
-        }
-    }
-
-    private void throwExceptionIfNotSuccessfullyDecoded(HttpObject httpObject) {
-        if (httpObject.getDecoderResult() != null && httpObject.getDecoderResult().isFailure()) {
-            throw new InvalidHttpRequestException("Detected HttpObject that was not successfully decoded.", httpObject.getDecoderResult().cause());
         }
     }
 

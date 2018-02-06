@@ -8,13 +8,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.commons.lang3.RandomUtils;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+import java.util.zip.Inflater;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -71,6 +82,116 @@ public class ComponentTestUtils {
 
     public static ByteBuf createByteBufPayload(int payloadSize) {
         return Unpooled.wrappedBuffer(generatePayload(payloadSize).getBytes(UTF_8));
+    }
+
+    public static byte[] gzipPayload(String payload) {
+        ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(bytesOut)) {
+            byte[] payloadBytes = payload.getBytes(UTF_8);
+            gzipOutputStream.write(payloadBytes);
+            gzipOutputStream.finish();
+            return bytesOut.toByteArray();
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static String ungzipPayload(byte[] compressed) {
+        try {
+            if ((compressed == null) || (compressed.length == 0)) {
+                throw new RuntimeException("Null/empty compressed payload. is_null=" + (compressed == null));
+            }
+
+            final StringBuilder outStr = new StringBuilder();
+            final GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(compressed));
+            final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(gis, "UTF-8"));
+
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                outStr.append(line);
+            }
+
+            return outStr.toString();
+        }
+        catch(IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    public static byte[] deflatePayload(String payload) {
+        Deflater deflater = new Deflater(6, false);
+        byte[] payloadBytes = payload.getBytes(UTF_8);
+        deflater.setInput(payloadBytes);
+        deflater.finish();
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        while (!deflater.finished()) {
+            int count = deflater.deflate(buffer);
+            outputStream.write(buffer, 0, count);
+        }
+
+        return outputStream.toByteArray();
+    }
+
+    public static String inflatePayload(byte[] compressed) {
+        Inflater inflater = new Inflater();
+        inflater.setInput(compressed);
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        while (!inflater.finished()) {
+            try {
+                int count = inflater.inflate(buffer);
+                outputStream.write(buffer, 0, count);
+            }
+            catch (DataFormatException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        return new String(outputStream.toByteArray(), UTF_8);
+    }
+
+    public static String base64Encode(byte[] bytes) {
+        return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    public static byte[] base64Decode(String encodedStr) {
+        return Base64.getDecoder().decode(encodedStr);
+    }
+
+    public enum CompressionType {
+        GZIP(ComponentTestUtils::gzipPayload,
+             ComponentTestUtils::ungzipPayload,
+             HttpHeaders.Values.GZIP),
+        DEFLATE(ComponentTestUtils::deflatePayload,
+                ComponentTestUtils::inflatePayload,
+                HttpHeaders.Values.DEFLATE),
+        IDENTITY(s -> s.getBytes(UTF_8),
+                 b -> new String(b, UTF_8),
+                 HttpHeaders.Values.IDENTITY);
+
+        private final Function<String, byte[]> compressionFunction;
+        private final Function<byte[], String> decompressionFunction;
+        public final String contentEncodingHeaderValue;
+
+        CompressionType(Function<String, byte[]> compressionFunction,
+                        Function<byte[], String> decompressionFunction,
+                        String contentEncodingHeaderValue) {
+            this.compressionFunction = compressionFunction;
+            this.decompressionFunction = decompressionFunction;
+            this.contentEncodingHeaderValue = contentEncodingHeaderValue;
+        }
+
+        public byte[] compress(String s) {
+            return compressionFunction.apply(s);
+        }
+
+        public String decompress(byte[] compressed) {
+            return decompressionFunction.apply(compressed);
+        }
     }
 
     public static Bootstrap createNettyHttpClientBootstrap() {
@@ -150,12 +271,16 @@ public class ComponentTestUtils {
         public final int statusCode;
         public final HttpHeaders headers;
         public final String payload;
+        public final byte[] payloadBytes;
         public final FullHttpResponse fullHttpResponse;
 
         public NettyHttpClientResponse(FullHttpResponse fullHttpResponse) {
             this.statusCode = fullHttpResponse.getStatus().code();
             this.headers = fullHttpResponse.headers();
-            this.payload = fullHttpResponse.content().toString(UTF_8);
+            ByteBuf content = fullHttpResponse.content();
+            this.payloadBytes = new byte[content.readableBytes()];
+            content.getBytes(content.readerIndex(), this.payloadBytes);
+            this.payload = new String(this.payloadBytes, UTF_8);
             this.fullHttpResponse = fullHttpResponse;
         }
     }

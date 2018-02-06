@@ -21,7 +21,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.DecoderResult;
-import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
@@ -32,9 +31,11 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -97,6 +98,7 @@ public class RequestInfoSetterHandlerTest {
         doReturn(byteBufMock).when(msgMock).content();
         doReturn(false).when(byteBufMock).isReadable();
         doReturn(HttpVersion.HTTP_1_1).when(msgMock).getProtocolVersion();
+        doReturn(null).when(stateMock).getRequestInfo();
 
         // when
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, msgMock);
@@ -107,6 +109,25 @@ public class RequestInfoSetterHandlerTest {
         RequestInfo requestInfo = requestInfoArgumentCaptor.getValue();
         assertThat(requestInfo.getUri()).isEqualTo(uri);
         assertThat(requestInfo.isCompleteRequestWithAllChunks()).isTrue();
+        assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @Test
+    public void doChannelRead_uses_existing_RequestInfo_on_state_if_available_and_does_not_recreate_it() {
+        // given
+        HttpRequest msgMock = mock(HttpRequest.class);
+        String uri = "/some/url";
+        HttpHeaders headers = new DefaultHttpHeaders();
+        doReturn(uri).when(msgMock).getUri();
+        doReturn(headers).when(msgMock).headers();
+        doReturn(HttpVersion.HTTP_1_1).when(msgMock).getProtocolVersion();
+        doReturn(requestInfo).when(stateMock).getRequestInfo();
+
+        // when
+        PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, msgMock);
+
+        // then
+        verify(stateMock, never()).setRequestInfo(any(RequestInfo.class));
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 
@@ -276,6 +297,7 @@ public class RequestInfoSetterHandlerTest {
         DecoderResult decoderResult = mock(DecoderResult.class);
         doReturn(true).when(decoderResult).isFailure();
         doReturn(decoderResult).when(msgMock).getDecoderResult();
+        doReturn(null).when(stateMock).getRequestInfo();
 
         // when
         Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, msgMock));

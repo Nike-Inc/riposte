@@ -133,7 +133,7 @@ public class Server {
                 serverConfig.requestSecurityValidator(), serverConfig.workerChannelIdleTimeoutMillis(),
                 serverConfig.proxyRouterConnectTimeoutMillis(), serverConfig.incompleteHttpCallTimeoutMillis(),
                 serverConfig.maxOpenIncomingServerChannels(), serverConfig.isDebugChannelLifecycleLoggingEnabled(),
-                serverConfig.userIdHeaderKeys()
+                serverConfig.userIdHeaderKeys(), serverConfig.responseCompressionThresholdBytes()
             );
         }
 

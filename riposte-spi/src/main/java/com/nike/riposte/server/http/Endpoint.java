@@ -143,4 +143,16 @@ public interface Endpoint<I> {
         // Return null by default so that the app-wide max request size will be used unless you override this method.
         return null;
     }
+
+    /**
+     * @return true if this endpoint should automatically decompress gzip/deflate encoded payloads (when the
+     * Content-Encoding header is "gzip" or "deflate"), false if the endpoint should pass compressed payloads on to the
+     * endpoint unchanged (where you can access the raw bytes by calling {@link RequestInfo#getRawContentBytes()}).
+     * Note that this method is called before any of the payload has arrived, so {@link
+     * RequestInfo#isCompleteRequestWithAllChunks()} will return false for the given request and all of the
+     * get-content-related methods in the request will return null.
+     */
+    default boolean isDecompressRequestPayloadAllowed(@SuppressWarnings("unused") RequestInfo<?> request) {
+        return true;
+    }
 }
