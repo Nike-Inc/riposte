@@ -253,7 +253,13 @@ public class CodahaleMetricsListener implements MetricsListener {
                 }
             }
             else if (ServerMetricsEvent.RESPONSE_WRITE_FAILED.equals(event)) {
+                inflightRequests.dec();
+                processedRequests.inc();
                 responseWriteFailed.inc();
+
+                if (logger.isDebugEnabled()) {
+                    logger.debug("inflightRequests decremented after response write failure");
+                }
             }
             else if (ServerMetricsEvent.RESPONSE_SENT.equals(event)) {
                 HttpProcessingState httpState;

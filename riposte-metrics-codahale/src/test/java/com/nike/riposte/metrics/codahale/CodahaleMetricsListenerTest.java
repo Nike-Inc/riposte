@@ -470,6 +470,8 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(event, null);
 
         // then
+        verify(listener.inflightRequests).dec();
+        verify(listener.processedRequests).inc();
         verify(listener.responseWriteFailed).inc();
     }
 
@@ -784,6 +786,7 @@ public class CodahaleMetricsListenerTest {
         Whitebox.setInternalState(listener, "logger", loggerMock);
         listener.onEvent(ServerMetricsEvent.REQUEST_RECEIVED, null);
         listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, state);
+        listener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, state);
 
         // Exercise enums
         for (ServerStatisticsMetricNames enumValue : ServerStatisticsMetricNames.values()) {
