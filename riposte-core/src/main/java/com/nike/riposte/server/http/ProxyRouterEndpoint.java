@@ -185,6 +185,10 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * Set this to false if you do not want a SubSpan around your proxied downstream call
          */
         public boolean performSubSpanAroundDownstreamCall = true;
+        /**
+         * Set this to false if you do not want the standard tracing headers to be added to your downstream call
+         */
+        public boolean addTracingHeadersToDownstreamCall = true;
 
         /**
          * Creates a new instance with the given values, and defaults {@link #customCircuitBreaker} to {@link
@@ -248,6 +252,14 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          */
         public DownstreamRequestFirstChunkInfo withPerformSubSpanAroundDownstreamCall(boolean performSubSpanAroundDownstreamCall) {
             this.performSubSpanAroundDownstreamCall = performSubSpanAroundDownstreamCall;
+            return this;
+        }
+
+        /**
+         * Pass in false if you do not want the standard tracing headers added to your downstream call
+         */
+        public DownstreamRequestFirstChunkInfo withAddTracingHeadersToDownstreamCall(boolean addTracingHeadersToDownstreamCall) {
+            this.addTracingHeadersToDownstreamCall = addTracingHeadersToDownstreamCall;
             return this;
         }
     }

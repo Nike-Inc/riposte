@@ -12,48 +12,45 @@ import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientRequestBuilder;
 import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
-
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import java.io.IOException;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
-
+import com.nike.wingtips.Span;
+import com.nike.wingtips.Tracer;
+import com.nike.wingtips.lifecyclelistener.SpanLifecycleListener;
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.slf4j.MDC;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import static com.nike.riposte.server.testutils.ComponentTestUtils.extractBodyFromRawRequest;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.extractFullBodyFromChunks;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.extractHeaders;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
 import static io.netty.util.CharsetUtil.UTF_8;
-import static java.util.Arrays.stream;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.apache.commons.lang3.StringUtils.containsOnly;
-import static org.apache.commons.lang3.StringUtils.split;
-import static org.apache.commons.lang3.StringUtils.substringAfter;
-import static org.apache.commons.lang3.StringUtils.substringBefore;
-import static org.apache.commons.lang3.StringUtils.substringBetween;
-import static org.apache.commons.lang3.StringUtils.substringsBetween;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
+@RunWith(DataProviderRunner.class)
+public class VerifyProxyRouterTracingBehaviorComponentTest {
 
     private static Server proxyServer;
     private static ServerConfig proxyServerConfig;
@@ -61,7 +58,7 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
     private static ServerConfig downstreamServerConfig;
     private static StringBuilder downstreamServerRequest;
     private static StringBuilder proxyServerRequest;
-    private static final int incompleteCallTimeoutMillis = 5000;
+    private SpanRecorder spanRecorder;
 
     @BeforeClass
     public static void setUpClass() throws Exception {
@@ -83,80 +80,45 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
     }
 
     @Before
-    public void setup() {
+    public void beforeMethod() {
         downstreamServerRequest = new StringBuilder();
         proxyServerRequest = new StringBuilder();
+
+        resetTracing();
+        spanRecorder = new SpanRecorder();
+        Tracer.getInstance().addSpanLifecycleListener(spanRecorder);
     }
 
     @After
-    public void cleanup() {
-        downstreamServerRequest = null;
-        proxyServerRequest = null;
+    public void afterMethod() {
+        resetTracing();
     }
 
     @Test
-    public void proxy_endpoints_should_honor_chunked_transfer_encoding() throws Exception {
+    @DataProvider(value = {
+            "false",
+            "true"
+    }, splitBy = "\\|")
+    public void proxy_endpoints_should_setsTracingHeadersBasedOnFlag(boolean sendTraceHeaders) throws Exception {
         // given
         int payloadSize = 10000;
         String payload = generatePayload(payloadSize);
 
         NettyHttpClientRequestBuilder request = request()
-            .withMethod(HttpMethod.POST)
-            .withUri(RouterEndpoint.MATCHING_PATH)
-            .withPaylod(payload)
-            .withHeader(HttpHeaders.Names.TRANSFER_ENCODING, HttpHeaders.Values.CHUNKED)
-            .withHeader(HttpHeaders.Names.HOST, "localhost");
+                .withMethod(HttpMethod.POST)
+                .withUri(RouterEndpoint.MATCHING_PATH)
+                .withPaylod(payload)
+                .withHeader("X-Test-SendTraceHeaders", sendTraceHeaders)
+                .withHeader(HttpHeaders.Names.CONTENT_LENGTH, payloadSize)
+                .withHeader(HttpHeaders.Names.HOST, "localhost");
 
         // when
-        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(),
-                                                                incompleteCallTimeoutMillis);
+        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(), 400);
 
         // then
         assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
         assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
-        assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded();
-
-        String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
-        String downstreamBody = extractBodyFromRawRequest(downstreamServerRequest.toString());
-
-        //assert request was sent in chunks
-        //https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
-        assertThat(downstreamBody).contains("\r\n");
-        assertThat(proxyBody).contains("\r\n");
-
-        //assert bodies are equal
-        String proxyBodyMinusChunkInfo = extractFullBodyFromChunks(proxyBody);
-        String downstreamBodyMinusChunkInfo = extractFullBodyFromChunks(downstreamBody);
-
-        //assert proxy and downstream have same bodies
-        assertThat(proxyBodyMinusChunkInfo).isEqualTo(downstreamBodyMinusChunkInfo);
-
-        //assert input payload matches proxy and downstream payloads
-        assertThat(proxyBodyMinusChunkInfo).isEqualTo(payload);
-        assertThat(downstreamBodyMinusChunkInfo).isEqualTo(payload);
-    }
-
-    @Test
-    public void proxy_endpoints_should_honor_non_chunked_transfer_encoding() throws Exception {
-        // given
-        int payloadSize = 10000;
-        String payload = generatePayload(payloadSize);
-
-        NettyHttpClientRequestBuilder request = request()
-            .withMethod(HttpMethod.POST)
-            .withUri(RouterEndpoint.MATCHING_PATH)
-            .withPaylod(payload)
-            .withHeader(HttpHeaders.Names.CONTENT_LENGTH, payloadSize)
-            .withHeader(HttpHeaders.Names.HOST, "localhost");
-
-        // when
-        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(),
-                                                                incompleteCallTimeoutMillis);
-
-        // then
-        assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
-        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
-        assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded();
+        assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded(sendTraceHeaders);
 
         String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
         String downstreamBody = extractBodyFromRawRequest(downstreamServerRequest.toString());
@@ -174,7 +136,64 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(downstreamBody).isEqualTo(payload);
     }
 
-    private void assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded() {
+    @Test
+    @DataProvider(value = {
+            "true | true",
+            "true | false",
+            "false | false",
+            "false | true"
+    }, splitBy = "\\|")
+    public void proxy_endpoints_should_performSubSpanAroundCallsBasedOnFlag(boolean performSubSpanAroundCall, boolean sendTraceHeadersToDownstream) throws Exception {
+        // given
+        int payloadSize = 10000;
+        String payload = generatePayload(payloadSize);
+
+        NettyHttpClientRequestBuilder request = request()
+                .withMethod(HttpMethod.POST)
+                .withUri(RouterEndpoint.MATCHING_PATH)
+                .withPaylod(payload)
+                .withHeader("X-Test-PerformSubSpanAroundCall", performSubSpanAroundCall)
+                .withHeader("X-Test-SendTraceHeaders", sendTraceHeadersToDownstream)
+                .withHeader(HttpHeaders.Names.CONTENT_LENGTH, payloadSize)
+                .withHeader(HttpHeaders.Names.HOST, "localhost");
+
+        // when
+        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(), 400);
+
+        // then
+        assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
+
+        // verify SubSpan size and creation
+        if (performSubSpanAroundCall) {
+            assertThat(spanRecorder.completedSpans.size()).isEqualTo(3);
+            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("async_downstream_call-POST_127.0.0.1:" + downstreamServerConfig.endpointsPort() + "/downstreamEndpoint");
+        } else {
+            assertThat(spanRecorder.completedSpans.size()).isEqualTo(2);
+            for (Span completedSpan : spanRecorder.completedSpans) {
+                assertThat(completedSpan.getSpanName()).doesNotStartWith("async_downstream_call");
+            }
+        }
+
+        assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded(sendTraceHeadersToDownstream);
+
+        String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
+        String downstreamBody = extractBodyFromRawRequest(downstreamServerRequest.toString());
+
+        //assert request was NOT sent in chunks
+        //https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
+        assertThat(proxyBody).doesNotContain("\r\n");
+        assertThat(downstreamBody).doesNotContain("\r\n");
+
+        //assert bodies are equal
+        assertThat(proxyBody).isEqualTo(downstreamBody);
+
+        //assert input payload matches proxy and downstream payloads
+        assertThat(proxyBody).isEqualTo(payload);
+        assertThat(downstreamBody).isEqualTo(payload);
+    }
+
+    private void assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded(boolean traceHeadersExpected) {
         Map<String, Object> proxyHeaders = extractHeaders(proxyServerRequest.toString());
         Map<String, Object> downstreamHeaders = extractHeaders(downstreamServerRequest.toString());
 
@@ -185,10 +204,10 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(downstreamHeaders.get(HttpHeaders.Names.HOST)).isEqualTo("127.0.0.1:" + downstreamServerConfig.endpointsPort());
 
         //assert trace info added to downstream call
-        assertThat(downstreamHeaders.get("X-B3-Sampled")).isNotNull();
-        assertThat(downstreamHeaders.get("X-B3-TraceId")).isNotNull();
-        assertThat(downstreamHeaders.get("X-B3-SpanId")).isNotNull();
-        assertThat(downstreamHeaders.get("X-B3-SpanName")).isNotNull();
+        assertThat(downstreamHeaders.containsKey("X-B3-Sampled")).isEqualTo(traceHeadersExpected);
+        assertThat(downstreamHeaders.containsKey("X-B3-TraceId")).isEqualTo(traceHeadersExpected);
+        assertThat(downstreamHeaders.containsKey("X-B3-SpanId")).isEqualTo(traceHeadersExpected);
+        assertThat(downstreamHeaders.containsKey("X-B3-SpanName")).isEqualTo(traceHeadersExpected);
     }
 
     private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
@@ -225,6 +244,8 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
                             "127.0.0.1", downstreamPort, false,
                             generateSimplePassthroughRequest(request, DownstreamEndpoint.MATCHING_PATH, request.getMethod(), ctx)
                     )
+                            .withAddTracingHeadersToDownstreamCall(Boolean.parseBoolean(request.getHeaders().get("X-Test-SendTraceHeaders")))
+                            .withPerformSubSpanAroundDownstreamCall(Boolean.parseBoolean(request.getHeaders().get("X-Test-PerformSubSpanAroundCall")))
             );
         }
 
@@ -262,6 +283,7 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         public List<PipelineCreateHook> pipelineCreateHooks() {
             return singletonList(pipeline -> pipeline.addFirst("recordDownstreamInboundRequest", new RecordDownstreamServerInboundRequest()));
         }
+
     }
 
     public static class ProxyTestingTestConfig implements ServerConfig {
@@ -291,6 +313,39 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         @Override
         public List<PipelineCreateHook> pipelineCreateHooks() {
             return singletonList(pipeline -> pipeline.addFirst("recordProxyInboundRequest", new RecordProxyServerInboundRequest()));
+        }
+    }
+
+    private void resetTracing() {
+        MDC.clear();
+        Tracer.getInstance().unregisterFromThread();
+        removeSpanRecorderLifecycleListener();
+    }
+
+    private void removeSpanRecorderLifecycleListener() {
+        List<SpanLifecycleListener> listeners = new ArrayList<>(Tracer.getInstance().getSpanLifecycleListeners());
+        for (SpanLifecycleListener listener : listeners) {
+            if (listener instanceof SpanRecorder) {
+                Tracer.getInstance().removeSpanLifecycleListener(listener);
+            }
+        }
+    }
+
+    private static class SpanRecorder implements SpanLifecycleListener {
+
+        public final List<Span> completedSpans = new ArrayList<>();
+
+        @Override
+        public void spanStarted(Span span) {
+        }
+
+        @Override
+        public void spanSampled(Span span) {
+        }
+
+        @Override
+        public void spanCompleted(Span span) {
+            completedSpans.add(span);
         }
     }
 
