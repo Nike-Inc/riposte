@@ -289,7 +289,7 @@ public class ChannelPipelineFinalizerHandlerTest {
 
         // then
         verify(responseSenderMock).sendErrorResponse(ctxMock, requestInfoMock, errorResponseMock);
-        verify(metricsListenerMock).onEvent(ServerMetricsEvent.RESPONSE_SENT, stateSpy);
+        verify(metricsListenerMock).onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, stateSpy);
         verify(ctxMock).flush();
     }
 
@@ -390,6 +390,32 @@ public class ChannelPipelineFinalizerHandlerTest {
         verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
         verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
+    @Test
+    public void doChannelInactive_completes_metrics_if_necessary_and_HttpProcessingState_is_not_null(
+        boolean stateIsNull
+    ) throws Exception {
+        // given
+        ChannelPipelineFinalizerHandler handlerSpy = spy(handler);
+        if (stateIsNull) {
+            doReturn(null).when(stateAttributeMock).get();
+        }
+
+        // when
+        PipelineContinuationBehavior result = handlerSpy.doChannelInactive(ctxMock);
+
+        // then
+        if (stateIsNull) {
+            verify(handlerSpy, never()).handleMetricsForCompletedRequestIfNotAlreadyDone(any(HttpProcessingState.class));
+        }
+        else {
+            verify(handlerSpy).handleMetricsForCompletedRequestIfNotAlreadyDone(state);
+        }
     }
 
     private Span setupTracingForChannelInactive(boolean traceCompletedOrScheduled) {

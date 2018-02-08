@@ -158,32 +158,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
 
         ctx.flush();
 
-        // Send response sent event for metrics purposes now that we handled all possible cases.
-        //      Due to multiple messages and exception possibilities/interactions it's possible we've already dealt with
-        //      the metrics for this request, so make sure we only do it if appropriate.
-        if (metricsListener != null && !state.isRequestMetricsRecordedOrScheduled()) {
-            // If there was no response sent then do the metrics event now (should only happen under rare error
-            //      conditions), otherwise do it when the response finishes.
-            if (!state.isResponseSendingLastChunkSent()) {
-                // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
-                metricsListener.onEvent(ServerMetricsEvent.RESPONSE_SENT, state);
-            }
-            else {
-                // We need to use a copy of the state in case the original state gets cleaned.
-                HttpProcessingState stateCopy = new HttpProcessingState(state);
-                stateCopy.getResponseWriterFinalChunkChannelFuture()
-                         .addListener((ChannelFutureListener) channelFuture -> {
-                             if (channelFuture.isSuccess())
-                                 metricsListener.onEvent(ServerMetricsEvent.RESPONSE_SENT, stateCopy);
-                             else {
-                                 // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
-                                 metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, null);
-                             }
-                         });
-            }
-
-            state.setRequestMetricsRecordedOrScheduled(true);
-        }
+        handleMetricsForCompletedRequestIfNotAlreadyDone(state);
 
         // Make sure to clear out request info chunks, multipart data, and any other resources to prevent reference
         //      counting memory leaks (or any other kind of memory leaks).
@@ -208,6 +183,35 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                 ctx
             ).run();
             ctx.channel().close();
+        }
+    }
+
+    protected void handleMetricsForCompletedRequestIfNotAlreadyDone(HttpProcessingState state) {
+        // Send response-sent event for metrics purposes now that we handled all possible cases.
+        //      Due to multiple messages and exception possibilities/interactions it's possible we've already dealt with
+        //      the metrics for this request, so make sure we only do it if appropriate.
+        if (metricsListener != null && !state.isRequestMetricsRecordedOrScheduled()) {
+            state.setRequestMetricsRecordedOrScheduled(true);
+
+            // If there was no response sent then do the metrics event now (should only happen under rare error
+            //      conditions), otherwise do it when the response finishes.
+            if (!state.isResponseSendingLastChunkSent()) {
+                // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
+                metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, state);
+            }
+            else {
+                // We need to use a copy of the state in case the original state gets cleaned.
+                HttpProcessingState stateCopy = new HttpProcessingState(state);
+                stateCopy.getResponseWriterFinalChunkChannelFuture()
+                         .addListener((ChannelFutureListener) channelFuture -> {
+                             if (channelFuture.isSuccess())
+                                 metricsListener.onEvent(ServerMetricsEvent.RESPONSE_SENT, stateCopy);
+                             else {
+                                 // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
+                                 metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, null);
+                             }
+                         });
+            }
         }
     }
 
@@ -262,7 +266,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             //      We want to finish the distributed tracing span for this request since there's no other place it
             //      might be done, and if the request wasn't fully sent then we should spit out a log message so
             //      debug investigations can find out what happened.
-            // TODO: Is there a way we can handle access logging and/or metrics here, but only if it wasn't done elsewhere?
+            // TODO: Is there a way we can handle access logging here, but only if it wasn't done elsewhere? Maybe similar to what we're doing with metrics?
             @SuppressWarnings("SimplifiableConditionalExpression")
             boolean tracingAlreadyCompleted = httpState.isTraceCompletedOrScheduled();
             boolean responseNotFullySent = responseInfo == null || !responseInfo.isResponseSendingLastChunkSent();
@@ -290,6 +294,9 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                     ctx
                 ).run();
             }
+
+            // Make sure metrics is handled
+            handleMetricsForCompletedRequestIfNotAlreadyDone(httpState);
 
             // Tell the RequestInfo it can release all its resources.
             if (requestInfo != null)
