@@ -8,10 +8,119 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.12.x` Releases - [0.12.0](#0120) 
 - `0.11.x` Releases - [0.11.2](#0112), [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.12.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.12.0)
+
+Released on 2018-02-14.
+
+### Potentially breaking changes
+
+- `StandardEndpoint<InputType, OutputType>`s have been adjusted to throw a "missing expected content" HTTP status code 
+400 error when the caller does not send a payload and `InputType` is anything other than `Void`. Previously the endpoint 
+would be executed and you'd have to check `RequestInfo.getContent()` manually to see if the caller had sent a payload
+and throw an error yourself to indicate a missing required payload. This change could result in endpoints throwing 400s 
+to callers when they previously did not. Please double-check your `StandardEndpoint`s - if they have a non-`Void` input 
+type but you want payloads to be optional then you can override the new `isRequireRequestContent()` endpoint method to 
+return `false` to keep the previous behavior of the endpoint allowing missing payloads for non-`Void` input types. More 
+details about this change can be found below.
+
+### Added
+
+- Added `EurekaVipAddressRoundRobinWithAzAffinityService` to the `riposte-service-registration-eureka` module. This 
+service will round-robin requests to instances in the same availability zone as the current server. If there are no 
+instances in the current availability zone, it will round-robin instances in all availability zones. Routing requests 
+this way has the advantage of lower response times and lower data transfer costs.
+    - Added by [cjha][contrib_cjha] in pull request [#77](https://github.com/Nike-Inc/riposte/pull/77).
+- `StandardEndpoint<InputType, OutputType>`s will now throw a "missing expected content" HTTP status code 400 error if 
+the `InputType` is not `Void` (or more specifically, if the `requestContentType()` method returns something besides 
+`null` or `Void`). This means you no longer have to check if `RequestInfo.getContent()` is `null` for endpoints that 
+specify an input type. i.e. after this feature addition if a caller does not send a payload to a 
+`StandardEndpoint<SomeObject, _>` endpoint then they would receive a "missing expected content" 400 error, but if
+the endpoint was defined `StandardEndpoint<Void, _>` then the endpoint would be executed normally. If you need to 
+change this behavior for endpoints where the payload is truly optional you can override the endpoint's 
+`isRequireRequestContent()` method to return `false`. 
+    - Added by [Robert Abeyta][contrib_rabeyta] in pull request [#83](https://github.com/Nike-Inc/riposte/pull/83).   
+- Added ability to use `byte[]` as an input type for `StandardEndpoint`, e.g. `StandardEndpoint<byte[], OutputType>`.
+This allows you to specify that you require a payload (see previous change) but that you don't want any deserialization 
+done, i.e. you want to handle the raw payload bytes in the endpoint yourself rather than have Riposte try to interpret 
+it. Previously specifying `byte[]` as an input type would result in a deserialization error.
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#86](https://github.com/Nike-Inc/riposte/pull/86).
+- Added support for automatic gzip/deflate decompression on incoming requests. This defaults to off for
+`ProxyRouterEndpoint` so that proxies don't modify payloads as they pass through, but defaults to on for all other 
+endpoint types so that payloads are decompressed before `StandardEndpoint`s execute and payloads deserialized into
+whatever input type is needed for the endpoint. If you want to change the default decompression behavior for a given
+endpoint you can override `Endpoint.isDecompressRequestPayloadAllowed()` to return whatever you need.  
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#84](https://github.com/Nike-Inc/riposte/pull/84).
+- Added `ServerConfig.responseCompressionThresholdBytes()` to allow you to specify the payload size threshold after 
+which response payloads will be automatically gzip/deflate compressed (assuming the caller supports compressed 
+responses). This feature already existed but was previously hardcoded to 500 bytes.
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#84](https://github.com/Nike-Inc/riposte/pull/84).
+- `ProxyRouterEndpoint`s now have the ability to turn off the automatic subspan around the downstream call (using 
+the new `DownstreamRequestFirstChunkInfo.withPerformSubSpanAroundDownstreamCall(boolean)` method), and you can now 
+indicate that you do *not* want tracing headers set on the downstream call (using the new 
+`DownstreamRequestFirstChunkInfo.withAddTracingHeadersToDownstreamCall(boolean)` method). Previously Riposte would
+always surround the downstream call with a subspan, and would always set tracing headers. These new options default
+to the previous behavior, but you can override them with the new behavior methods.
+    - Added by [Robert Abeyta][contrib_rabeyta] in pull request [#88](https://github.com/Nike-Inc/riposte/pull/88). 
+- Added options to `ServerConfig` for specifying the max initial line length, max combined header line length, and max 
+chunk size values used when decoding incoming HTTP requests. See `ServerConfig.httpRequestDecoderConfig()` for details.
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#91](https://github.com/Nike-Inc/riposte/pull/91).
+- Added a `RequestInfo.addRequestAttribute(...)` that exposes how much time was spent waiting for the request payload
+to arrive (time from first chunk to last chunk), and another for how much time was spent waiting for a connection to
+be established to the downstream system for a `ProxyRouterEndpoint` request. Refer to 
+`AccessLogStartHandler.REQUEST_PAYLOAD_TRANSFER_TIME_NANOS_REQUEST_ATTR_KEY` and 
+`ProxyRouterEndpointExecutionHandler.DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY` in your code for the
+request attribute keys. You may want to consider adding these to your access logs to help diagnose intermittent slow
+requests.
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#94](https://github.com/Nike-Inc/riposte/pull/94).    
+    
+### Fixed
+
+- Fixed `ResponseInfo.withCookies(...)` handling when sending responses to serialize the entire Netty `Cookie` object 
+rather than just name and value. This means the other cookie parameters/properties are now honored and sent as 
+expected, e.g. `Max-Age` and `HTTPOnly`. Previously any extra properties beyond cookie name and value were not being
+sent.
+    - Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#82](https://github.com/Nike-Inc/riposte/pull/82).
+- Fixed Riposte interaction with Netty `ByteBuf` when reading incoming request content to use the 
+`ByteBuf.readerIndex()` rather than assuming index 0. This should have no effect currently but is the correct way to
+read content from `ByteBuf` (future-proofing).
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#85](https://github.com/Nike-Inc/riposte/pull/85).
+- Fixed some corner cases where server request/response metrics were not being updated (e.g. caller dropping their
+connection in the middle of the request). In particular this was causing the `inflight_requests` metric to grow over
+time if these corner case calls were occurring.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#89](https://github.com/Nike-Inc/riposte/pull/89).
+- Fixed some corner cases where access logs were not being output (e.g. caller dropping their connection in the middle 
+of the request). 
+    - Also removed span name from access logger output defaults - callers shouldn't be sending this and it's a waste of 
+    characters in the log message.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#93](https://github.com/Nike-Inc/riposte/pull/93).
+- Fixed `ProxyRouterEndpoint` to no longer send a `X-B3-SpanName` on downstream calls. Sending that header is not
+best practice.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#90](https://github.com/Nike-Inc/riposte/pull/90).
+- Fixed the Backstopper Riposte framework listener to detect exceptions for requests that have too-long headers and
+map them to a [431 HTTP status code](https://tools.ietf.org/html/rfc6585#page-4) rather than a 400. Also adjusted the
+error messages and metadata sent to the user in the response when HTTP decoding issues like too-long headers are 
+encountered to be more informative.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#92](https://github.com/Nike-Inc/riposte/pull/92).
+
+### Updated
+
+- Updated Wingtips to version `0.14.1` from `0.11.2`. 
+[Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/master/CHANGELOG.md)
+    - Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#90](https://github.com/Nike-Inc/riposte/pull/90).
+- Updated Backstopper to version `0.11.4` from `0.11.1`.
+[Backstopper changelog](https://github.com/Nike-Inc/backstopper/blob/master/CHANGELOG.md)
+    - Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#92](https://github.com/Nike-Inc/riposte/pull/92).
+
+### Project Build
+
+- Updated to Kotlin 1.2.21. Doesn't affect anything except the Kotlin sample.
+    - Done by [Nic Munroe][contrib_nicmunroe] in pull request [#87](https://github.com/Nike-Inc/riposte/pull/87).
 
 ## [0.11.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.11.2)
 
@@ -221,3 +330,4 @@ Released on 2016-11-03.
 [contrib_ferhatsb]: https://github.com/ferhatsb
 [contrib_amitsk]: https://github.com/amitsk
 [contrib_tlisonbee]: https://github.com/tlisonbee
+[contrib_cjha]: https://github.com/cjha
