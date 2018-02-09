@@ -3,6 +3,7 @@ package com.nike.riposte.server.channelpipeline;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.metrics.MetricsListener;
+import com.nike.riposte.server.config.ServerConfig.HttpRequestDecoderConfig;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
 import com.nike.riposte.server.error.validation.RequestSecurityValidator;
@@ -64,7 +65,6 @@ import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
@@ -155,6 +155,7 @@ public class HttpChannelInitializerTest {
         boolean debugChannelLifecycleLoggingEnabled = true;
         List<String> userIdHeaderKeys = mock(List.class);
         int responseCompressionThresholdBytes = 5678;
+        HttpRequestDecoderConfig httpRequestDecoderConfig = new HttpRequestDecoderConfig() {};
 
         // when
         HttpChannelInitializer hci = new HttpChannelInitializer(
@@ -162,7 +163,7 @@ public class HttpChannelInitializerTest {
             validationService, requestContentDeserializer, responseSender, metricsListener, defaultCompletableFutureTimeoutMillis, accessLogger,
             pipelineCreateHooks, requestSecurityValidator, workerChannelIdleTimeoutMillis, proxyRouterConnectTimeoutMillis,
             incompleteHttpCallTimeoutMillis, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled, userIdHeaderKeys,
-            responseCompressionThresholdBytes);
+            responseCompressionThresholdBytes, httpRequestDecoderConfig);
 
         // then
         assertThat(extractField(hci, "sslCtx"), is(sslCtx));
@@ -185,6 +186,7 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(hci, "debugChannelLifecycleLoggingEnabled"), is(debugChannelLifecycleLoggingEnabled));
         assertThat(extractField(hci, "userIdHeaderKeys"), is(userIdHeaderKeys));
         assertThat(extractField(hci, "responseCompressionThresholdBytes"), is(responseCompressionThresholdBytes));
+        assertThat(extractField(hci, "httpRequestDecoderConfig"), is(httpRequestDecoderConfig));
 
         StreamingAsyncHttpClient sahc = extractField(hci, "streamingAsyncHttpClientForProxyRouterEndpoints");
         assertThat(extractField(sahc, "idleChannelTimeoutMillis"), is(workerChannelIdleTimeoutMillis));
@@ -210,7 +212,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123);
+            123, null);
 
         // then
         assertThat(extractField(hci, "sslCtx"), nullValue());
@@ -227,6 +229,7 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(hci, "afterSecurityRequestFilterHandler"), nullValue());
         assertThat(extractField(hci, "cachedResponseFilterHandler"), nullValue());
         assertThat(extractField(hci, "userIdHeaderKeys"), nullValue());
+        assertThat(extractField(hci, "httpRequestDecoderConfig"), is(HttpRequestDecoderConfig.DEFAULT_IMPL));
     }
 
     @Test
@@ -241,7 +244,7 @@ public class HttpChannelInitializerTest {
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
                 null, null, 121, 42, 321, 100, false, null,
-                123);
+                123, null);
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
@@ -265,7 +268,7 @@ public class HttpChannelInitializerTest {
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
                 null, null, 121, 42, 321, 100, false, null,
-                123);
+                123, null);
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
@@ -284,7 +287,7 @@ public class HttpChannelInitializerTest {
             null, 42, null, null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123);
+            123, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -294,7 +297,7 @@ public class HttpChannelInitializerTest {
             null, 42, Collections.emptyList(), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123);
+            123, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -304,7 +307,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, null, mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123);
+            123, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -314,7 +317,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), null,
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123);
+            123, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -324,7 +327,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, null, null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123);
+            123, null);
     }
 
     private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind, boolean findLast) {
@@ -358,7 +361,7 @@ public class HttpChannelInitializerTest {
             sslCtx, 42, Arrays.asList(getMockEndpoint("/some/path")), requestAndResponseFilters, null, mock(RiposteErrorHandler.class),
             mock(RiposteUnhandledErrorHandler.class), validationService, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, workerChannelIdleTimeoutMillis, 4200, 1234, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled,
-            null, 123);
+            null, 123, null);
     }
 
     @Test
@@ -522,6 +525,49 @@ public class HttpChannelInitializerTest {
         // No SSL Context was passed, so HttpRequestDecoder should be the first inbound handler.
         assertThat(foundHandler.getLeft(), is(firstInboundHandler.getLeft()));
         assertThat(foundHandler.getRight(), is(firstInboundHandler.getRight()));
+    }
+
+    @Test
+    public void initChannel_adds_HttpRequestDecoder_with_config_values_coming_from_httpRequestDecoderConfig() {
+        // given
+        HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
+        HttpRequestDecoderConfig configWithCustomValues = new HttpRequestDecoderConfig() {
+            @Override
+            public int maxInitialLineLength() {
+                return 123;
+            }
+
+            @Override
+            public int maxHeaderSize() {
+                return 456;
+            }
+
+            @Override
+            public int maxChunkSize() {
+                return 789;
+            }
+        };
+        Whitebox.setInternalState(hci, "httpRequestDecoderConfig", configWithCustomValues);
+
+        // when
+        hci.initChannel(socketChannelMock);
+
+        // then
+        ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
+        verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
+        List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
+        Pair<Integer, HttpRequestDecoder> requestDecoderHandlerPair = findChannelHandler(handlers, HttpRequestDecoder.class);
+
+        Assertions.assertThat(requestDecoderHandlerPair).isNotNull();
+
+        HttpRequestDecoder decoderHandler = requestDecoderHandlerPair.getValue();
+        int actualMaxInitialLineLength = extractField(extractField(decoderHandler, "lineParser"), "maxLength");
+        int actualMaxHeaderSize = extractField(extractField(decoderHandler, "headerParser"), "maxLength");
+        int actualMaxChunkSize = extractField(decoderHandler, "maxChunkSize");
+
+        Assertions.assertThat(actualMaxInitialLineLength).isEqualTo(configWithCustomValues.maxInitialLineLength());
+        Assertions.assertThat(actualMaxHeaderSize).isEqualTo(configWithCustomValues.maxHeaderSize());
+        Assertions.assertThat(actualMaxChunkSize).isEqualTo(configWithCustomValues.maxChunkSize());
     }
 
     @Test

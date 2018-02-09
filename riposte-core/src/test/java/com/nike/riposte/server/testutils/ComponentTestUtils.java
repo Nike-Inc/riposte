@@ -6,7 +6,6 @@ import com.nike.internal.util.Pair;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang3.RandomUtils;
 
 import java.io.BufferedReader;
@@ -15,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,14 +24,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.Inflater;
-import java.util.stream.Collectors;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -81,11 +82,15 @@ public class ComponentTestUtils {
     }
 
     public static String generatePayload(int payloadSize) {
+        return generatePayload(payloadSize, payloadDictionary);
+    }
+
+    public static String generatePayload(int payloadSize, String dictionary) {
         StringBuilder payload = new StringBuilder();
 
         for(int i = 0; i < payloadSize; i++) {
-            int randomInt = RandomUtils.nextInt(0, payloadDictionary.length() - 1);
-            payload.append(payloadDictionary.charAt(randomInt));
+            int randomInt = RandomUtils.nextInt(0, dictionary.length() - 1);
+            payload.append(dictionary.charAt(randomInt));
         }
 
         return payload.toString();
@@ -369,9 +374,9 @@ public class ComponentTestUtils {
             return this;
         }
 
-        public NettyHttpClientRequestBuilder withHeaders(Pair<String, Object>... headers) {
-            withHeaders(headers);
-            return this;
+        @SafeVarargs
+        public final NettyHttpClientRequestBuilder withHeaders(Pair<String, Object>... headers) {
+            return withHeaders(Arrays.asList(headers));
         }
 
         public NettyHttpClientRequestBuilder withPipelineAdjuster(Consumer<ChannelPipeline> pipelineAdjuster) {

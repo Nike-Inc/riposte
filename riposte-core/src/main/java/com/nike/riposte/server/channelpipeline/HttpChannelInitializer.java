@@ -4,6 +4,7 @@ import com.nike.internal.util.StringUtils;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.ServerConfig.HttpRequestDecoderConfig;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
@@ -235,6 +236,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final ChannelGroup openChannelsGroup;
     private final boolean debugChannelLifecycleLoggingEnabled;
     private final int responseCompressionThresholdBytes;
+    private final HttpRequestDecoderConfig httpRequestDecoderConfig;
 
     private final StreamingAsyncHttpClient streamingAsyncHttpClientForProxyRouterEndpoints;
 
@@ -340,7 +342,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
                                   int maxOpenChannelsThreshold,
                                   boolean debugChannelLifecycleLoggingEnabled,
                                   List<String> userIdHeaderKeys,
-                                  int responseCompressionThresholdBytes) {
+                                  int responseCompressionThresholdBytes,
+                                  HttpRequestDecoderConfig httpRequestDecoderConfig) {
         if (endpoints == null || endpoints.isEmpty())
             throw new IllegalArgumentException("endpoints cannot be empty");
 
@@ -355,6 +358,10 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         if (responseSender == null)
             throw new IllegalArgumentException("responseSender cannot be null");
+
+        if (httpRequestDecoderConfig == null) {
+            httpRequestDecoderConfig = HttpRequestDecoderConfig.DEFAULT_IMPL;
+        }
 
         this.sslCtx = sslCtx;
         this.maxRequestSizeInBytes = maxRequestSizeInBytes;
@@ -421,6 +428,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         cachedResponseFilterHandler = (hasReqResFilters) ? new ResponseFilterHandler(requestAndResponseFilters) : null;
         this.userIdHeaderKeys = userIdHeaderKeys;
         this.responseCompressionThresholdBytes = responseCompressionThresholdBytes;
+        this.httpRequestDecoderConfig = httpRequestDecoderConfig;
     }
 
     @Override
@@ -452,7 +460,13 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         // INBOUND - Add HttpRequestDecoder so that incoming messages are translated into the appropriate HttpMessage
         //           objects.
-        p.addLast(HTTP_REQUEST_DECODER_HANDLER_NAME, new HttpRequestDecoder());
+        p.addLast(HTTP_REQUEST_DECODER_HANDLER_NAME,
+                  new HttpRequestDecoder(
+                      httpRequestDecoderConfig.maxInitialLineLength(),
+                      httpRequestDecoderConfig.maxHeaderSize(),
+                      httpRequestDecoderConfig.maxChunkSize()
+                  )
+        );
         // INBOUND - Now that the message is translated into HttpMessages we can add RequestStateCleanerHandler to
         //           setup/clean state for the rest of the pipeline.
         p.addLast(REQUEST_STATE_CLEANER_HANDLER_NAME, new RequestStateCleanerHandler(metricsListener,

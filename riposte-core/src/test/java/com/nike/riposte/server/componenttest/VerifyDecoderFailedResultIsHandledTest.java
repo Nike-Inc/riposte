@@ -5,6 +5,7 @@ import com.nike.backstopper.apierror.ApiErrorWithMetadata;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.ServerConfig.HttpRequestDecoderConfig;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.ProxyRouterEndpoint;
 import com.nike.riposte.server.http.RequestInfo;
@@ -15,9 +16,13 @@ import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientReque
 import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
 
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -35,17 +40,29 @@ import static com.nike.riposte.server.testutils.ComponentTestUtils.verifyErrorRe
 import static com.nike.riposte.util.AsyncNettyHelper.supplierWithTracingAndMdc;
 import static java.lang.Thread.sleep;
 import static java.util.Collections.singleton;
+import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Component test that verifies {@link ServerConfig#httpRequestDecoderConfig()} values are honored and that the
+ * resulting decoder failure results are converted into the expected HTTP error responses.
+ */
+@RunWith(DataProviderRunner.class)
 public class VerifyDecoderFailedResultIsHandledTest {
 
     private static Server proxyServer;
     private static ServerConfig proxyServerConfig;
     private static Server downstreamServer;
     private static ServerConfig downstreamServerConfig;
+    private static Server basicServer;
+    private static ServerConfig basicServerConfig;
     private static final int incompleteCallTimeoutMillis = 5000;
 
     @BeforeClass
     public static void setUpClass() throws Exception {
+        basicServerConfig = new BasicServerTestConfig();
+        basicServer = new Server(basicServerConfig);
+        basicServer.startup();
+
         downstreamServerConfig = new DownstreamServerTestConfig();
         downstreamServer = new Server(downstreamServerConfig);
         downstreamServer.startup();
@@ -59,49 +76,183 @@ public class VerifyDecoderFailedResultIsHandledTest {
     public static void tearDown() throws Exception {
         proxyServer.shutdown();
         downstreamServer.shutdown();
+        basicServer.shutdown();
     }
 
+    private enum EndpointTypeScenario {
+        STANDARD_ENDPOINT(basicServerConfig.endpointsPort(),
+                          BasicEndpoint.MATCHING_PATH_BASE,
+                          BasicEndpoint.RESPONSE_PAYLOAD),
+        PROXY_ENDPOINT(proxyServerConfig.endpointsPort(),
+                       RouterEndpoint.MATCHING_PATH_BASE,
+                       DownstreamEndpoint.RESPONSE_PAYLOAD);
+
+        public final int serverPort;
+        public final String matchingPathBase;
+        public final String successfulResponsePayload;
+
+        EndpointTypeScenario(int serverPort, String matchingPathBase, String successfulResponsePayload) {
+            this.serverPort = serverPort;
+            this.matchingPathBase = matchingPathBase;
+            this.successfulResponsePayload = successfulResponsePayload;
+        }
+    }
+
+    @DataProvider(value = {
+        "STANDARD_ENDPOINT",
+        "PROXY_ENDPOINT"
+    })
     @Test
-    public void proxy_endpoints_should_handle_decode_exception() throws Exception {
+    public void endpoints_should_be_reachable_with_barely_valid_initial_line_length_values(
+        EndpointTypeScenario scenario
+    ) throws Exception {
         // given
-        int payloadSize = 10000;
+        String barelyAcceptableUri = generateUriForInitialLineLength(
+            HttpMethod.GET, scenario.matchingPathBase, CUSTOM_REQUEST_DECODER_CONFIG.maxInitialLineLength()
+        );
+        Pair<String, Object> barelyAcceptableHeader =
+            generateHeaderForHeaderLineLength(CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize());
+
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.GET)
+            .withUri(barelyAcceptableUri)
+            .withHeaders(barelyAcceptableHeader);
+
+        // when
+        NettyHttpClientResponse serverResponse = request.execute(scenario.serverPort,
+                                                                 incompleteCallTimeoutMillis);
+
+        // then
+        assertThat(serverResponse.statusCode).isEqualTo(200);
+        assertThat(serverResponse.payload).isEqualTo(scenario.successfulResponsePayload);
+    }
+
+    private String generateUriForInitialLineLength(HttpMethod method, String baseUri, int desiredInitialLineLength) {
+        String baseInitialLine = method.name() + " " + baseUri + "/ HTTP/1.1";
+        int neededWildcardLength = desiredInitialLineLength - baseInitialLine.length();
+        return baseUri + "/" + generatePayload(neededWildcardLength, "a");
+    }
+
+    private Pair<String, Object> generateHeaderForHeaderLineLength(int desiredHeaderLineLength) {
+        return generateHeaderForHeaderLineLength("foo", desiredHeaderLineLength);
+    }
+
+    private Pair<String, Object> generateHeaderForHeaderLineLength(String headerKey, int desiredHeaderLineLength) {
+        String baseHeaderLine = headerKey + ": ";
+        int neededHeaderValueLength = desiredHeaderLineLength - baseHeaderLine.length();
+        return Pair.of(headerKey, generatePayload(neededHeaderValueLength, "h"));
+    }
+
+    @DataProvider(value = {
+        "STANDARD_ENDPOINT",
+        "PROXY_ENDPOINT"
+    })
+    @Test
+    public void endpoints_should_throw_decode_exception_for_initial_line_length_that_is_too_long(
+        EndpointTypeScenario scenario
+    ) throws Exception {
+        // given
+        String tooLongUri = generateUriForInitialLineLength(
+            HttpMethod.GET, scenario.matchingPathBase,
+            CUSTOM_REQUEST_DECODER_CONFIG.maxInitialLineLength() + 1
+        );
+
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.GET)
+            .withUri(tooLongUri);
+
+        // when
+        NettyHttpClientResponse serverResponse = request.execute(scenario.serverPort,
+                                                                 incompleteCallTimeoutMillis);
+
+        // then
+        assertTooLongFrameErrorResponse(serverResponse);
+    }
+
+    @DataProvider(value = {
+        "STANDARD_ENDPOINT",
+        "PROXY_ENDPOINT"
+    })
+    @Test
+    public void endpoints_should_throw_decode_exception_for_single_header_that_is_too_long(
+        EndpointTypeScenario scenario
+    ) throws Exception {
+        // given
+        Pair<String, Object> tooLongHeader = generateHeaderForHeaderLineLength(
+            CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize() + 1
+        );
+
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.GET)
+            .withUri(scenario.matchingPathBase)
+            .withHeaders(tooLongHeader);
+
+        // when
+        NettyHttpClientResponse serverResponse = request.execute(scenario.serverPort,
+                                                                 incompleteCallTimeoutMillis);
+
+        // then
+        assertTooLongFrameErrorResponse(serverResponse);
+    }
+
+    @DataProvider(value = {
+        "STANDARD_ENDPOINT",
+        "PROXY_ENDPOINT"
+    })
+    @Test
+    public void endpoints_should_throw_decode_exception_for_multiple_headers_that_are_too_long_when_summed(
+        EndpointTypeScenario scenario
+    ) throws Exception {
+        // given
+        Pair<String, Object> halfMaxLengthHeader = generateHeaderForHeaderLineLength(
+            "foo",
+            CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize() / 2
+        );
+        Pair<String, Object> halfMaxLengthHeaderPlusOne = generateHeaderForHeaderLineLength(
+            "bar",
+            (CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize() / 2) + 1
+        );
+
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.GET)
+            .withUri(scenario.matchingPathBase)
+            .withHeaders(halfMaxLengthHeader, halfMaxLengthHeaderPlusOne);
+
+        // when
+        NettyHttpClientResponse serverResponse = request.execute(scenario.serverPort,
+                                                                 incompleteCallTimeoutMillis);
+
+        // then
+        assertTooLongFrameErrorResponse(serverResponse);
+    }
+
+    @DataProvider(value = {
+        "STANDARD_ENDPOINT",
+        "PROXY_ENDPOINT"
+    })
+    @Test
+    public void endpoints_should_handle_decode_exception_for_invalid_http_request(
+        EndpointTypeScenario scenario
+    ) throws Exception {
+        // given
+        int payloadSize = CUSTOM_REQUEST_DECODER_CONFIG.maxInitialLineLength() + 1;
         String payload = generatePayload(payloadSize);
 
         //leave off content-length and transfer-encoding headers to trigger DecoderFailedResult
         NettyHttpClientRequestBuilder request = request()
             .withMethod(HttpMethod.POST)
-            .withUri(RouterEndpoint.MATCHING_PATH)
+            .withUri(scenario.matchingPathBase)
             .withPaylod(payload);
 
         // when
-        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(),
+        NettyHttpClientResponse serverResponse = request.execute(scenario.serverPort,
                                                                  incompleteCallTimeoutMillis);
 
         // then
-        assertErrorResponse(serverResponse);
+        assertTooLongFrameErrorResponse(serverResponse);
     }
 
-    @Test
-    public void standardEndpoint_should_handle_decode_exception() throws Exception {
-        // given
-        int payloadSize = 100000;
-        String payload = generatePayload(payloadSize);
-
-        //leave off content-length and transfer-encoding to trigger DecoderFailedResult
-        NettyHttpClientRequestBuilder request = request()
-            .withMethod(HttpMethod.POST)
-            .withUri(DownstreamEndpoint.MATCHING_PATH)
-            .withPaylod(payload);
-
-        // when
-        NettyHttpClientResponse serverResponse = request.execute(downstreamServerConfig.endpointsPort(),
-                                                                 incompleteCallTimeoutMillis);
-
-        // then
-        assertErrorResponse(serverResponse);
-    }
-
-    private void assertErrorResponse(NettyHttpClientResponse serverResponse) throws IOException {
+    private void assertTooLongFrameErrorResponse(NettyHttpClientResponse serverResponse) throws IOException {
         ApiError expectedApiError = new ApiErrorWithMetadata(
             MALFORMED_REQUEST,
             Pair.of("cause", "The request contained an HTTP headers line or other HTTP line that was longer than the maximum allowed")
@@ -109,9 +260,9 @@ public class VerifyDecoderFailedResultIsHandledTest {
         verifyErrorReceived(serverResponse.payload, serverResponse.statusCode, expectedApiError);
     }
 
-    private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
-
-        public static final String MATCHING_PATH = "/downstreamEndpoint";
+    private static class BasicEndpoint extends StandardEndpoint<Void, String> {
+        public static final String MATCHING_PATH_BASE = "/basicEndpoint";
+        public static final String MATCHING_PATH = MATCHING_PATH_BASE + "/**";
         public static final String RESPONSE_PAYLOAD = "basic-endpoint-" + UUID.randomUUID().toString();
 
         @Override
@@ -128,13 +279,37 @@ public class VerifyDecoderFailedResultIsHandledTest {
 
         @Override
         public Matcher requestMatcher() {
-            return Matcher.match(MATCHING_PATH, HttpMethod.POST);
+            return Matcher.match(MATCHING_PATH);
+        }
+    }
+
+    private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
+
+        public static final String MATCHING_PATH = "/downstreamEndpoint";
+        public static final String RESPONSE_PAYLOAD = "downstream-endpoint-" + UUID.randomUUID().toString();
+
+        @Override
+        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+            //need to do some work in a future to force the DecoderException to bubble up and return a 400
+            return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(() -> {
+                try {
+                    sleep(10);
+                } catch (InterruptedException e) {
+                }
+                return null;
+            }, ctx), longRunningTaskExecutor).thenApply(o -> ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build());
+        }
+
+        @Override
+        public Matcher requestMatcher() {
+            return Matcher.match(MATCHING_PATH);
         }
     }
 
     public static class RouterEndpoint extends ProxyRouterEndpoint {
 
-        public static final String MATCHING_PATH = "/proxyEndpoint";
+        public static final String MATCHING_PATH_BASE = "/proxyEndpoint";
+        public static final String MATCHING_PATH = MATCHING_PATH_BASE + "/**";
         private final int downstreamPort;
 
         public RouterEndpoint(int downstreamPort) {
@@ -156,6 +331,48 @@ public class VerifyDecoderFailedResultIsHandledTest {
         @Override
         public Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
+        }
+    }
+
+    static HttpRequestDecoderConfig CUSTOM_REQUEST_DECODER_CONFIG = new HttpRequestDecoderConfig() {
+        @Override
+        public int maxInitialLineLength() {
+            return 100;
+        }
+
+        @Override
+        public int maxHeaderSize() {
+            return 200;
+        }
+    };
+
+    public static class BasicServerTestConfig implements ServerConfig {
+        private final int port;
+        private final Collection<Endpoint<?>> endpoints;
+
+        public BasicServerTestConfig() {
+            try {
+                port = ComponentTestUtils.findFreePort();
+            } catch (IOException e) {
+                throw new RuntimeException("Couldn't allocate port", e);
+            }
+
+            endpoints = singleton(new BasicEndpoint());
+        }
+
+        @Override
+        public Collection<Endpoint<?>> appEndpoints() {
+            return endpoints;
+        }
+
+        @Override
+        public int endpointsPort() {
+            return port;
+        }
+
+        @Override
+        public HttpRequestDecoderConfig httpRequestDecoderConfig() {
+            return CUSTOM_REQUEST_DECODER_CONFIG;
         }
     }
 
@@ -182,7 +399,6 @@ public class VerifyDecoderFailedResultIsHandledTest {
         public int endpointsPort() {
             return port;
         }
-
     }
 
     public static class ProxyTestingTestConfig implements ServerConfig {
@@ -209,5 +425,9 @@ public class VerifyDecoderFailedResultIsHandledTest {
             return port;
         }
 
+        @Override
+        public HttpRequestDecoderConfig httpRequestDecoderConfig() {
+            return CUSTOM_REQUEST_DECODER_CONFIG;
+        }
     }
 }
