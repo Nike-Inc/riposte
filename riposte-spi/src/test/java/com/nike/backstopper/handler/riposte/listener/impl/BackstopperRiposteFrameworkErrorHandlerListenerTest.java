@@ -2,6 +2,7 @@ package com.nike.backstopper.handler.riposte.listener.impl;
 
 import com.nike.backstopper.apierror.ApiError;
 import com.nike.backstopper.apierror.ApiErrorBase;
+import com.nike.backstopper.apierror.ApiErrorWithMetadata;
 import com.nike.backstopper.apierror.SortedApiErrorSet;
 import com.nike.backstopper.apierror.projectspecificinfo.ProjectApiErrors;
 import com.nike.backstopper.apierror.testutil.ProjectApiErrorsForTesting;
@@ -9,6 +10,7 @@ import com.nike.backstopper.handler.listener.ApiExceptionHandlerListenerResult;
 import com.nike.fastbreak.exception.CircuitBreakerException;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
 import com.nike.fastbreak.exception.CircuitBreakerTimeoutException;
+import com.nike.internal.util.Pair;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.Forbidden403Exception;
@@ -17,22 +19,20 @@ import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutExceptio
 import com.nike.riposte.server.error.exception.InvalidCharsetInContentTypeHeaderException;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
+import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
 import com.nike.riposte.server.error.exception.NonblockingEndpointCompletableFutureTimedOut;
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
 import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.error.exception.RequestContentDeserializationException;
-import com.nike.riposte.server.error.exception.MissingRequiredContentException;
 import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
-import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.nike.riposte.util.Matcher;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
@@ -131,7 +131,13 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
 
     @Test
     public void shouldHandleTooLongFrameException() {
-        verifyExceptionHandled(new TooLongFrameException(), singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+        verifyExceptionHandled(
+            new TooLongFrameException(),
+            singletonError(new ApiErrorWithMetadata(
+                testProjectApiErrors.getMalformedRequestApiError(),
+                Pair.of("cause", listener.TOO_LONG_FRAME_METADATA_MESSAGE)
+            ))
+        );
     }
 
     @Test
@@ -197,16 +203,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     }
 
     @Test
-    public void shouldHandleTooLongFrameExceptionAndAddCauseMetadata() {
-        ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new TooLongFrameException());
-        assertThat(result.shouldHandleResponse).isTrue();
-        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
-        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo(listener.TOO_LONG_FRAME_METADATA_MESSAGE);
-    }
-
-    @Test
     public void should_handle_IncompleteHttpCallTimeoutException() {
-        verifyExceptionHandled(new IncompleteHttpCallTimeoutException(4242), singletonError(testProjectApiErrors.getMalformedRequestApiError()));
+        verifyExceptionHandled(new IncompleteHttpCallTimeoutException(4242), singletonError(
+            new ApiErrorWithMetadata(testProjectApiErrors.getMalformedRequestApiError(),
+                                     Pair.of("cause", "Unfinished/invalid HTTP request"))
+        ));
     }
 
     @Test
@@ -220,8 +221,10 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
     public void shouldHandleInvalidHttpRequestExceptionWithNullCause() {
         ApiExceptionHandlerListenerResult result = listener.shouldHandleException(new InvalidHttpRequestException("message", null));
         assertThat(result.shouldHandleResponse).isTrue();
-        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
-        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("Invalid HTTP request");
+        assertThat(result.errors).isEqualTo(singletonError(
+            new ApiErrorWithMetadata(testProjectApiErrors.getMalformedRequestApiError(),
+                                     Pair.of("cause", "Invalid HTTP request"))
+        ));
 
         assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
         assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo("message");
@@ -252,8 +255,10 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
 
         // then
         assertThat(result.shouldHandleResponse).isTrue();
-        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
-        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo(expectedCauseMetadataMessage);
+        assertThat(result.errors).isEqualTo(singletonError(
+            new ApiErrorWithMetadata(testProjectApiErrors.getMalformedRequestApiError(),
+                                     Pair.of("cause", expectedCauseMetadataMessage))
+        ));
 
         assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
         assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo(outerExceptionMessage);
@@ -273,8 +278,10 @@ public class BackstopperRiposteFrameworkErrorHandlerListenerTest {
 
         // then
         assertThat(result.shouldHandleResponse).isTrue();
-        assertThat(result.errors).isEqualTo(singletonError(testProjectApiErrors.getMalformedRequestApiError()));
-        assertThat(result.errors.first().getMetadata().get("cause")).isEqualTo("The request exceeded the maximum payload size allowed");
+        assertThat(result.errors).isEqualTo(singletonError(
+            new ApiErrorWithMetadata(testProjectApiErrors.getMalformedRequestApiError(),
+                                     Pair.of("cause", "The request exceeded the maximum payload size allowed"))
+        ));
 
         assertThat(result.extraDetailsForLogging.get(0).getLeft()).isEqualTo("exception_message");
         assertThat(result.extraDetailsForLogging.get(0).getRight()).isEqualTo(exMsg);
