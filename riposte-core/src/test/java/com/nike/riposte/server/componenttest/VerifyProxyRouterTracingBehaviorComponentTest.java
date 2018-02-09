@@ -2,27 +2,23 @@ package com.nike.riposte.server.componenttest;
 
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
-import com.nike.riposte.server.hooks.PipelineCreateHook;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.ProxyRouterEndpoint;
+import com.nike.riposte.server.http.ProxyRouterEndpoint.DownstreamRequestFirstChunkInfo;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
-import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientRequestBuilder;
-import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
 import com.nike.wingtips.Span;
+import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.http.HttpRequestTracingUtils;
 import com.nike.wingtips.lifecyclelistener.SpanLifecycleListener;
+
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpResponseStatus;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -34,21 +30,35 @@ import org.slf4j.MDC;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
-import static com.nike.riposte.server.testutils.ComponentTestUtils.extractBodyFromRawRequest;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.extractHeaders;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
-import static io.netty.util.CharsetUtil.UTF_8;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.restassured.response.ExtractableResponse;
+
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_PARENT_SPAN_ID_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_SAMPLED_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_SPAN_ID_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_TRACE_ID_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.RouterEndpoint.PERFORM_SUBSPAN_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.RouterEndpoint.SET_TRACING_HEADERS_HEADER_KEY;
+import static com.nike.wingtips.http.HttpRequestTracingUtils.convertSampleableBooleanToExpectedB3Value;
+import static io.restassured.RestAssured.given;
 import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Verifies the distributed tracing behavior of {@link ProxyRouterEndpoint} calls, including the {@link
+ * DownstreamRequestFirstChunkInfo#withAddTracingHeadersToDownstreamCall(boolean)} and {@link
+ * DownstreamRequestFirstChunkInfo#withPerformSubSpanAroundDownstreamCall(boolean)} options.
+ */
 @RunWith(DataProviderRunner.class)
 public class VerifyProxyRouterTracingBehaviorComponentTest {
 
@@ -56,8 +66,6 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
     private static ServerConfig proxyServerConfig;
     private static Server downstreamServer;
     private static ServerConfig downstreamServerConfig;
-    private static StringBuilder downstreamServerRequest;
-    private static StringBuilder proxyServerRequest;
     private SpanRecorder spanRecorder;
 
     @BeforeClass
@@ -75,15 +83,10 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
     public static void tearDown() throws Exception {
         proxyServer.shutdown();
         downstreamServer.shutdown();
-        downstreamServerRequest = null;
-        proxyServerRequest = null;
     }
 
     @Before
     public void beforeMethod() {
-        downstreamServerRequest = new StringBuilder();
-        proxyServerRequest = new StringBuilder();
-
         resetTracing();
         spanRecorder = new SpanRecorder();
         Tracer.getInstance().addSpanLifecycleListener(spanRecorder);
@@ -94,141 +97,205 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         resetTracing();
     }
 
-    @Test
-    @DataProvider(value = {
-            "false",
-            "true"
-    }, splitBy = "\\|")
-    public void proxy_endpoints_should_setsTracingHeadersBasedOnFlag(boolean sendTraceHeaders) throws Exception {
-        // given
-        int payloadSize = 10000;
-        String payload = generatePayload(payloadSize);
+    private enum TracingBehaviorScenario {
+        HEADERS_ON_SUBSPAN_ON(true, true),
+        HEADERS_OFF_SUBSPAN_ON(false, true),
+        HEADERS_ON_SUBSPAN_OFF(true, false),
+        HEADERS_OFF_SUBSPAN_OFF(false, false);
 
-        NettyHttpClientRequestBuilder request = request()
-                .withMethod(HttpMethod.POST)
-                .withUri(RouterEndpoint.MATCHING_PATH)
-                .withPaylod(payload)
-                .withHeader("X-Test-SendTraceHeaders", sendTraceHeaders)
-                .withHeader(HttpHeaders.Names.CONTENT_LENGTH, payloadSize)
-                .withHeader(HttpHeaders.Names.HOST, "localhost");
+        public final boolean tracingHeadersOn;
+        public final boolean subspanOn;
 
-        // when
-        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(), 400);
-
-        // then
-        assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
-        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
-        assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded(sendTraceHeaders);
-
-        String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
-        String downstreamBody = extractBodyFromRawRequest(downstreamServerRequest.toString());
-
-        //assert request was NOT sent in chunks
-        //https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
-        assertThat(proxyBody).doesNotContain("\r\n");
-        assertThat(downstreamBody).doesNotContain("\r\n");
-
-        //assert bodies are equal
-        assertThat(proxyBody).isEqualTo(downstreamBody);
-
-        //assert input payload matches proxy and downstream payloads
-        assertThat(proxyBody).isEqualTo(payload);
-        assertThat(downstreamBody).isEqualTo(payload);
+        TracingBehaviorScenario(boolean tracingHeadersOn, boolean subspanOn) {
+            this.tracingHeadersOn = tracingHeadersOn;
+            this.subspanOn = subspanOn;
+        }
     }
 
-    @Test
     @DataProvider(value = {
-            "true | true",
-            "true | false",
-            "false | false",
-            "false | true"
-    }, splitBy = "\\|")
-    public void proxy_endpoints_should_performSubSpanAroundCallsBasedOnFlag(boolean performSubSpanAroundCall, boolean sendTraceHeadersToDownstream) throws Exception {
-        // given
-        int payloadSize = 10000;
-        String payload = generatePayload(payloadSize);
+        "HEADERS_ON_SUBSPAN_ON",
+        "HEADERS_OFF_SUBSPAN_ON",
+        "HEADERS_ON_SUBSPAN_OFF",
+        "HEADERS_OFF_SUBSPAN_OFF"
+    })
+    @Test
+    public void proxy_endpoint_tracing_behavior_should_work_as_desired_when_orig_request_does_not_have_tracing_headers(
+        TracingBehaviorScenario scenario
+    ) {
+        ExtractableResponse response =
+            given()
+                .baseUri("http://127.0.0.1")
+                .port(proxyServerConfig.endpointsPort())
+                .basePath(RouterEndpoint.MATCHING_PATH)
+                .header(SET_TRACING_HEADERS_HEADER_KEY, scenario.tracingHeadersOn)
+                .header(PERFORM_SUBSPAN_HEADER_KEY, scenario.subspanOn)
+                .log().all()
+            .when()
+                .get()
+            .then()
+                .log().headers()
+                .extract();
 
-        NettyHttpClientRequestBuilder request = request()
-                .withMethod(HttpMethod.POST)
-                .withUri(RouterEndpoint.MATCHING_PATH)
-                .withPaylod(payload)
-                .withHeader("X-Test-PerformSubSpanAroundCall", performSubSpanAroundCall)
-                .withHeader("X-Test-SendTraceHeaders", sendTraceHeadersToDownstream)
-                .withHeader(HttpHeaders.Names.CONTENT_LENGTH, payloadSize)
-                .withHeader(HttpHeaders.Names.HOST, "localhost");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.asString()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
 
-        // when
-        NettyHttpClientResponse serverResponse = request.execute(proxyServerConfig.endpointsPort(), 400);
+        // Verify that the proxy honored the subspan option, and get a handle on the span that surrounded the proxy
+        //      downstream call.
+        Span spanForDownstreamCall = verifyCompletedSpansAndReturnSpanForDownstreamCall(scenario.subspanOn);
 
-        // then
-        assertThat(serverResponse.payload).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
-        assertThat(serverResponse.statusCode).isEqualTo(HttpResponseStatus.OK.code());
+        if (scenario.tracingHeadersOn) {
+            // The downstream endpoint should have received tracing headers based on the span surrounding the proxy
+            //      downstream call.
+            verifyExpectedTracingHeadersReceivedDownstream(response, spanForDownstreamCall);
+        }
+        else {
+            // Proxy had the "set tracing headers" option off, and we didn't send any in our original request, so
+            //      the downstream endpoint should not have received *any* tracing headers.
+            verifyExpectedTracingHeadersReceivedDownstream(response, null, null, null, null);
+        }
+    }
 
-        // verify SubSpan size and creation
-        if (performSubSpanAroundCall) {
-            assertThat(spanRecorder.completedSpans.size()).isEqualTo(3);
-            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("async_downstream_call-POST_127.0.0.1:" + downstreamServerConfig.endpointsPort() + "/downstreamEndpoint");
-        } else {
-            assertThat(spanRecorder.completedSpans.size()).isEqualTo(2);
-            for (Span completedSpan : spanRecorder.completedSpans) {
-                assertThat(completedSpan.getSpanName()).doesNotStartWith("async_downstream_call");
-            }
+    private Span verifyCompletedSpansAndReturnSpanForDownstreamCall(boolean subspanOn) {
+        if (subspanOn) {
+            // Should be 3 completed spans - one for proxy overall request, one for the subspan around the downstream
+            //      call, and one for downstream overall request. Completed in reverse order.
+            waitUntilSpanRecorderHasExpectedNumSpans(3);
+            assertThat(spanRecorder.completedSpans).hasSize(3);
+            assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET_" + DownstreamEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(1).getSpanName())
+                .startsWith("async_downstream_call-GET_")
+                .endsWith(DownstreamEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(2).getSpanName()).isEqualTo("GET_" + RouterEndpoint.MATCHING_PATH);
+        }
+        else {
+            // Should be 2 completed spans - one for proxy overall request, and one for downstream overall request.
+            //      Completed in reverse order.
+            waitUntilSpanRecorderHasExpectedNumSpans(2);
+            assertThat(spanRecorder.completedSpans).hasSize(2);
+            assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET_" + DownstreamEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("GET_" + RouterEndpoint.MATCHING_PATH);
         }
 
-        assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded(sendTraceHeadersToDownstream);
-
-        String proxyBody = extractBodyFromRawRequest(proxyServerRequest.toString());
-        String downstreamBody = extractBodyFromRawRequest(downstreamServerRequest.toString());
-
-        //assert request was NOT sent in chunks
-        //https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
-        assertThat(proxyBody).doesNotContain("\r\n");
-        assertThat(downstreamBody).doesNotContain("\r\n");
-
-        //assert bodies are equal
-        assertThat(proxyBody).isEqualTo(downstreamBody);
-
-        //assert input payload matches proxy and downstream payloads
-        assertThat(proxyBody).isEqualTo(payload);
-        assertThat(downstreamBody).isEqualTo(payload);
+        // In either case, the span for the downstream call lives in index 1.
+        return spanRecorder.completedSpans.get(1);
     }
 
-    private void assertProxyAndDownstreamServiceHeadersAndTracingHeadersAdded(boolean traceHeadersExpected) {
-        Map<String, Object> proxyHeaders = extractHeaders(proxyServerRequest.toString());
-        Map<String, Object> downstreamHeaders = extractHeaders(downstreamServerRequest.toString());
-
-        //assert input headers are passed down stream
-        assertThat(proxyHeaders.get(HttpHeaders.Names.HOST)).isEqualTo("localhost");
-        assertThat(proxyHeaders.get(HttpHeaders.Names.CONTENT_LENGTH)).isEqualTo(downstreamHeaders.get(HttpHeaders.Names.CONTENT_LENGTH));
-        assertThat(proxyHeaders.get(HttpHeaders.Names.TRANSFER_ENCODING)).isEqualTo(downstreamHeaders.get(HttpHeaders.Names.TRANSFER_ENCODING));
-        assertThat(downstreamHeaders.get(HttpHeaders.Names.HOST)).isEqualTo("127.0.0.1:" + downstreamServerConfig.endpointsPort());
-
-        //assert trace info added to downstream call
-        assertThat(downstreamHeaders.containsKey("X-B3-Sampled")).isEqualTo(traceHeadersExpected);
-        assertThat(downstreamHeaders.containsKey("X-B3-TraceId")).isEqualTo(traceHeadersExpected);
-        assertThat(downstreamHeaders.containsKey("X-B3-SpanId")).isEqualTo(traceHeadersExpected);
-        assertThat(downstreamHeaders.containsKey("X-B3-SpanName")).isEqualTo(traceHeadersExpected);
+    private void verifyExpectedTracingHeadersReceivedDownstream(
+        ExtractableResponse response, Span expectedSpan
+    ) {
+        verifyExpectedTracingHeadersReceivedDownstream(
+            response, expectedSpan.getTraceId(), expectedSpan.getSpanId(), expectedSpan.getParentSpanId(),
+            convertSampleableBooleanToExpectedB3Value(expectedSpan.isSampleable())
+        );
     }
 
-    private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
+    private void verifyExpectedTracingHeadersReceivedDownstream(
+        ExtractableResponse response, String expectedTraceId, String expectedSpanId, String expectedParentSpanId,
+        String expectedSampled
+    ) {
+        assertThat(response.header(RECEIVED_TRACE_ID_HEADER_KEY)).isEqualTo(String.valueOf(expectedTraceId));
+        assertThat(response.header(RECEIVED_SPAN_ID_HEADER_KEY)).isEqualTo(String.valueOf(expectedSpanId));
+        assertThat(response.header(RECEIVED_PARENT_SPAN_ID_HEADER_KEY)).isEqualTo(String.valueOf(expectedParentSpanId));
+        assertThat(response.header(RECEIVED_SAMPLED_HEADER_KEY)).isEqualTo(String.valueOf(expectedSampled));
+    }
+
+    @DataProvider(value = {
+        "HEADERS_ON_SUBSPAN_ON      |   true",
+        "HEADERS_ON_SUBSPAN_ON      |   false",
+        "HEADERS_OFF_SUBSPAN_ON     |   true",
+        "HEADERS_OFF_SUBSPAN_ON     |   false",
+        "HEADERS_ON_SUBSPAN_OFF     |   true",
+        "HEADERS_ON_SUBSPAN_OFF     |   false",
+        "HEADERS_OFF_SUBSPAN_OFF    |   true",
+        "HEADERS_OFF_SUBSPAN_OFF    |   false"
+    }, splitBy = "\\|")
+    @Test
+    public void proxy_endpoint_tracing_behavior_should_work_as_desired_when_orig_request_does_have_tracing_headers(
+        TracingBehaviorScenario scenario, boolean sampled
+    ) {
+        Span origCallSpan = Span.newBuilder("origCall", Span.SpanPurpose.CLIENT)
+                                .withSampleable(sampled)
+                                .build();
+        Map<String, String> tracingHeaders = new HashMap<>();
+        HttpRequestTracingUtils.propagateTracingHeaders(tracingHeaders::put, origCallSpan);
+
+        ExtractableResponse response =
+            given()
+                .baseUri("http://127.0.0.1")
+                .port(proxyServerConfig.endpointsPort())
+                .basePath(RouterEndpoint.MATCHING_PATH)
+                .header(SET_TRACING_HEADERS_HEADER_KEY, scenario.tracingHeadersOn)
+                .header(PERFORM_SUBSPAN_HEADER_KEY, scenario.subspanOn)
+                .headers(tracingHeaders)
+                .log().all()
+            .when()
+                .get()
+            .then()
+                .log().headers()
+                .extract();
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.asString()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+
+        // Verify that the proxy honored the subspan option, and get a handle on the span that surrounded the proxy
+        //      downstream call.
+        Span spanForDownstreamCall = verifyCompletedSpansAndReturnSpanForDownstreamCall(scenario.subspanOn);
+
+        // Sanity checking - spanForDownstreamCall should be a child of origCallSpan (same trace ID and sampleable
+        //      value but different span IDs.
+        assertThat(spanForDownstreamCall.getTraceId()).isEqualTo(origCallSpan.getTraceId());
+        assertThat(spanForDownstreamCall.isSampleable()).isEqualTo(origCallSpan.isSampleable());
+        assertThat(spanForDownstreamCall.getSpanId()).isNotEqualTo(origCallSpan.getSpanId());
+
+        if (scenario.tracingHeadersOn) {
+            // The downstream endpoint should have received tracing headers based on the span surrounding the proxy
+            //      downstream call.
+            verifyExpectedTracingHeadersReceivedDownstream(response, spanForDownstreamCall);
+        }
+        else {
+            // The ProxyRouterEndpoint is configured to *not* set tracing headers, so we should see the values
+            //      from origCallSpan show up on the other end since we sent them with the original call - the proxy
+            //      should not have messed with them.
+            verifyExpectedTracingHeadersReceivedDownstream(response, origCallSpan);
+        }
+    }
+
+    static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
 
         public static final String MATCHING_PATH = "/downstreamEndpoint";
-        public static final String RESPONSE_PAYLOAD = "basic-endpoint-" + UUID.randomUUID().toString();
+        public static final String RESPONSE_PAYLOAD = "downstream-endpoint-" + UUID.randomUUID().toString();
+        public static final String RECEIVED_TRACE_ID_HEADER_KEY = "received-traceid";
+        public static final String RECEIVED_SPAN_ID_HEADER_KEY = "received-spanid";
+        public static final String RECEIVED_PARENT_SPAN_ID_HEADER_KEY = "received-parent-spanid";
+        public static final String RECEIVED_SAMPLED_HEADER_KEY = "received-sampled";
 
         @Override
         public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
-            return CompletableFuture.completedFuture(ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build());
+            HttpHeaders reqHeaders = request.getHeaders();
+            return CompletableFuture.completedFuture(
+                ResponseInfo.newBuilder(RESPONSE_PAYLOAD)
+                            .withHeaders(
+                                new DefaultHttpHeaders()
+                                    .set(RECEIVED_TRACE_ID_HEADER_KEY, String.valueOf(reqHeaders.get(TraceHeaders.TRACE_ID)))
+                                    .set(RECEIVED_SPAN_ID_HEADER_KEY, String.valueOf(reqHeaders.get(TraceHeaders.SPAN_ID)))
+                                    .set(RECEIVED_PARENT_SPAN_ID_HEADER_KEY, String.valueOf(reqHeaders.get(TraceHeaders.PARENT_SPAN_ID)))
+                                    .set(RECEIVED_SAMPLED_HEADER_KEY, String.valueOf(reqHeaders.get(TraceHeaders.TRACE_SAMPLED)))
+                            )
+                            .build()
+            );
         }
 
         @Override
         public Matcher requestMatcher() {
-            return Matcher.match(MATCHING_PATH, HttpMethod.POST);
+            return Matcher.match(MATCHING_PATH);
         }
     }
 
     public static class RouterEndpoint extends ProxyRouterEndpoint {
 
         public static final String MATCHING_PATH = "/proxyEndpoint";
+        public static final String SET_TRACING_HEADERS_HEADER_KEY = "X-Test-SendTraceHeaders";
+        public static final String PERFORM_SUBSPAN_HEADER_KEY = "X-Test-PerformSubSpanAroundCall";
         private final int downstreamPort;
 
         public RouterEndpoint(int downstreamPort) {
@@ -239,14 +306,24 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
                                                                                                      Executor longRunningTaskExecutor,
                                                                                                      ChannelHandlerContext ctx) {
-            return CompletableFuture.completedFuture(
-                    new DownstreamRequestFirstChunkInfo(
-                            "127.0.0.1", downstreamPort, false,
-                            generateSimplePassthroughRequest(request, DownstreamEndpoint.MATCHING_PATH, request.getMethod(), ctx)
-                    )
-                            .withAddTracingHeadersToDownstreamCall(Boolean.parseBoolean(request.getHeaders().get("X-Test-SendTraceHeaders")))
-                            .withPerformSubSpanAroundDownstreamCall(Boolean.parseBoolean(request.getHeaders().get("X-Test-PerformSubSpanAroundCall")))
+
+            DownstreamRequestFirstChunkInfo target = new DownstreamRequestFirstChunkInfo(
+                "127.0.0.1", downstreamPort, false,
+                generateSimplePassthroughRequest(request, DownstreamEndpoint.MATCHING_PATH, request.getMethod(), ctx)
             );
+
+            String setTracingHeadersStrValue = request.getHeaders().get(SET_TRACING_HEADERS_HEADER_KEY);
+            String performSubspanStrValue = request.getHeaders().get(PERFORM_SUBSPAN_HEADER_KEY);
+
+            if (setTracingHeadersStrValue != null) {
+                target.withAddTracingHeadersToDownstreamCall(Boolean.parseBoolean(setTracingHeadersStrValue));
+            }
+
+            if (performSubspanStrValue != null) {
+                target.withPerformSubSpanAroundDownstreamCall(Boolean.parseBoolean(performSubspanStrValue));
+            }
+
+            return CompletableFuture.completedFuture(target);
         }
 
         @Override
@@ -278,12 +355,6 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         public int endpointsPort() {
             return port;
         }
-
-        @Override
-        public List<PipelineCreateHook> pipelineCreateHooks() {
-            return singletonList(pipeline -> pipeline.addFirst("recordDownstreamInboundRequest", new RecordDownstreamServerInboundRequest()));
-        }
-
     }
 
     public static class ProxyTestingTestConfig implements ServerConfig {
@@ -308,11 +379,6 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         @Override
         public int endpointsPort() {
             return port;
-        }
-
-        @Override
-        public List<PipelineCreateHook> pipelineCreateHooks() {
-            return singletonList(pipeline -> pipeline.addFirst("recordProxyInboundRequest", new RecordProxyServerInboundRequest()));
         }
     }
 
@@ -349,25 +415,30 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
     }
 
-    public static class RecordDownstreamServerInboundRequest extends ChannelInboundHandlerAdapter {
-        @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            ByteBuf byteBuf = (ByteBuf) msg;
+    private void waitUntilSpanRecorderHasExpectedNumSpans(int expectedNumSpans) {
+        long timeoutMillis = 5000;
+        long startTimeMillis = System.currentTimeMillis();
+        while (spanRecorder.completedSpans.size() < expectedNumSpans) {
+            try {
+                Thread.sleep(10);
+            }
+            catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
 
-            downstreamServerRequest.append(byteBuf.toString(UTF_8));
-
-            super.channelRead(ctx, msg);
+            long timeSinceStart = System.currentTimeMillis() - startTimeMillis;
+            if (timeSinceStart > timeoutMillis) {
+                throw new RuntimeException(
+                    "spanRecorder did not have the expected number of spans after waiting "
+                    + timeoutMillis + " milliseconds"
+                );
+            }
         }
-    }
 
-    public static class RecordProxyServerInboundRequest extends ChannelInboundHandlerAdapter {
-        @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            ByteBuf byteBuf = (ByteBuf) msg;
-
-            proxyServerRequest.append(byteBuf.toString(UTF_8));
-
-            super.channelRead(ctx, msg);
-        }
+        // Before we return we need to sort completedSpans by start time (in reverse order to mimic what normally
+        //      happens with spans where the last-created is first-completed). We need to do this sort because running
+        //      these tests on travis CI can get weird and we can get them completing and arriving in the list in
+        //      out-of-expected-order state.
+        spanRecorder.completedSpans.sort(Comparator.comparingLong(Span::getSpanStartTimeNanos).reversed());
     }
 }

@@ -8,8 +8,8 @@ import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutExcep
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
 import com.nike.wingtips.Span;
-import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.http.HttpRequestTracingUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +65,6 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpObjectDecoder;
 import io.netty.handler.codec.http.HttpObjectEncoder;
@@ -666,16 +665,14 @@ public class StreamingAsyncHttpClient {
 
                 // Add distributed trace headers to the downstream call if desired and we have a current span.
                 if (addTracingHeadersToDownstreamCall && spanForDownstreamCall != null) {
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_SAMPLED,
-                                            String.valueOf(spanForDownstreamCall.isSampleable()));
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_ID,
-                                            spanForDownstreamCall.getTraceId());
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_ID,
-                                            spanForDownstreamCall.getSpanId());
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.PARENT_SPAN_ID,
-                                            spanForDownstreamCall.getParentSpanId());
-                    setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.SPAN_NAME,
-                                            spanForDownstreamCall.getSpanName());
+                    HttpRequestTracingUtils.propagateTracingHeaders(
+                        (headerKey, headerValue) -> {
+                            if (headerValue != null) {
+                                initialRequestChunk.headers().set(headerKey, headerValue);
+                            }
+                        },
+                        spanForDownstreamCall
+                    );
                 }
 
                 Channel ch = channelFuture.getNow();
@@ -1165,11 +1162,6 @@ public class StreamingAsyncHttpClient {
             callActiveHolder.heldObject = false;
             pool.release(ch);
         }
-    }
-
-    protected void setHeaderIfValueNotNull(HttpMessage httpMessage, String key, String value) {
-        if (value != null)
-            httpMessage.headers().set(key, value);
     }
 
     /**
