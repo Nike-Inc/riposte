@@ -583,6 +583,7 @@ public class StreamingAsyncHttpClient {
     public CompletableFuture<StreamingChannel> streamDownstreamCall(
         String downstreamHost, int downstreamPort, HttpRequest initialRequestChunk, boolean isSecureHttpsCall,
         boolean relaxedHttpsValidation, StreamingCallback callback, long downstreamCallTimeoutMillis,
+        boolean performSubSpanAroundDownstreamCalls, boolean addTracingHeadersToDownstreamCall,
         ChannelHandlerContext ctx
     ) {
         CompletableFuture<StreamingChannel> streamingChannel = new CompletableFuture<>();
@@ -594,8 +595,6 @@ public class StreamingAsyncHttpClient {
                                  ? downstreamHost
                                  : downstreamHost + ":" + downstreamPort;
         initialRequestChunk.headers().set(HttpHeaders.Names.HOST, hostHeaderValue);
-
-        boolean performSubSpanAroundDownstreamCalls = true;
 
         ObjectHolder<Long> beforeConnectionStartTimeNanos = new ObjectHolder<>();
         beforeConnectionStartTimeNanos.heldObject = System.nanoTime();
@@ -665,8 +664,8 @@ public class StreamingAsyncHttpClient {
                                              ? null
                                              : distributedSpanStackToUse.peek();
 
-                // Add distributed trace headers to the downstream call if we have a current span.
-                if (spanForDownstreamCall != null) {
+                // Add distributed trace headers to the downstream call if desired and we have a current span.
+                if (addTracingHeadersToDownstreamCall && spanForDownstreamCall != null) {
                     setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_SAMPLED,
                                             String.valueOf(spanForDownstreamCall.isSampleable()));
                     setHeaderIfValueNotNull(initialRequestChunk, TraceHeaders.TRACE_ID,

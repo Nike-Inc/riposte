@@ -89,7 +89,7 @@ public class StreamingAsyncHttpClientTest {
         downstreamLastChunkSentHolder.heldObject = false;
 
         streamingChannelSpy = spy(new StreamingChannel(channelMock, channelPoolMock, callActiveHolder,
-                                                       downstreamLastChunkSentHolder, null, null));
+                downstreamLastChunkSentHolder, null, null));
 
         writeAndFlushChannelFutureMock = mock(ChannelFuture.class);
 
@@ -115,7 +115,7 @@ public class StreamingAsyncHttpClientTest {
 
         // when
         StreamingChannel sc = new StreamingChannel(
-            channelMock, channelPoolMock, callActiveHolder, downstreamLastChunkSentHolder, spanStackMock, mdcInfoMock
+                channelMock, channelPoolMock, callActiveHolder, downstreamLastChunkSentHolder, spanStackMock, mdcInfoMock
         );
 
         // then
@@ -130,7 +130,7 @@ public class StreamingAsyncHttpClientTest {
 
     @Test
     public void StreamingChannel_streamChunk_sets_up_task_in_event_loop_to_call_doStreamChunk_and_adds_listener_to_complete_promise()
-        throws Exception {
+            throws Exception {
         // given
         ChannelFuture doStreamChunkFutureMock = mock(ChannelFuture.class);
         doReturn(doStreamChunkFutureMock).when(streamingChannelSpy).doStreamChunk(any(HttpContent.class));
@@ -248,12 +248,12 @@ public class StreamingAsyncHttpClientTest {
     }
 
     @DataProvider(value = {
-        "false  |   0",
-        "true   |   42"
+            "false  |   0",
+            "true   |   42"
     }, splitBy = "\\|")
     @Test
     public void StreamingChannel_doStreamChunk_works_as_expected_when_last_chunk_already_sent_downstream_and_incoming_chunk_does_not_match_requirements(
-        boolean chunkIsLastChunk, int readableBytes
+            boolean chunkIsLastChunk, int readableBytes
     ) {
         // given
         streamingChannelSpy.downstreamLastChunkSentHolder.heldObject = true;
@@ -288,7 +288,7 @@ public class StreamingAsyncHttpClientTest {
         verify(contentChunkMock).release();
 
         verifyFailedChannelFuture(
-            result, "Unable to stream chunk - downstream call is no longer active.", null
+                result, "Unable to stream chunk - downstream call is no longer active.", null
         );
     }
 
@@ -305,7 +305,7 @@ public class StreamingAsyncHttpClientTest {
         verify(contentChunkMock).release();
 
         verifyFailedChannelFuture(
-            result, "Unable to stream chunks downstream - the channel was closed previously due to an unrecoverable error", null
+                result, "Unable to stream chunks downstream - the channel was closed previously due to an unrecoverable error", null
         );
     }
 
@@ -323,7 +323,7 @@ public class StreamingAsyncHttpClientTest {
         verify(contentChunkMock, never()).release();
 
         verifyFailedChannelFuture(
-            result, "StreamingChannel.doStreamChunk() threw an exception", crazyEx
+                result, "StreamingChannel.doStreamChunk() threw an exception", crazyEx
         );
     }
 
@@ -355,13 +355,13 @@ public class StreamingAsyncHttpClientTest {
     }
 
     @DataProvider(value = {
-        "true   |   true",
-        "false  |   false",
-        "true   |   false"
+            "true   |   true",
+            "false  |   false",
+            "true   |   false"
     }, splitBy = "\\|")
     @Test
     public void StreamingChannel_closeChannelDueToUnrecoverableError_sets_field_to_true_but_otherwise_does_nothing_if_already_closed_or_call_inactive(
-        boolean alreadyClosed, boolean callActive
+            boolean alreadyClosed, boolean callActive
     ) {
         // given
         Throwable unrecoverableError = new RuntimeException("kaboom");
@@ -386,7 +386,7 @@ public class StreamingAsyncHttpClientTest {
 
         // when
         Throwable caughtEx = catchThrowable(
-            () -> streamingChannelSpy.closeChannelDueToUnrecoverableError(new RuntimeException("some other error"))
+                () -> streamingChannelSpy.closeChannelDueToUnrecoverableError(new RuntimeException("some other error"))
         );
 
         // then
@@ -395,8 +395,8 @@ public class StreamingAsyncHttpClientTest {
     }
 
     @DataProvider(value = {
-        "true",
-        "false"
+            "true",
+            "false"
     })
     @Test
     public void StreamingChannel_doCloseChannelDueToUnrecoverableError_works_as_expected(boolean callActive) {
@@ -437,7 +437,7 @@ public class StreamingAsyncHttpClientTest {
 
         // when
         new StreamingAsyncHttpClient(200, 200, true)
-                .streamDownstreamCall(downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, ctx);
+                .streamDownstreamCall(downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, true, true, ctx);
 
         // then
         assertThat(request.headers().get(HOST)).isEqualTo(expectedHostHeader);

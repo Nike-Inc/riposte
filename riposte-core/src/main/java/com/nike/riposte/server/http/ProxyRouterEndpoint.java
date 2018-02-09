@@ -181,6 +181,14 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * security vulnerabilities - make sure you know what you're doing.
          */
         public boolean relaxedHttpsValidation = false;
+        /**
+         * Set this to false if you do not want a SubSpan around your proxied downstream call
+         */
+        public boolean performSubSpanAroundDownstreamCall = true;
+        /**
+         * Set this to false if you do not want the standard tracing headers to be added to your downstream call
+         */
+        public boolean addTracingHeadersToDownstreamCall = true;
 
         /**
          * Creates a new instance with the given values, and defaults {@link #customCircuitBreaker} to {@link
@@ -236,6 +244,22 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          */
         public DownstreamRequestFirstChunkInfo withRelaxedHttpsValidation(boolean relaxedHttpsValidation) {
             this.relaxedHttpsValidation = relaxedHttpsValidation;
+            return this;
+        }
+
+        /**
+         * Pass in false if you do not want SubSpans created around your downstream call
+         */
+        public DownstreamRequestFirstChunkInfo withPerformSubSpanAroundDownstreamCall(boolean performSubSpanAroundDownstreamCall) {
+            this.performSubSpanAroundDownstreamCall = performSubSpanAroundDownstreamCall;
+            return this;
+        }
+
+        /**
+         * Pass in false if you do not want the standard tracing headers added to your downstream call
+         */
+        public DownstreamRequestFirstChunkInfo withAddTracingHeadersToDownstreamCall(boolean addTracingHeadersToDownstreamCall) {
+            this.addTracingHeadersToDownstreamCall = addTracingHeadersToDownstreamCall;
             return this;
         }
     }

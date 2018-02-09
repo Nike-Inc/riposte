@@ -185,6 +185,8 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                 HttpRequest downstreamRequestFirstChunk = downstreamRequestFirstChunkInfo.firstChunk;
                                 boolean isSecureHttpsCall = downstreamRequestFirstChunkInfo.isHttps;
                                 boolean relaxedHttpsValidation = downstreamRequestFirstChunkInfo.relaxedHttpsValidation;
+                                boolean performSubSpanAroundDownstreamCall = downstreamRequestFirstChunkInfo.performSubSpanAroundDownstreamCall;
+                                boolean addTracingHeadersToDownstreamCall = downstreamRequestFirstChunkInfo.addTracingHeadersToDownstreamCall;
 
                                 // Tell the proxyRouterState about the streaming callback so that
                                 //      callback.unrecoverableErrorOccurred(...) can be called in the case of an error
@@ -197,8 +199,9 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                 CompletableFuture<StreamingChannel> streamingChannel =
                                     streamingAsyncHttpClient.streamDownstreamCall(
                                         downstreamHost, downstreamPort, downstreamRequestFirstChunk, isSecureHttpsCall,
-                                        relaxedHttpsValidation, callback,
-                                        callTimeoutValueToUse, ctx
+                                        relaxedHttpsValidation, callback, callTimeoutValueToUse,
+                                            performSubSpanAroundDownstreamCall, addTracingHeadersToDownstreamCall,
+                                            ctx
                                     );
 
                                 // Tell the streaming channel future what to do when it completes.

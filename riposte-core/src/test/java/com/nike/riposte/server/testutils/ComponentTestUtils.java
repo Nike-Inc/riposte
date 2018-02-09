@@ -6,6 +6,7 @@ import com.nike.internal.util.Pair;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang3.RandomUtils;
 
 import java.io.BufferedReader;
@@ -15,6 +16,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -26,9 +29,9 @@ import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.Inflater;
+import java.util.stream.Collectors;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -51,6 +54,13 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.CharsetUtil;
 
 import static io.netty.util.CharsetUtil.UTF_8;
+import static java.util.Arrays.stream;
+import static org.apache.commons.lang3.StringUtils.containsOnly;
+import static org.apache.commons.lang3.StringUtils.split;
+import static org.apache.commons.lang3.StringUtils.substringAfter;
+import static org.apache.commons.lang3.StringUtils.substringBefore;
+import static org.apache.commons.lang3.StringUtils.substringBetween;
+import static org.apache.commons.lang3.StringUtils.substringsBetween;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -60,6 +70,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class ComponentTestUtils {
 
+    private static final String HEADER_SEPARATOR = ":";
     private static final String payloadDictionary = "aBcDefGhiJkLmN@#$%";
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -399,5 +410,27 @@ public class ComponentTestUtils {
         assertThat(responseAsError.errors.get(0).code).isEqualTo(expectedApiError.getErrorCode());
         assertThat(responseAsError.errors.get(0).message).isEqualTo(expectedApiError.getMessage());
         assertThat(responseAsError.errors.get(0).metadata).isEqualTo(expectedApiError.getMetadata());
+    }
+
+    public static String extractBodyFromRawRequest(String request) {
+        return substringAfter(request.toString(), "\r\n\r\n"); //body start after \r\n\r\n combo
+    }
+
+    public static String extractFullBodyFromChunks(String downstreamBody) {
+        return stream(substringsBetween(downstreamBody, "\r\n", "\r\n")) //get all chunks
+                .filter(chunk -> containsOnly(chunk, payloadDictionary)) //filter out chunk sizes
+                .collect(Collectors.joining());
+    }
+
+    public static Map<String, Object> extractHeaders(String requestHeaderString) {
+        String concatHeaders = substringBetween(requestHeaderString, "HTTP/1.1\r\n", "\r\n\r\n");
+
+        Map<String, Object> extractedHeaders = new HashMap<>();
+
+        for (String concatHeader : split(concatHeaders, "\r\n")) {
+            extractedHeaders.put(substringBefore(concatHeader, HEADER_SEPARATOR).trim(), substringAfter(concatHeader, HEADER_SEPARATOR).trim());
+        }
+
+        return extractedHeaders;
     }
 }
