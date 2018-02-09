@@ -207,7 +207,6 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         assertThat(downstreamHeaders.containsKey("X-B3-Sampled")).isEqualTo(traceHeadersExpected);
         assertThat(downstreamHeaders.containsKey("X-B3-TraceId")).isEqualTo(traceHeadersExpected);
         assertThat(downstreamHeaders.containsKey("X-B3-SpanId")).isEqualTo(traceHeadersExpected);
-        assertThat(downstreamHeaders.containsKey("X-B3-SpanName")).isEqualTo(traceHeadersExpected);
     }
 
     private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {

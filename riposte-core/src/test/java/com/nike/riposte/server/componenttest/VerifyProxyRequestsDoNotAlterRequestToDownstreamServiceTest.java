@@ -188,7 +188,6 @@ public class VerifyProxyRequestsDoNotAlterRequestToDownstreamServiceTest {
         assertThat(downstreamHeaders.get("X-B3-Sampled")).isNotNull();
         assertThat(downstreamHeaders.get("X-B3-TraceId")).isNotNull();
         assertThat(downstreamHeaders.get("X-B3-SpanId")).isNotNull();
-        assertThat(downstreamHeaders.get("X-B3-SpanName")).isNotNull();
     }
 
     private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
