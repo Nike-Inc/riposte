@@ -32,10 +32,15 @@ import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -55,12 +60,19 @@ import static java.util.Collections.singletonList;
 @SuppressWarnings("WeakerAccess")
 public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExceptionHandlerListener {
 
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
     public final ApiError CIRCUIT_BREAKER_GENERIC_API_ERROR;
     public final ApiError CIRCUIT_BREAKER_OPEN_API_ERROR;
     public final ApiError CIRCUIT_BREAKER_TIMEOUT_API_ERROR;
 
-    protected final String TOO_LONG_FRAME_METADATA_MESSAGE =
-        "The request contained an HTTP headers line or other HTTP line that was longer than the maximum allowed";
+    protected final String TOO_LONG_FRAME_LINE_METADATA_MESSAGE =
+        "The request contained a HTTP line that was longer than the maximum allowed";
+    protected final String TOO_LONG_FRAME_HEADER_METADATA_MESSAGE =
+        "The combined size of the request's HTTP headers was more than the maximum allowed";
+
+    protected final ApiError TOO_LONG_FRAME_LINE_API_ERROR_BASE;
+    protected final ApiError TOO_LONG_FRAME_HEADER_API_ERROR_BASE;
 
     protected final ProjectApiErrors projectApiErrors;
 
@@ -77,6 +89,24 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             new ApiErrorBase(projectApiErrors.getTemporaryServiceProblemApiError(), "CIRCUIT_BREAKER_OPEN");
         CIRCUIT_BREAKER_TIMEOUT_API_ERROR =
             new ApiErrorBase(projectApiErrors.getTemporaryServiceProblemApiError(), "CIRCUIT_BREAKER_TIMEOUT");
+
+        ApiError malformedReqError = projectApiErrors.getMalformedRequestApiError();
+        // Too long line can keep generic malformed request ApiError error code, message, and HTTP status code (400),
+        //      but we'll give it a new name for the logs and some cause metadata so the caller knows what went wrong.
+        TOO_LONG_FRAME_LINE_API_ERROR_BASE = new ApiErrorWithMetadata(
+            new ApiErrorBase(malformedReqError, "TOO_LONG_HTTP_LINE"),
+            Pair.of("cause", TOO_LONG_FRAME_LINE_METADATA_MESSAGE)
+        );
+        // Too long headers should keep the error code and message of malformed request ApiError, but use 431 HTTP
+        //      status code (see https://tools.ietf.org/html/rfc6585#page-4), and we'll give it a new name for the logs
+        //      and some cause metadata so the caller knows what went wrong.
+        TOO_LONG_FRAME_HEADER_API_ERROR_BASE = new ApiErrorWithMetadata(
+            new ApiErrorBase(
+                "TOO_LONG_HEADERS", malformedReqError.getErrorCode(), malformedReqError.getMessage(),
+                431, malformedReqError.getMetadata()
+            ),
+            Pair.of("cause", TOO_LONG_FRAME_HEADER_METADATA_MESSAGE)
+        );
     }
 
     @Override
@@ -122,7 +152,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
 
         if (ex instanceof DecoderException) {
             ApiError errorToUse = (ex instanceof TooLongFrameException)
-                                  ? generateTooLongFrameApiError()
+                                  ? generateTooLongFrameApiError((TooLongFrameException)ex)
                                   : projectApiErrors.getMalformedRequestApiError();
             return ApiExceptionHandlerListenerResult.handleResponse(
                 singletonError(errorToUse),
@@ -289,7 +319,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             Throwable cause = theEx.getCause();
 
             ApiError apiErrorToUse = (cause instanceof TooLongFrameException)
-                                     ? generateTooLongFrameApiError()
+                                     ? generateTooLongFrameApiError((TooLongFrameException)cause)
                                      : new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
                                                                 Pair.of("cause", "Invalid HTTP request"));
 
@@ -324,9 +354,49 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
                        ApiExceptionHandlerUtils.DEFAULT_IMPL.quotesToApostrophes(causeDetails));
     }
 
-    protected ApiError generateTooLongFrameApiError() {
-        return new ApiErrorWithMetadata(projectApiErrors.getMalformedRequestApiError(),
-                                        Pair.of("cause", TOO_LONG_FRAME_METADATA_MESSAGE));
+    protected ApiError generateTooLongFrameApiError(TooLongFrameException ex) {
+        String exMessage = String.valueOf(ex.getMessage());
+        Integer tooLongFrameMaxSize = extractTooLongFrameMaxSizeFromExceptionMessage(ex);
+        Map<String, Object> maxSizeMetadata = new HashMap<>();
+        if (tooLongFrameMaxSize != null) {
+            maxSizeMetadata.put("max_length_allowed", tooLongFrameMaxSize);
+        }
+
+        // If we detect it's complaining about HTTP header size then throw the ApiError that maps to a
+        //      431 HTTP status code.
+        if (exMessage.startsWith("HTTP header is larger than")) {
+            return new ApiErrorWithMetadata(
+                TOO_LONG_FRAME_HEADER_API_ERROR_BASE,
+                maxSizeMetadata
+            );
+        }
+
+        // It wasn't complaining about HTTP header size (or we didn't detect it for some reason). Return the
+        //      generic "too long line" ApiError that maps to a 400.
+        return new ApiErrorWithMetadata(
+            TOO_LONG_FRAME_LINE_API_ERROR_BASE,
+            maxSizeMetadata
+        );
+    }
+
+    private Integer extractTooLongFrameMaxSizeFromExceptionMessage(TooLongFrameException ex) {
+        String exMessage = ex.getMessage();
+        
+        if (exMessage == null || !exMessage.endsWith(" bytes.")) {
+            return null;
+        }
+
+        try {
+            String[] messageWords = exMessage.split(" ");
+            String maxSizeWord = messageWords[messageWords.length - 2];
+
+            return Integer.parseInt(maxSizeWord);
+        }
+        catch(Throwable t) {
+            // Couldn't parse it for some reason.
+            logger.debug("Unable to parse max size from TooLongFrameException. ex_message={}", exMessage, t);
+            return null;
+        }
     }
 
     protected SortedApiErrorSet singletonError(ApiError apiError) {

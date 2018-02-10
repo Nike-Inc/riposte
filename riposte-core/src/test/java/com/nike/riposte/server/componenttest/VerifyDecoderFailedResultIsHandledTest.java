@@ -1,7 +1,9 @@
 package com.nike.riposte.server.componenttest;
 
 import com.nike.backstopper.apierror.ApiError;
+import com.nike.backstopper.apierror.ApiErrorBase;
 import com.nike.backstopper.apierror.ApiErrorWithMetadata;
+import com.nike.backstopper.apierror.sample.SampleCoreApiError;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
@@ -33,7 +35,6 @@ import java.util.concurrent.Executor;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
 
-import static com.nike.backstopper.apierror.sample.SampleCoreApiError.MALFORMED_REQUEST;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.verifyErrorReceived;
@@ -166,7 +167,10 @@ public class VerifyDecoderFailedResultIsHandledTest {
                                                                  incompleteCallTimeoutMillis);
 
         // then
-        assertTooLongFrameErrorResponse(serverResponse);
+        assertTooLongFrameErrorResponse(serverResponse, EXPECTED_TOO_LONG_FRAME_LINE_API_ERROR);
+        // The EXPECTED_TOO_LONG_FRAME_LINE_API_ERROR check above should have verified 400 status code, but do a
+        //      sanity check here just for test readability.
+        assertThat(serverResponse.statusCode).isEqualTo(400);
     }
 
     @DataProvider(value = {
@@ -192,7 +196,10 @@ public class VerifyDecoderFailedResultIsHandledTest {
                                                                  incompleteCallTimeoutMillis);
 
         // then
-        assertTooLongFrameErrorResponse(serverResponse);
+        assertTooLongFrameErrorResponse(serverResponse, EXPECTED_TOO_LONG_FRAME_HEADER_API_ERROR);
+        // The EXPECTED_TOO_LONG_FRAME_HEADER_API_ERROR check above should have verified 431 status code, but do a
+        //      sanity check here just for test readability.
+        assertThat(serverResponse.statusCode).isEqualTo(431);
     }
 
     @DataProvider(value = {
@@ -223,7 +230,10 @@ public class VerifyDecoderFailedResultIsHandledTest {
                                                                  incompleteCallTimeoutMillis);
 
         // then
-        assertTooLongFrameErrorResponse(serverResponse);
+        assertTooLongFrameErrorResponse(serverResponse, EXPECTED_TOO_LONG_FRAME_HEADER_API_ERROR);
+        // The EXPECTED_TOO_LONG_FRAME_HEADER_API_ERROR check above should have verified 431 status code, but do a
+        //      sanity check here just for test readability.
+        assertThat(serverResponse.statusCode).isEqualTo(431);
     }
 
     @DataProvider(value = {
@@ -249,14 +259,41 @@ public class VerifyDecoderFailedResultIsHandledTest {
                                                                  incompleteCallTimeoutMillis);
 
         // then
-        assertTooLongFrameErrorResponse(serverResponse);
+        assertTooLongFrameErrorResponse(serverResponse, EXPECTED_TOO_LONG_FRAME_LINE_API_ERROR);
+        // The EXPECTED_TOO_LONG_FRAME_LINE_API_ERROR check above should have verified 400 status code, but do a
+        //      sanity check here just for test readability.
+        assertThat(serverResponse.statusCode).isEqualTo(400);
     }
 
-    private void assertTooLongFrameErrorResponse(NettyHttpClientResponse serverResponse) throws IOException {
-        ApiError expectedApiError = new ApiErrorWithMetadata(
-            MALFORMED_REQUEST,
-            Pair.of("cause", "The request contained an HTTP headers line or other HTTP line that was longer than the maximum allowed")
-        );
+    static HttpRequestDecoderConfig CUSTOM_REQUEST_DECODER_CONFIG = new HttpRequestDecoderConfig() {
+        @Override
+        public int maxInitialLineLength() {
+            return 100;
+        }
+
+        @Override
+        public int maxHeaderSize() {
+            return 200;
+        }
+    };
+
+    private static ApiError malformedReqError = SampleCoreApiError.MALFORMED_REQUEST;
+    private static ApiError EXPECTED_TOO_LONG_FRAME_LINE_API_ERROR = new ApiErrorWithMetadata(
+        new ApiErrorBase(malformedReqError, "TOO_LONG_HTTP_LINE"),
+        Pair.of("cause", "The request contained a HTTP line that was longer than the maximum allowed"),
+        Pair.of("max_length_allowed", CUSTOM_REQUEST_DECODER_CONFIG.maxInitialLineLength())
+    );
+    private static ApiError EXPECTED_TOO_LONG_FRAME_HEADER_API_ERROR = new ApiErrorWithMetadata(
+        new ApiErrorBase(
+            "TOO_LONG_HEADERS", malformedReqError.getErrorCode(), malformedReqError.getMessage(),
+            431, malformedReqError.getMetadata()
+        ),
+        Pair.of("cause", "The combined size of the request's HTTP headers was more than the maximum allowed"),
+        Pair.of("max_length_allowed", CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize())
+    );
+
+    private void assertTooLongFrameErrorResponse(NettyHttpClientResponse serverResponse,
+                                                 ApiError expectedApiError) throws IOException {
         verifyErrorReceived(serverResponse.payload, serverResponse.statusCode, expectedApiError);
     }
 
@@ -333,18 +370,6 @@ public class VerifyDecoderFailedResultIsHandledTest {
             return Matcher.match(MATCHING_PATH);
         }
     }
-
-    static HttpRequestDecoderConfig CUSTOM_REQUEST_DECODER_CONFIG = new HttpRequestDecoderConfig() {
-        @Override
-        public int maxInitialLineLength() {
-            return 100;
-        }
-
-        @Override
-        public int maxHeaderSize() {
-            return 200;
-        }
-    };
 
     public static class BasicServerTestConfig implements ServerConfig {
         private final int port;

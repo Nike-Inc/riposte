@@ -575,7 +575,7 @@ public interface ServerConfig {
          * details on this option.
          *
          * @return The maximum allowed length of all headers combined. If the sum of the length of all headers exceeds
-         * this value then an exception will be thrown that will map to an appropriate HTTP status code 400 response.
+         * this value then an exception will be thrown that will map to an appropriate HTTP status code 431 response.
          */
         default int maxHeaderSize() {
             return 8192;
