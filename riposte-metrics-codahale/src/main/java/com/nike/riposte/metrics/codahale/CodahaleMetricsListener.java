@@ -22,7 +22,6 @@ import com.codahale.metrics.SlidingTimeWindowReservoir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -291,19 +290,25 @@ public class CodahaleMetricsListener implements MetricsListener {
                     logger.error("Metrics Error: httpState.getResponseInfo() is null");
                     return;
                 }
-                if (httpState.getRequestStartTime() == null) {
-                    logger.error("Metrics Error: httpState.getRequestStartTime() is null");
+
+                // Response end time should already be set by now, but just in case it hasn't (i.e. due to an exception
+                //      preventing any response from being sent)...
+                httpState.setResponseEndTimeNanosToNowIfNotAlreadySet();
+                Long requestElapsedTimeMillis = httpState.calculateTotalRequestTimeMillis();
+                if (requestElapsedTimeMillis == null) {
+                    // This should only happen if httpState.getRequestStartTimeNanos() is null,
+                    //      which means AccessLogStartHandler never executed for a Netty HttpRequest message. Something
+                    //      went really wrong with this request.
+                    logger.error(
+                        "Metrics Error: httpState.calculateTotalRequestTimeMillis() is null. "
+                        + "httpState.getRequestStartTimeNanos(): " + httpState.getRequestStartTimeNanos()
+                    );
                     return;
                 }
 
                 final int responseHttpStatusCode =
                     responseInfo.getHttpStatusCodeWithDefault(ResponseSender.DEFAULT_HTTP_STATUS_CODE);
                 final int responseHttpStatusCodeXXValue = responseHttpStatusCode / 100;
-                // TODO: We (maybe) shouldn't calculate the elapsed time here (?) -
-                //       there should (maybe) be a listener that gets executed when the response finishes
-                //       and updates the HTTP state with a new requestEndTime variable.
-                final long requestElapsedTimeMillis =
-                    Instant.now().toEpochMilli() - httpState.getRequestStartTime().toEpochMilli();
 
                 endpointMetricsHandler.handleRequest(
                     requestInfo, responseInfo, httpState, responseHttpStatusCode, responseHttpStatusCodeXXValue,

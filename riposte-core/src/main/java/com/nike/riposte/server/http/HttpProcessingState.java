@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import io.netty.channel.ChannelFuture;
@@ -30,6 +31,9 @@ public class HttpProcessingState implements ProcessingState {
     private Deque<Span> distributedTraceStack;
     private Map<String, String> loggerMdcContextMap;
     private Instant requestStartTime;
+    private Long requestStartTimeNanos;
+    private Long requestLastChunkArrivedTimeNanos;
+    private Long responseEndTimeNanos;
     private ChannelFuture responseWriterFinalChunkChannelFuture;
     private boolean traceCompletedOrScheduled = false;
     private boolean accessLogCompletedOrScheduled = false;
@@ -49,6 +53,9 @@ public class HttpProcessingState implements ProcessingState {
         this.distributedTraceStack = copyMe.getDistributedTraceStack();
         this.loggerMdcContextMap = copyMe.getLoggerMdcContextMap();
         this.requestStartTime = copyMe.getRequestStartTime();
+        this.requestStartTimeNanos = copyMe.getRequestStartTimeNanos();
+        this.requestLastChunkArrivedTimeNanos = copyMe.getRequestLastChunkArrivedTimeNanos();
+        this.responseEndTimeNanos = copyMe.getResponseEndTimeNanos();
         this.responseWriterFinalChunkChannelFuture = copyMe.getResponseWriterFinalChunkChannelFuture();
         this.traceCompletedOrScheduled = copyMe.isTraceCompletedOrScheduled();
         this.accessLogCompletedOrScheduled = copyMe.isAccessLogCompletedOrScheduled();
@@ -68,6 +75,9 @@ public class HttpProcessingState implements ProcessingState {
         distributedTraceStack = null;
         loggerMdcContextMap = null;
         requestStartTime = null;
+        requestStartTimeNanos = null;
+        requestLastChunkArrivedTimeNanos = null;
+        responseEndTimeNanos = null;
         responseWriterFinalChunkChannelFuture = null;
         traceCompletedOrScheduled = false;
         accessLogCompletedOrScheduled = false;
@@ -146,6 +156,54 @@ public class HttpProcessingState implements ProcessingState {
 
     public void setRequestStartTime(Instant requestStartTime) {
         this.requestStartTime = requestStartTime;
+    }
+
+    public Long getRequestStartTimeNanos() {
+        return requestStartTimeNanos;
+    }
+
+    public void setRequestStartTimeNanos(Long requestStartTimeNanos) {
+        this.requestStartTimeNanos = requestStartTimeNanos;
+    }
+
+    public Long getRequestLastChunkArrivedTimeNanos() {
+        return requestLastChunkArrivedTimeNanos;
+    }
+
+    public void setRequestLastChunkArrivedTimeNanos(Long requestLastChunkArrivedTimeNanos) {
+        this.requestLastChunkArrivedTimeNanos = requestLastChunkArrivedTimeNanos;
+    }
+
+    public Long getResponseEndTimeNanos() {
+        return responseEndTimeNanos;
+    }
+
+    public void setResponseEndTimeNanosToNowIfNotAlreadySet() {
+        // Only the first piece of code that recognizes that the response is done gets to set response end time.
+        if (this.responseEndTimeNanos == null) {
+            this.responseEndTimeNanos = System.nanoTime();
+        }
+    }
+
+    /**
+     * @return Convenience method that returns the total time this request took from beginning to end-of-response-sent
+     * in milliseconds, or null if {@link #getRequestStartTimeNanos()} or {@link #getResponseEndTimeNanos()} is null.
+     * This method uses {@link TimeUnit#NANOSECONDS} {@link TimeUnit#toMillis(long)} to convert nanoseconds to
+     * milliseconds, so any nanosecond remainder will be chopped (i.e. 1_999_999 nanoseconds will convert to 1
+     * millisecond - the 0.999999 milliseconds worth of nanosecond-remainder is dropped).
+     *
+     * <p>If you need greater precision than milliseconds you can refer to {@link #getRequestStartTimeNanos()}
+     * (and/or {@link #getRequestLastChunkArrivedTimeNanos()}) and {@link #getResponseEndTimeNanos()} for nanosecond
+     * precision, although you'll need to do the math yourself and you'll need to keep in mind that the values are only
+     * useful in relation to each other - they are not timestamps. For a timestamp you can refer to {@link
+     * #getRequestStartTime()} which returns an {@link Instant}.
+     */
+    public Long calculateTotalRequestTimeMillis() {
+        if (requestStartTimeNanos == null || responseEndTimeNanos == null) {
+            return null;
+        }
+
+        return TimeUnit.NANOSECONDS.toMillis(responseEndTimeNanos - requestStartTimeNanos);
     }
 
     public ChannelFuture getResponseWriterFinalChunkChannelFuture() {

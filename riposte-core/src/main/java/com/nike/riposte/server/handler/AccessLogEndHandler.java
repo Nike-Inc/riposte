@@ -13,8 +13,6 @@ import com.nike.riposte.util.asynchelperwrapper.ChannelFutureListenerWithTracing
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
-
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpResponse;
@@ -57,7 +55,13 @@ public class AccessLogEndHandler extends BaseInboundHandlerWithTracingAndMdcSupp
         // Due to multiple messages and exception possibilities/interactions it's possible we've already done the access
         //      logging for this request, so make sure we only do it if appropriate
         if (httpProcessingState != null && !httpProcessingState.isAccessLogCompletedOrScheduled()) {
-            Instant startTime = httpProcessingState.getRequestStartTime();
+            httpProcessingState.setAccessLogCompletedOrScheduled(true);
+
+            // Response end time should already be set by now under normal circumstances,
+            //      but just in case it hasn't (i.e. exception corner cases)...
+            httpProcessingState.setResponseEndTimeNanosToNowIfNotAlreadySet();
+
+            // Gather the remaining bits needed to execute the access logger.
             ResponseInfo responseInfo = httpProcessingState.getResponseInfo();
             HttpResponse actualResponseObject = httpProcessingState.getActualResponseObject();
             RequestInfo requestInfo = httpProcessingState.getRequestInfo();
@@ -65,7 +69,7 @@ public class AccessLogEndHandler extends BaseInboundHandlerWithTracingAndMdcSupp
             ChannelFutureListener doTheAccessLoggingOperation = new ChannelFutureListenerWithTracingAndMdc(
                 (channelFuture) -> accessLogger.log(
                     requestInfo, actualResponseObject, responseInfo,
-                    Instant.now().minusMillis(startTime.toEpochMilli()).toEpochMilli()
+                    httpProcessingState.calculateTotalRequestTimeMillis()
                 ),
                 ctx
             );
@@ -76,8 +80,6 @@ public class AccessLogEndHandler extends BaseInboundHandlerWithTracingAndMdcSupp
                 doTheAccessLoggingOperation.operationComplete(null);
             else
                 httpProcessingState.getResponseWriterFinalChunkChannelFuture().addListener(doTheAccessLoggingOperation);
-
-            httpProcessingState.setAccessLogCompletedOrScheduled(true);
         }
     }
 
