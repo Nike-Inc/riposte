@@ -43,7 +43,7 @@ class AccessLoggerSpec extends Specification {
     then:
       logger.getAllLoggingEvents().size() == 1
       logger.getAllLoggingEvents().get(0).level == Level.INFO
-      logger.getAllLoggingEvents().get(0).message.contains("\"GET /test HTTP/1.1\" 210 20 \"myReferer\" \"myUserAgent\" accept-Req=- content-type-Req=- content-length-Res=- transfer_encoding-Res=- http_status_code-Res=210 error_uid-Res=- X-B3-Sampled-Req=- X-B3-SpanId-Req=- X-B3-SpanName-Req=- X-B3-TraceId-Req=- X-B3-TraceId-Res=- raw_content_length-Req=19 raw_content_length-Res=21 final_content_length-Res=20 elapsed_time_millis=20")
+      logger.getAllLoggingEvents().get(0).message.contains("\"GET /test HTTP/1.1\" 210 20 \"myReferer\" \"myUserAgent\" accept-Req=- content-type-Req=- content-length-Res=- transfer_encoding-Res=- http_status_code-Res=210 error_uid-Res=- X-B3-Sampled-Req=- X-B3-SpanId-Req=- X-B3-TraceId-Req=- X-B3-TraceId-Res=- raw_content_length-Req=19 raw_content_length-Res=21 final_content_length-Res=20 elapsed_time_millis=20")
   }
 
     def "log(): throws IllegalArgumentException if passed null request"() {
@@ -91,7 +91,7 @@ class AccessLoggerSpec extends Specification {
     when: "we call logMessageAdditions()"
       List<Pair<String, String>> result = accessLogger.logMessageAdditions(requestMock, null, responseMock, 20L)
     then:
-      result.size() == 17
+      result.size() == 16
       result.get(0) == Pair.of("accept-Req", "application/json")
       result.get(1) == Pair.of("content-type-Req", "application/json;charset=utf-8")
       result.get(2) == Pair.of("content-length-Res", "Content-LengthMock")
@@ -100,15 +100,14 @@ class AccessLoggerSpec extends Specification {
       result.get(5) == Pair.of("error_uid-Res", "error_uidMock")
       result.get(6) == Pair.of("X-B3-Sampled-Req", "X-B3-SampledMock")
       result.get(7) == Pair.of("X-B3-SpanId-Req", "X-B3-SpanIdMock")
-      result.get(8) == Pair.of("X-B3-SpanName-Req", "X-B3-SpanNameMock")
-      result.get(9) == Pair.of("X-B3-TraceId-Req", "X-B3-TraceId-ReqMock")
-      result.get(10) == Pair.of("X-B3-TraceId-Res", "X-B3-TraceId-ResMock")
-      result.get(11) == Pair.of("raw_content_length-Req", "19")
-      result.get(12) == Pair.of("raw_content_length-Res", "21")
-      result.get(13) == Pair.of("final_content_length-Res", "20")
-      result.get(14) == Pair.of("elapsed_time_millis", "20")
-      result.get(15) == Pair.of("foo", "bar")
-      result.get(16) == Pair.of("whee", "yay")
+      result.get(8) == Pair.of("X-B3-TraceId-Req", "X-B3-TraceId-ReqMock")
+      result.get(9) == Pair.of("X-B3-TraceId-Res", "X-B3-TraceId-ResMock")
+      result.get(10) == Pair.of("raw_content_length-Req", "19")
+      result.get(11) == Pair.of("raw_content_length-Res", "21")
+      result.get(12) == Pair.of("final_content_length-Res", "20")
+      result.get(13) == Pair.of("elapsed_time_millis", "20")
+      result.get(14) == Pair.of("foo", "bar")
+      result.get(15) == Pair.of("whee", "yay")
   }
     
   def "logMessageAdditions(): includes missing headers but gives them null values"() {
