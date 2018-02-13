@@ -561,7 +561,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(
             CHANNEL_PIPELINE_FINALIZER_HANDLER_NAME,
             new ChannelPipelineFinalizerHandler(
-                exceptionHandlingHandler, responseSender, metricsListener, workerChannelIdleTimeoutMillis
+                exceptionHandlingHandler, responseSender, metricsListener, accessLogger, workerChannelIdleTimeoutMillis
             )
         );
 

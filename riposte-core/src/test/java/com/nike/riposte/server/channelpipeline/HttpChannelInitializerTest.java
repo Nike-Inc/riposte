@@ -1104,11 +1104,13 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_ChannelPipelineFinalizerHandler_as_the_last_handler_and_uses_the_ExceptionHandlingHandler_handler_and_responseSender_and_metricsListener() {
+    public void initChannel_adds_ChannelPipelineFinalizerHandler_as_the_last_handler_and_passes_the_expected_args() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
         MetricsListener expectedMetricsListener = mock(MetricsListener.class);
+        AccessLogger expectedAccessLogger = mock(AccessLogger.class);
         Whitebox.setInternalState(hci, "metricsListener", expectedMetricsListener);
+        Whitebox.setInternalState(hci, "accessLogger", expectedAccessLogger);
         ResponseSender expectedResponseSender = extractField(hci, "responseSender");
 
         // when
@@ -1131,10 +1133,12 @@ public class HttpChannelInitializerTest {
         ExceptionHandlingHandler actualExceptionHandlingHandler = (ExceptionHandlingHandler) Whitebox.getInternalState(channelPipelineFinalizerHandler.getRight(), "exceptionHandlingHandler");
         ResponseSender actualResponseSender = (ResponseSender) Whitebox.getInternalState(channelPipelineFinalizerHandler.getRight(), "responseSender");
         MetricsListener actualMetricsListener = (MetricsListener) Whitebox.getInternalState(channelPipelineFinalizerHandler.getRight(), "metricsListener");
+        AccessLogger actualAccessLogger = (AccessLogger) Whitebox.getInternalState(channelPipelineFinalizerHandler.getRight(), "accessLogger");
 
         assertThat(actualExceptionHandlingHandler, is(expectedExceptionHandlingHandlerPair.getRight()));
         assertThat(actualResponseSender, is(expectedResponseSender));
         assertThat(actualMetricsListener, is(expectedMetricsListener));
+        Assertions.assertThat(actualAccessLogger).isSameAs(expectedAccessLogger);
     }
 
     @Test

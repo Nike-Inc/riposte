@@ -424,7 +424,7 @@ public class AccessLogger {
             Pair.of("raw_content_length-Req", String.valueOf(request.getRawContentLengthInBytes())),
             Pair.of("raw_content_length-Res", uncompressedRawContentLength),
             Pair.of("final_content_length-Res", finalContentLength),
-            Pair.of("elapsed_time_millis", String.valueOf(elapsedTimeMillis))
+            Pair.of("elapsed_time_millis", (elapsedTimeMillis == null) ? null : elapsedTimeMillis.toString())
         ));
 
         List<Pair<String, String>> customApplicationLogMessageExtras =

@@ -56,6 +56,29 @@ class AccessLoggerSpec extends Specification {
             thrown(IllegalArgumentException)
     }
 
+    def "log(): handles null response gracefully"() {
+        given: "the AccessLogger object"
+            AccessLogger accessLogger = new AccessLogger()
+            TestLogger logger = TestLoggerFactory.getTestLogger("ACCESS_LOG")
+            logger.clearAll()
+        and: "we've mocked the request object"
+            RequestInfo requestMock = Mock(RequestInfo)
+            requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
+            requestMock.getHeaders().get("Referer") >> "myReferer"
+            requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+            requestMock.getMethod() >> HttpMethod.GET
+            requestMock.getUri() >> "/test"
+            requestMock.getProtocolVersion() >> HttpVersion.HTTP_1_1
+            requestMock.getRawContentLengthInBytes() >> 19
+        when: "we call logMessageAdditions()"
+            CompletableFuture<?> cf = accessLogger.log(requestMock, null, null, null)
+            cf.join()
+        then:
+            logger.getAllLoggingEvents().size() == 1
+            logger.getAllLoggingEvents().get(0).level == Level.INFO
+            logger.getAllLoggingEvents().get(0).message.contains("\"GET /test HTTP/1.1\" - - \"myReferer\" \"myUserAgent\" accept-Req=- content-type-Req=- content-length-Res=- transfer_encoding-Res=- http_status_code-Res=- error_uid-Res=- X-B3-Sampled-Req=- X-B3-SpanId-Req=- X-B3-TraceId-Req=- X-B3-TraceId-Res=- raw_content_length-Req=19 raw_content_length-Res=- final_content_length-Res=- elapsed_time_millis=-")
+    }
+
   def "logMessageAdditions(): contains all expected headers including custom app ones"() {
     given: "the AccessLogger object that also returns some custom log message extras"
       AccessLogger accessLogger = new AccessLogger() {

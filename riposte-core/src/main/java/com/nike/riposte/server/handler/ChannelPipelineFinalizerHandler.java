@@ -11,6 +11,8 @@ import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.ResponseSender;
+import com.nike.riposte.server.http.impl.RequestInfoImpl;
+import com.nike.riposte.server.logging.AccessLogger;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
@@ -48,6 +50,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
     private final ExceptionHandlingHandler exceptionHandlingHandler;
     private final ResponseSender responseSender;
     private final MetricsListener metricsListener;
+    private final AccessLogger accessLogger;
     private final long workerChannelIdleTimeoutMillis;
     private static final Throwable ARTIFICIAL_SERVER_WORKER_CHANNEL_CLOSED_EXCEPTION =
         new RuntimeException("Server worker channel closed");
@@ -59,13 +62,17 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
      * @param responseSender
      *     The {@link ResponseSender} that is used by the pipeline where this class is registered for sending data to
      *     the user.
+     * @param accessLogger The {@link AccessLogger} that is used by the pipeline where this class is registered for
+     * access logging (i.e. the same access logger set on {@link AccessLogEndHandler}).
      * @param workerChannelIdleTimeoutMillis
      *     The time in millis that should be given to {@link IdleChannelTimeoutHandler}s when they are created for
      *     detecting idle channels that need to be closed.
      */
     public ChannelPipelineFinalizerHandler(ExceptionHandlingHandler exceptionHandlingHandler,
                                            ResponseSender responseSender,
-                                           MetricsListener metricsListener, long workerChannelIdleTimeoutMillis) {
+                                           MetricsListener metricsListener,
+                                           AccessLogger accessLogger,
+                                           long workerChannelIdleTimeoutMillis) {
         if (exceptionHandlingHandler == null)
             throw new IllegalArgumentException("exceptionHandlingHandler cannot be null");
 
@@ -75,6 +82,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         this.exceptionHandlingHandler = exceptionHandlingHandler;
         this.responseSender = responseSender;
         this.metricsListener = metricsListener;
+        this.accessLogger = accessLogger;
         this.workerChannelIdleTimeoutMillis = workerChannelIdleTimeoutMillis;
     }
 
@@ -262,11 +270,14 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                 ).run();
             }
 
+            // The request/response is definitely done at this point since the channel is closing. Set the response end
+            //      time if it hasn't already been done.
+            httpState.setResponseEndTimeNanosToNowIfNotAlreadySet();
+
             // Handle the case where the response wasn't fully sent or tracing wasn't completed for some reason.
             //      We want to finish the distributed tracing span for this request since there's no other place it
             //      might be done, and if the request wasn't fully sent then we should spit out a log message so
             //      debug investigations can find out what happened.
-            // TODO: Is there a way we can handle access logging here, but only if it wasn't done elsewhere? Maybe similar to what we're doing with metrics?
             @SuppressWarnings("SimplifiableConditionalExpression")
             boolean tracingAlreadyCompleted = httpState.isTraceCompletedOrScheduled();
             boolean responseNotFullySent = responseInfo == null || !responseInfo.isResponseSendingLastChunkSent();
@@ -275,24 +286,37 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                     () -> {
                         if (responseNotFullySent) {
                             logger.warn(
-                                "The caller's channel was closed before a response could be sent. This means that "
-                                + "an access log probably does not exist for this request. Distributed tracing "
-                                + "will be completed now if it wasn't already done. Any dangling resources will be "
-                                + "released. response_info_is_null={}",
+                                "The caller's channel was closed before a response could be sent. Distributed tracing "
+                                + "will be completed now if it wasn't already done, and we will attempt to output an "
+                                + "access log if needed. Any dangling resources will be released. "
+                                + "response_info_is_null={}",
                                 (responseInfo == null)
                             );
                         }
 
                         if (!tracingAlreadyCompleted) {
+                            httpState.setTraceCompletedOrScheduled(true);
+
                             Span currentSpan = Tracer.getInstance().getCurrentSpan();
                             if (currentSpan != null && !currentSpan.isCompleted())
                                 Tracer.getInstance().completeRequestSpan();
-
-                            httpState.setTraceCompletedOrScheduled(true);
                         }
                     },
                     ctx
                 ).run();
+            }
+
+            // Make sure access logging is handled
+            if (!httpState.isAccessLogCompletedOrScheduled() && accessLogger != null) {
+                httpState.setAccessLogCompletedOrScheduled(true);
+
+                RequestInfo<?> requestInfoToUse = (requestInfo == null)
+                                                  ? RequestInfoImpl.dummyInstanceForUnknownRequests()
+                                                  : requestInfo;
+                accessLogger.log(
+                    requestInfoToUse, httpState.getActualResponseObject(), responseInfo,
+                    httpState.calculateTotalRequestTimeMillis()
+                );
             }
 
             // Make sure metrics is handled
