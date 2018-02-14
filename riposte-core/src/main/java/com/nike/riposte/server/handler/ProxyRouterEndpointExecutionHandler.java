@@ -72,6 +72,8 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
 
     public static final String DOWNSTREAM_CALL_TIME_NANOS_REQUEST_ATTR_KEY = "proxyRouterDownstreamCallTimeNanos";
     public static final String DOWNSTREAM_CALL_PATH_REQUEST_ATTR_KEY = "proxyRouterDownstreamCallPath";
+    public static final String DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY =
+        ProxyRouterEndpointExecutionHandler.class + "-ProxyRouterDownstreamConnectionSetupTimeNanos";
 
     public ProxyRouterEndpointExecutionHandler(Executor longRunningTaskExecutor,
                                                StreamingAsyncHttpClient streamingAsyncHttpClient,
