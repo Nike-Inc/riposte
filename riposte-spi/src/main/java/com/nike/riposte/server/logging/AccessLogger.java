@@ -419,13 +419,12 @@ public class AccessLogger {
             Pair.of("error_uid-Res", errorUid),
             Pair.of(TRACE_ENABLED + "-Req", request.getHeaders().get(TRACE_ENABLED)),
             Pair.of(SPAN_ID + "-Req", request.getHeaders().get(SPAN_ID)),
-            Pair.of(SPAN_NAME + "-Req", request.getHeaders().get(SPAN_NAME)),
             Pair.of(TRACE_ID + "-Req", request.getHeaders().get(TRACE_ID)),
             Pair.of(TRACE_ID + "-Res", responseTraceId),
             Pair.of("raw_content_length-Req", String.valueOf(request.getRawContentLengthInBytes())),
             Pair.of("raw_content_length-Res", uncompressedRawContentLength),
             Pair.of("final_content_length-Res", finalContentLength),
-            Pair.of("elapsed_time_millis", String.valueOf(elapsedTimeMillis))
+            Pair.of("elapsed_time_millis", (elapsedTimeMillis == null) ? null : elapsedTimeMillis.toString())
         ));
 
         List<Pair<String, String>> customApplicationLogMessageExtras =

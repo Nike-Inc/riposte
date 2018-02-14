@@ -47,7 +47,7 @@ class AccessLogEndHandlerSpec extends Specification {
       logger.clearAll()
 
       HttpProcessingState state = Mock(HttpProcessingState)
-      state.getRequestStartTime() >> Instant.EPOCH
+      state.calculateTotalRequestTimeMillis() >> 42
       state.getResponseInfo() >> Mock(ResponseInfo)
       ChannelAttributes.getHttpProcessingStateForChannel(_) >> state
       ChannelHandlerContext mockContext = Mock(ChannelHandlerContext)
@@ -72,6 +72,8 @@ class AccessLogEndHandlerSpec extends Specification {
         def (ChannelHandlerContext mockContext, HttpProcessingState state) = mockContext()
         ChannelFuture channelFutureMock = Mock(ChannelFuture)
         RequestInfo requestInfoMock = Mock(RequestInfo)
+        Long expectedElapsedTimeMillis = state.calculateTotalRequestTimeMillis()
+        assert expectedElapsedTimeMillis != null
         state.getResponseWriterFinalChunkChannelFuture() >> channelFutureMock
         state.isResponseSent() >> true
         state.getRequestInfo() >> requestInfoMock
@@ -89,7 +91,7 @@ class AccessLogEndHandlerSpec extends Specification {
         HttpResponse actualResponseObjectMock = state.getActualResponseObject()
         ResponseInfo responseInfoMock = state.getResponseInfo()
         boolean accessLoggerCalled = false
-        accessLogger.log(_ as RequestInfo, actualResponseObjectMock, responseInfoMock, _ as Long) >> {
+        accessLogger.log(_ as RequestInfo, actualResponseObjectMock, responseInfoMock, expectedElapsedTimeMillis) >> {
           accessLoggerCalled = true
           return null
         }
@@ -105,7 +107,7 @@ class AccessLogEndHandlerSpec extends Specification {
 
   protected List mockContext() {
     HttpProcessingState state = Mock(HttpProcessingState)
-    state.getRequestStartTime() >> Instant.EPOCH
+    state.calculateTotalRequestTimeMillis() >> 42
     state.getResponseInfo() >> Mock(ResponseInfo)
     state.getActualResponseObject() >> Mock(HttpResponse)
     ChannelAttributes.getHttpProcessingStateForChannel(_) >> state

@@ -10,6 +10,7 @@ import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.ResponseSender;
+import com.nike.riposte.server.logging.AccessLogger;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
@@ -34,6 +35,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.util.Attribute;
 import io.netty.util.concurrent.GenericFutureListener;
 
@@ -66,6 +68,7 @@ public class ChannelPipelineFinalizerHandlerTest {
     private ExceptionHandlingHandler exceptionHandlingHandlerMock;
     private ResponseSender responseSenderMock;
     private MetricsListener metricsListenerMock;
+    private AccessLogger accessLoggerMock;
     private Channel channelMock;
     private ChannelHandlerContext ctxMock;
     private ChannelPipeline pipelineMock;
@@ -82,7 +85,9 @@ public class ChannelPipelineFinalizerHandlerTest {
         exceptionHandlingHandlerMock = mock(ExceptionHandlingHandler.class);
         responseSenderMock = mock(ResponseSender.class);
         metricsListenerMock = mock(MetricsListener.class);
-        handler = new ChannelPipelineFinalizerHandler(exceptionHandlingHandlerMock, responseSenderMock, metricsListenerMock, workerChannelIdleTimeoutMillis);
+        accessLoggerMock = mock(AccessLogger.class);
+        handler = new ChannelPipelineFinalizerHandler(exceptionHandlingHandlerMock, responseSenderMock, metricsListenerMock,
+                                                      accessLoggerMock, workerChannelIdleTimeoutMillis);
         channelMock = mock(Channel.class);
         ctxMock = mock(ChannelHandlerContext.class);
         pipelineMock = mock(ChannelPipeline.class);
@@ -111,8 +116,10 @@ public class ChannelPipelineFinalizerHandlerTest {
     @Test
     public void constructor_works_with_valid_args() {
         // given
-        ChannelPipelineFinalizerHandler handler = new ChannelPipelineFinalizerHandler(mock(ExceptionHandlingHandler.class), mock(ResponseSender.class), null,
-                                                                                      workerChannelIdleTimeoutMillis);
+        ChannelPipelineFinalizerHandler handler = new ChannelPipelineFinalizerHandler(
+            mock(ExceptionHandlingHandler.class), mock(ResponseSender.class), null, null,
+            workerChannelIdleTimeoutMillis
+        );
 
         // expect
         assertThat(handler, notNullValue());
@@ -121,13 +128,15 @@ public class ChannelPipelineFinalizerHandlerTest {
     @Test(expected = IllegalArgumentException.class)
     public void constructor_throws_IllegalArgumentException_if_exceptionHandlingHandler_is_null() {
         // expect
-        new ChannelPipelineFinalizerHandler(null, mock(ResponseSender.class), null, workerChannelIdleTimeoutMillis);
+        new ChannelPipelineFinalizerHandler(null, mock(ResponseSender.class), null, null,
+                                            workerChannelIdleTimeoutMillis);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void constructor_throws_IllegalArgumentException_if_responseSender_is_null() {
         // expect
-        new ChannelPipelineFinalizerHandler(mock(ExceptionHandlingHandler.class), null, null, workerChannelIdleTimeoutMillis);
+        new ChannelPipelineFinalizerHandler(mock(ExceptionHandlingHandler.class), null, null, null,
+                                            workerChannelIdleTimeoutMillis);
     }
 
     @Test
@@ -563,6 +572,70 @@ public class ChannelPipelineFinalizerHandlerTest {
         Assertions.assertThat(
             handler.argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(null, null, null, null)
         ).isFalse();
+    }
+
+    @DataProvider(value = {
+        "true",
+        "false"
+    }, splitBy = "\\|")
+    @Test
+    public void doChannelInactive_should_call_accessLogger_if_access_logging_not_already_scheduled(
+        boolean requestInfoIsNull
+    ) throws Exception {
+        // given
+        state.setAccessLogCompletedOrScheduled(false);
+        if (requestInfoIsNull) {
+            state.setRequestInfo(null);
+        }
+
+        HttpResponse actualResponseMock = mock(HttpResponse.class);
+        state.setActualResponseObject(actualResponseMock);
+
+        HttpProcessingState stateSpy = spy(state);
+        doReturn(42L).when(stateSpy).calculateTotalRequestTimeMillis();
+        doReturn(stateSpy).when(stateAttributeMock).get();
+
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isFalse();
+
+        // when
+        handler.doChannelInactive(ctxMock);
+
+        // then
+        verify(stateSpy).setResponseEndTimeNanosToNowIfNotAlreadySet();
+        ArgumentCaptor<RequestInfo> requestInfoArgumentCaptor = ArgumentCaptor.forClass(RequestInfo.class);
+        verify(accessLoggerMock).log(
+            requestInfoArgumentCaptor.capture(), eq(actualResponseMock), eq(responseInfoMock), eq(42L)
+        );
+        RequestInfo actualRequestInfo = requestInfoArgumentCaptor.getValue();
+        if (requestInfoIsNull) {
+            Assertions.assertThat(actualRequestInfo.getUri()).isEqualTo(RequestInfo.NONE_OR_UNKNOWN_TAG);
+        }
+        else {
+            Assertions.assertThat(actualRequestInfo).isSameAs(requestInfoMock);
+        }
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isTrue();
+    }
+
+    @DataProvider(value = {
+        "true   |   false",
+        "false  |   true"
+    }, splitBy = "\\|")
+    @Test
+    public void doChannelInactive_should_not_call_accessLogger_if_accessLogger_is_null_or_access_logging_already_scheduled(
+        boolean accessLoggerIsNull, boolean accessLoggingAlreadyScheduled
+    ) throws Exception {
+        // given
+        if (accessLoggerIsNull)
+            Whitebox.setInternalState(handler, "accessLogger", null);
+
+        state.setAccessLogCompletedOrScheduled(accessLoggingAlreadyScheduled);
+
+        // when
+        handler.doChannelInactive(ctxMock);
+
+        // then
+        verifyZeroInteractions(accessLoggerMock);
+        Assertions.assertThat(state.isAccessLogCompletedOrScheduled()).isEqualTo(accessLoggingAlreadyScheduled);
     }
 
     @Test

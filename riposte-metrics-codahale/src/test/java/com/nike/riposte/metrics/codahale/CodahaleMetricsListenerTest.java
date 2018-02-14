@@ -33,8 +33,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.Whitebox;
 import org.slf4j.Logger;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -43,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -53,6 +52,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER;
 import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultMetricNamingStrategy.DEFAULT_PREFIX;
 import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultMetricNamingStrategy.DEFAULT_WORD_DELIMITER;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
@@ -98,7 +98,7 @@ public class CodahaleMetricsListenerTest {
     private RequestInfo<?> requestInfoMock;
     private ResponseInfo<?> responseInfoMock;
 
-    private Instant requestStartTime;
+    private long requestStartTimeNanos;
 
     @Before
     public void beforeMethod() {
@@ -146,8 +146,8 @@ public class CodahaleMetricsListenerTest {
 
         state.setRequestInfo(requestInfoMock);
         state.setResponseInfo(responseInfoMock);
-        requestStartTime = Instant.now().minus(42, ChronoUnit.MILLIS);
-        state.setRequestStartTime(requestStartTime);
+        requestStartTimeNanos = System.nanoTime() - TimeUnit.MILLISECONDS.toNanos(42);
+        state.setRequestStartTimeNanos(requestStartTimeNanos);
     }
 
     private void setupMetricRegistryAndCodahaleMetricsCollector() {
@@ -563,9 +563,9 @@ public class CodahaleMetricsListenerTest {
         Thread.sleep((long)(Math.random() * 25));
 
         // when
-        long beforeCallTime = System.currentTimeMillis();
+        long beforeCallTimeNanos = System.nanoTime();
         listener.onEvent(event, state);
-        long afterCallTime = System.currentTimeMillis();
+        long afterCallTimeNanos = System.nanoTime();
 
         // then
         // Inflight requests counter decremented
@@ -581,17 +581,18 @@ public class CodahaleMetricsListenerTest {
         verify(listener.requestSizes).update(requestRawContentLengthBytes);
         verify(listener.responseSizes).update(finalResponseContentLength);
 
+        // Response end time should be set correctly
+        assertThat(state.getResponseEndTimeNanos()).isBetween(beforeCallTimeNanos, afterCallTimeNanos);
+
         // The EndpointMetricsHandler should have been notified
         int responseHttpStatusCodeXXValue = responseStatusCode / 100;
-        long expectedElapsedTimeMillisLowerBound = beforeCallTime - requestStartTime.toEpochMilli();
-        long expectedElapsedTimeMillisUpperBound = afterCallTime - requestStartTime.toEpochMilli();
         ArgumentCaptor<Long> elapsedTimeMillisArgCaptor = ArgumentCaptor.forClass(Long.class);
         verify(endpointMetricsHandlerMock).handleRequest(
             eq(requestInfoMock), eq(responseInfoMock), eq(state), eq(responseStatusCode),
             eq(responseHttpStatusCodeXXValue), elapsedTimeMillisArgCaptor.capture()
         );
-        assertThat(elapsedTimeMillisArgCaptor.getValue())
-            .isBetween(expectedElapsedTimeMillisLowerBound, expectedElapsedTimeMillisUpperBound);
+        long expectedElapsedTimeNanos = state.getResponseEndTimeNanos() - state.getRequestStartTimeNanos();
+        assertThat(elapsedTimeMillisArgCaptor.getValue()).isEqualTo(NANOSECONDS.toMillis(expectedElapsedTimeNanos));
     }
 
     @DataProvider(value = {
@@ -618,9 +619,9 @@ public class CodahaleMetricsListenerTest {
         doReturn(finalResponseContentLength).when(responseInfoMock).getFinalContentLength();
 
         // when
-        long beforeCallTime = System.currentTimeMillis();
+        long beforeCallTimeNanos = System.nanoTime();
         listener.onEvent(event, state);
-        long afterCallTime = System.currentTimeMillis();
+        long afterCallTimeNanos = System.nanoTime();
 
         // then
         // Inflight requests counter decremented
@@ -636,17 +637,18 @@ public class CodahaleMetricsListenerTest {
         verify(listener.requestSizes).update(requestRawContentLengthBytes);
         verify(listener.responseSizes).update(finalResponseContentLength);
 
+        // Response end time should be set correctly
+        assertThat(state.getResponseEndTimeNanos()).isBetween(beforeCallTimeNanos, afterCallTimeNanos);
+
         // The EndpointMetricsHandler should have been notified
         int responseHttpStatusCodeXXValue = responseStatusCode / 100;
-        long expectedElapsedTimeMillisLowerBound = beforeCallTime - requestStartTime.toEpochMilli();
-        long expectedElapsedTimeMillisUpperBound = afterCallTime - requestStartTime.toEpochMilli();
         ArgumentCaptor<Long> elapsedTimeMillisArgCaptor = ArgumentCaptor.forClass(Long.class);
         verify(endpointMetricsHandlerMock).handleRequest(
             eq(requestInfoMock), eq(responseInfoMock), eq(state), eq(responseStatusCode),
             eq(responseHttpStatusCodeXXValue), elapsedTimeMillisArgCaptor.capture()
         );
-        assertThat(elapsedTimeMillisArgCaptor.getValue())
-            .isBetween(expectedElapsedTimeMillisLowerBound, expectedElapsedTimeMillisUpperBound);
+        long expectedElapsedTimeNanos = state.getResponseEndTimeNanos() - state.getRequestStartTimeNanos();
+        assertThat(elapsedTimeMillisArgCaptor.getValue()).isEqualTo(NANOSECONDS.toMillis(expectedElapsedTimeNanos));
     }
 
     @Test
@@ -700,9 +702,9 @@ public class CodahaleMetricsListenerTest {
     }
 
     @Test
-    public void onEvent_should_short_circuit_for_RESPONSE_SENT_if_request_start_time_is_null() {
+    public void onEvent_should_short_circuit_for_RESPONSE_SENT_if_request_start_time_nanos_is_null() {
         // given
-        state.setRequestStartTime(null);
+        state.setRequestStartTimeNanos(null);
 
         // when
         listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, state);

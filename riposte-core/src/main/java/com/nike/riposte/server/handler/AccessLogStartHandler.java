@@ -12,6 +12,7 @@ import java.time.Instant;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
 
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 
@@ -33,15 +34,30 @@ public class AccessLogStartHandler extends BaseInboundHandlerWithTracingAndMdcSu
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
             HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             if (httpProcessingState != null) {
                 httpProcessingState.setRequestStartTime(Instant.now());
+                httpProcessingState.setRequestStartTimeNanos(System.nanoTime());
             }
             else {
                 runnableWithTracingAndMdc(
-                    () -> logger.warn("HttpProcessingState is null. This shouldn't happen."), ctx
+                    () -> logger.warn("HttpProcessingState is null reading HttpRequest. This shouldn't happen."),
+                    ctx
+                ).run();
+            }
+        }
+
+        if (msg instanceof LastHttpContent) {
+            HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
+            if (httpProcessingState != null) {
+                httpProcessingState.setRequestLastChunkArrivedTimeNanos(System.nanoTime());
+            }
+            else {
+                runnableWithTracingAndMdc(
+                    () -> logger.warn("HttpProcessingState is null reading LastHttpContent. This shouldn't happen."),
+                    ctx
                 ).run();
             }
         }
