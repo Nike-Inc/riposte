@@ -4,6 +4,7 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.RequestInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,9 @@ public class AccessLogStartHandler extends BaseInboundHandlerWithTracingAndMdcSu
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
+    public static final String REQUEST_PAYLOAD_TRANSFER_TIME_NANOS_REQUEST_ATTR_KEY =
+        AccessLogStartHandler.class.getName() + "-RequestPayloadTransferTimeNanos";
+
     @Override
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
@@ -52,7 +56,33 @@ public class AccessLogStartHandler extends BaseInboundHandlerWithTracingAndMdcSu
         if (msg instanceof LastHttpContent) {
             HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             if (httpProcessingState != null) {
-                httpProcessingState.setRequestLastChunkArrivedTimeNanos(System.nanoTime());
+                // Capture the current nano time as the time when the last chunk of the payload was received.
+                long lastChunkArrivedTimeNanos = System.nanoTime();
+                httpProcessingState.setRequestLastChunkArrivedTimeNanos(lastChunkArrivedTimeNanos);
+
+                // Calculate and set a request attribute for the payload transfer time from the caller.
+                RequestInfo<?> requestInfo = httpProcessingState.getRequestInfo();
+                if (requestInfo != null) {
+                    Long reqStartTimeNanos = httpProcessingState.getRequestStartTimeNanos();
+                    if (reqStartTimeNanos != null) {
+                        requestInfo.addRequestAttribute(REQUEST_PAYLOAD_TRANSFER_TIME_NANOS_REQUEST_ATTR_KEY,
+                                                        (lastChunkArrivedTimeNanos - reqStartTimeNanos));
+                    }
+                    else {
+                        runnableWithTracingAndMdc(
+                            () -> logger.warn("HttpProcessingState.getRequestStartTimeNanos() is null. "
+                                              + "This shouldn't happen."),
+                            ctx
+                        ).run();
+                    }
+
+                }
+                else {
+                    runnableWithTracingAndMdc(
+                        () -> logger.warn("RequestInfo is null. This shouldn't happen."),
+                        ctx
+                    ).run();
+                }
             }
             else {
                 runnableWithTracingAndMdc(

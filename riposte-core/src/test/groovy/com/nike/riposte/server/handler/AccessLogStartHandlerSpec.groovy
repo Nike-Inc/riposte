@@ -3,6 +3,8 @@ package com.nike.riposte.server.handler
 import com.nike.riposte.server.channelpipeline.ChannelAttributes
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior
 import com.nike.riposte.server.http.HttpProcessingState
+import com.nike.riposte.server.http.RequestInfo
+import com.nike.riposte.server.http.impl.RequestInfoImpl
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.http.HttpRequest
@@ -16,6 +18,8 @@ import uk.org.lidalia.slf4jtest.TestLogger
 import uk.org.lidalia.slf4jtest.TestLoggerFactory
 
 import java.time.Instant
+
+import static com.nike.riposte.server.handler.AccessLogStartHandler.REQUEST_PAYLOAD_TRANSFER_TIME_NANOS_REQUEST_ATTR_KEY
 
 class AccessLogStartHandlerSpec extends Specification {
 
@@ -48,12 +52,17 @@ class AccessLogStartHandlerSpec extends Specification {
     given: "an AccessLogStartHandler"
       AccessLogStartHandler handler = new AccessLogStartHandler()
       def (ChannelHandlerContext mockContext, HttpProcessingState state) = mockContext()
+      def requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests()
+      state.setRequestStartTimeNanos(System.nanoTime() - 42)
+      state.setRequestInfo(requestInfo)
       assert state.getRequestLastChunkArrivedTimeNanos() == null
     when: "we call doChannelRead()"
       PipelineContinuationBehavior response = handler.doChannelRead(mockContext, Mock(LastHttpContent))
     then:
       response == PipelineContinuationBehavior.CONTINUE
       state.getRequestLastChunkArrivedTimeNanos() != null
+      requestInfo.getRequestAttributes().get(REQUEST_PAYLOAD_TRANSFER_TIME_NANOS_REQUEST_ATTR_KEY) ==
+                                        (state.getRequestLastChunkArrivedTimeNanos() - state.getRequestStartTimeNanos())
   }
 
   @Unroll
@@ -82,6 +91,46 @@ class AccessLogStartHandlerSpec extends Specification {
 
     where:
       message << [Mock(HttpRequest), Mock(LastHttpContent)]
+  }
+
+  def "doChannelRead() - message is LastHttpContent - null RequestInfo"() {
+    given: "an AccessLogStartHandler"
+      AccessLogStartHandler handler = new AccessLogStartHandler()
+      TestLogger logger = TestLoggerFactory.getTestLogger(handler.getClass())
+      logger.clearAll()
+
+      def (ChannelHandlerContext mockContext, HttpProcessingState state) = mockContext()
+
+      assert state.getRequestInfo() == null
+    
+    when: "we call doChannelRead()"
+      PipelineContinuationBehavior response = handler.doChannelRead(mockContext, Mock(LastHttpContent))
+    then:
+      response == PipelineContinuationBehavior.CONTINUE
+      logger.getAllLoggingEvents().size() == 1
+      logger.getAllLoggingEvents().get(0).level == Level.WARN
+      logger.getAllLoggingEvents().get(0).message == "RequestInfo is null. This shouldn't happen."
+  }
+
+  def "doChannelRead() - message is LastHttpContent - null state.getRequestStartTimeNanos()"() {
+    given: "an AccessLogStartHandler"
+    AccessLogStartHandler handler = new AccessLogStartHandler()
+    TestLogger logger = TestLoggerFactory.getTestLogger(handler.getClass())
+    logger.clearAll()
+
+    def (ChannelHandlerContext mockContext, HttpProcessingState state) = mockContext()
+
+    state.setRequestInfo(Mock(RequestInfo))
+
+    assert state.getRequestStartTimeNanos() == null
+
+    when: "we call doChannelRead()"
+    PipelineContinuationBehavior response = handler.doChannelRead(mockContext, Mock(LastHttpContent))
+    then:
+    response == PipelineContinuationBehavior.CONTINUE
+    logger.getAllLoggingEvents().size() == 1
+    logger.getAllLoggingEvents().get(0).level == Level.WARN
+    logger.getAllLoggingEvents().get(0).message == "HttpProcessingState.getRequestStartTimeNanos() is null. This shouldn't happen."
   }
 
   protected List mockContext() {

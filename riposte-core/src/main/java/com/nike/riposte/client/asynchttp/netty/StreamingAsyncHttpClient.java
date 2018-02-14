@@ -3,10 +3,13 @@ package com.nike.riposte.client.asynchttp.netty;
 import com.nike.backstopper.exception.WrapperException;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.client.asynchttp.netty.downstreampipeline.DownstreamIdleChannelTimeoutHandler;
+import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
+import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.RequestInfo;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
 import com.nike.wingtips.http.HttpRequestTracingUtils;
@@ -83,6 +86,7 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 
+import static com.nike.riposte.server.handler.ProxyRouterEndpointExecutionHandler.DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY;
 import static com.nike.riposte.util.AsyncNettyHelper.linkTracingAndMdcToCurrentThread;
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 import static com.nike.riposte.util.AsyncNettyHelper.unlinkTracingAndMdcFromCurrentThread;
@@ -595,8 +599,7 @@ public class StreamingAsyncHttpClient {
                                  : downstreamHost + ":" + downstreamPort;
         initialRequestChunk.headers().set(HttpHeaders.Names.HOST, hostHeaderValue);
 
-        ObjectHolder<Long> beforeConnectionStartTimeNanos = new ObjectHolder<>();
-        beforeConnectionStartTimeNanos.heldObject = System.nanoTime();
+        long beforeConnectionStartTimeNanos = System.nanoTime();
 
         // Create a connection to the downstream server.
         ChannelPool pool = getPooledChannelFuture(downstreamHost, downstreamPort);
@@ -605,8 +608,22 @@ public class StreamingAsyncHttpClient {
         channelFuture.addListener(future -> {
             Pair<Deque<Span>, Map<String, String>> originalThreadInfo = null;
             try {
+                long connectionSetupTimeNanos = System.nanoTime() - beforeConnectionStartTimeNanos;
+                HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
+                if (httpProcessingState != null) {
+                    RequestInfo<?> requestInfo = httpProcessingState.getRequestInfo();
+                    if (requestInfo != null) {
+                        requestInfo.addRequestAttribute(DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY,
+                                                        connectionSetupTimeNanos);
+                    }
+                }
+
                 // Setup tracing and MDC so our log messages have the correct distributed trace info, etc.
                 originalThreadInfo = linkTracingAndMdcToCurrentThread(ctx);
+
+                if (logger.isDebugEnabled()) {
+                    logger.debug("CONNECTION SETUP TIME NANOS: {}", connectionSetupTimeNanos);
+                }
 
                 if (!future.isSuccess()) {
                     try {
@@ -628,12 +645,6 @@ public class StreamingAsyncHttpClient {
                     }
 
                     return;
-                }
-
-                if (logger.isDebugEnabled()) {
-                    logger.debug("CONNECTION SETUP TIME NANOS: {}",
-                                 (System.nanoTime() - beforeConnectionStartTimeNanos.heldObject)
-                    );
                 }
 
                 // Do a subspan around the downstream call if desired.
