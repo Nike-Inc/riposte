@@ -1,5 +1,6 @@
 package com.nike.riposte.typesafeconfig;
 
+import com.nike.internal.util.Pair;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
@@ -21,6 +22,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.ResourceLeakDetector;
@@ -113,6 +115,30 @@ public class TypesafeConfigServerTest {
         assertThat(response.asString()).isEqualTo("overridevalue");
         assertThat(System.getProperty("org.jboss.logging.provider")).isEqualTo("slf4j");
         assertThat(ResourceLeakDetector.getLevel()).isEqualTo(ResourceLeakDetector.Level.PARANOID);
+    }
+
+    @Test
+    public void getAppIdAndEnvironmentPair(){
+        // given
+        setAppAndEnvironment("typesafeconfigserver", "compiletimetest");
+
+        AtomicBoolean called = new AtomicBoolean(false);
+        // when
+        TypesafeConfigServer server = new TypesafeConfigServer(){
+            protected ServerConfig getServerConfig(Config appConfig){
+                return null;
+            }
+
+            @Override
+            protected Pair<String, String> getAppIdAndEnvironmentPair() {
+                called.set(true);
+                return super.getAppIdAndEnvironmentPair();
+            }
+        };
+        server.infrastructureInit();
+
+        // then (verify that getAppIdAndEnvironmentPair was called from infrastructureInit)
+        assertThat(called.get()).isTrue();
     }
 
     private static class SomeEndpoint extends StandardEndpoint<Void, String> {

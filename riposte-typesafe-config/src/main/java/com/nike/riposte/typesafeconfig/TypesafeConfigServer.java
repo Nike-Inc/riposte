@@ -81,7 +81,7 @@ public abstract class TypesafeConfigServer {
     protected void infrastructureInit() {
         MainClassUtils.setupJbossLoggingToUseSlf4j();
 
-        Pair<String, String> appIdAndEnvironmentPair = MainClassUtils.getAppIdAndEnvironmentFromSystemProperties();
+        Pair<String, String> appIdAndEnvironmentPair = getAppIdAndEnvironmentPair();
         Config appConfig = TypesafeConfigUtil
             .loadConfigForAppIdAndEnvironment(appIdAndEnvironmentPair.getLeft(), appIdAndEnvironmentPair.getRight());
 
@@ -95,6 +95,19 @@ public abstract class TypesafeConfigServer {
         MainClassUtils.setupNettyLeakDetectionLevel(appConfig::hasPath, appConfig::getString);
 
         setAppConfig(appConfig);
+    }
+
+    /**
+     * Allow the appId and Environment to be overridden when loading TypesafeConfig files.
+     * This will support resolution of different TypesafeConfig files without globally modifying the
+     * appId or environment.  This would allow region specific property files
+     * while still maintaining the same appId or environment variables.
+     *
+     * @return {@code Pair<String,String>} with the {@code Left} the appId of the TypesafeConfig to load
+     * and the {@code Right} the Environment.
+     */
+    protected Pair<String,String> getAppIdAndEnvironmentPair(){
+        return MainClassUtils.getAppIdAndEnvironmentFromSystemProperties();
     }
 
     /**
