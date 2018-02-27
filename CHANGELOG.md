@@ -8,11 +8,21 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.12.x` Releases - [0.12.0](#0120) 
+- `0.12.x` Releases - [0.12.1](#0121), [0.12.0](#0120) 
 - `0.11.x` Releases - [0.11.2](#0112), [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.12.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.12.1)
+
+Released on 2018-02-27.
+
+### Changed
+
+- Changed `TypesafeConfigServer` to allow you to override the `appId` and/or `environment` that are used to load
+the properties files: see the new overridable `TypesafeConfigServer.getAppIdAndEnvironmentPair()` method.
+    - Changed by [jcnorman48][contrib_jcnorman48] in pull request [#96](https://github.com/Nike-Inc/riposte/pull/96).
 
 ## [0.12.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.12.0)
 
@@ -331,3 +341,4 @@ Released on 2016-11-03.
 [contrib_amitsk]: https://github.com/amitsk
 [contrib_tlisonbee]: https://github.com/tlisonbee
 [contrib_cjha]: https://github.com/cjha
+[contrib_jcnorman48]: https://github.com/jcnorman48
