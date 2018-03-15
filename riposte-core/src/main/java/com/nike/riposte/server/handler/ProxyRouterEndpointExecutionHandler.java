@@ -168,7 +168,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                             //      info (i.e. for access logs if desired)
                             requestInfo.addRequestAttribute(
                                 DOWNSTREAM_CALL_PATH_REQUEST_ATTR_KEY,
-                                HttpUtils.extractPath(downstreamRequestFirstChunkInfo.firstChunk.getUri())
+                                HttpUtils.extractPath(downstreamRequestFirstChunkInfo.firstChunk.uri())
                             );
 
                             // Try our circuit breaker (if we have one).
@@ -463,14 +463,14 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         return Optional.of(
             new CircuitBreakerDelegate<>(
                 defaultStatusCodeCircuitBreaker,
-                httpResponse -> (httpResponse == null ? null : httpResponse.getStatus().code())
+                httpResponse -> (httpResponse == null ? null : httpResponse.status().code())
             )
         );
     }
 
     protected static ResponseInfo<?> createChunkedResponseInfoFromHttpResponse(HttpResponse httpResponse) {
         return ResponseInfo.newChunkedResponseBuilder()
-                           .withHttpStatusCode(httpResponse.getStatus().code())
+                           .withHttpStatusCode(httpResponse.status().code())
                            .withHeaders(httpResponse.headers())
                            .withPreventCompressedOutput(true)
                            .build();
@@ -518,8 +518,8 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                               .append(String.join(",", response.headers().getAll(headerName))).append("\"");
                         }
                         logger.debug("STREAMING RESPONSE HEADERS: " + sb.toString());
-                        logger.debug("STREAMING RESPONSE HTTP STATUS: " + response.getStatus().code());
-                        logger.debug("STREAMING RESPONSE PROTOCOL: " + response.getProtocolVersion().text());
+                        logger.debug("STREAMING RESPONSE HTTP STATUS: " + response.status().code());
+                        logger.debug("STREAMING RESPONSE PROTOCOL: " + response.protocolVersion().text());
                     },
                     ctx
                 ).run();

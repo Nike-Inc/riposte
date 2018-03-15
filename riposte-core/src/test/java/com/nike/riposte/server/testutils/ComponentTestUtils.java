@@ -287,7 +287,7 @@ public class ComponentTestUtils {
         public final FullHttpResponse fullHttpResponse;
 
         public NettyHttpClientResponse(FullHttpResponse fullHttpResponse) {
-            this.statusCode = fullHttpResponse.getStatus().code();
+            this.statusCode = fullHttpResponse.status().code();
             this.headers = fullHttpResponse.headers();
             ByteBuf content = fullHttpResponse.content();
             this.payloadBytes = new byte[content.readableBytes()];

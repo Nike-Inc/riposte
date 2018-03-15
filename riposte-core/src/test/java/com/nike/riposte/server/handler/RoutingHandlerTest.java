@@ -319,7 +319,7 @@ public class RoutingHandlerTest {
         HttpRequest msgMock = mock(HttpRequest.class);
         DecoderResult decoderResult = mock(DecoderResult.class);
         doReturn(true).when(decoderResult).isFailure();
-        doReturn(decoderResult).when(msgMock).getDecoderResult();
+        doReturn(decoderResult).when(msgMock).decoderResult();
         doReturn(null).when(stateMock).getRequestInfo();
 
         // when
@@ -341,9 +341,9 @@ public class RoutingHandlerTest {
         HttpRequest msgMock = mock(HttpRequest.class);
         String uri = "/some/url";
         HttpHeaders headers = new DefaultHttpHeaders();
-        doReturn(uri).when(msgMock).getUri();
+        doReturn(uri).when(msgMock).uri();
         doReturn(headers).when(msgMock).headers();
-        doReturn(HttpVersion.HTTP_1_1).when(msgMock).getProtocolVersion();
+        doReturn(HttpVersion.HTTP_1_1).when(msgMock).protocolVersion();
         RequestInfo<?> requestInfoAlreadyOnState = (requestInfoAlreadySetOnState) ? requestInfoMock : null;
         doReturn(Optional.of(uri)).when(matcherMock).matchesPath(any(RequestInfo.class));
         doReturn(requestInfoAlreadyOnState).when(stateMock).getRequestInfo();

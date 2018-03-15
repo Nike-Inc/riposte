@@ -284,10 +284,10 @@ public class HttpServletResponseWrapperForResponseInfoTest {
         headers.set(headerKey2, UUID.randomUUID().toString());
 
         // when
-        Collection result = wrapper.getHeaderNames();
+        Collection<String> result = wrapper.getHeaderNames();
 
         // then
-        assertThat(result).isEqualTo(headers.names());
+        assertThat(result).containsAll(headers.names());
         assertThat(headers.names()).hasSize(2);
     }
 

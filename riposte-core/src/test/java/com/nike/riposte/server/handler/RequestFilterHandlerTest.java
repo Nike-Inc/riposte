@@ -147,9 +147,9 @@ public class RequestFilterHandlerTest {
 
         String uri = "/some/url";
         HttpHeaders headers = new DefaultHttpHeaders();
-        doReturn(uri).when(firstChunkMsgMock).getUri();
+        doReturn(uri).when(firstChunkMsgMock).uri();
         doReturn(headers).when(firstChunkMsgMock).headers();
-        doReturn(HttpVersion.HTTP_1_1).when(firstChunkMsgMock).getProtocolVersion();
+        doReturn(HttpVersion.HTTP_1_1).when(firstChunkMsgMock).protocolVersion();
 
         // when
         handlerSpy.doChannelRead(ctxMock, firstChunkMsgMock);
@@ -171,7 +171,7 @@ public class RequestFilterHandlerTest {
         // given
         DecoderResult decoderResult = mock(DecoderResult.class);
         doReturn(true).when(decoderResult).isFailure();
-        doReturn(decoderResult).when(firstChunkMsgMock).getDecoderResult();
+        doReturn(decoderResult).when(firstChunkMsgMock).decoderResult();
         state.setRequestInfo(null);
 
         // when

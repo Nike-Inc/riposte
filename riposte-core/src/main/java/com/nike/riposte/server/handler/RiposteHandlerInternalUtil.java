@@ -37,9 +37,9 @@ class RiposteHandlerInternalUtil {
     }
 
     void throwExceptionIfNotSuccessfullyDecoded(HttpObject httpObject) {
-        if (httpObject.getDecoderResult() != null && httpObject.getDecoderResult().isFailure()) {
+        if (httpObject.decoderResult() != null && httpObject.decoderResult().isFailure()) {
             throw new InvalidHttpRequestException("Detected HttpObject that was not successfully decoded.",
-                                                  httpObject.getDecoderResult().cause());
+                                                  httpObject.decoderResult().cause());
         }
     }
 

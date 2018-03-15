@@ -619,9 +619,9 @@ public class ResponseSender {
 
             StringBuilder sb = new StringBuilder();
             sb.append("SENDING RESPONSE:");
-            sb.append("\n\tHTTP STATUS: ").append(response.getStatus().code());
+            sb.append("\n\tHTTP STATUS: ").append(response.status().code());
             sb.append("\n\tHEADERS: ").append(headers.toString());
-            sb.append("\n\tPROTOCOL: ").append(response.getProtocolVersion().text());
+            sb.append("\n\tPROTOCOL: ").append(response.protocolVersion().text());
             if (response instanceof HttpContent) {
                 HttpContent chunk = (HttpContent) response;
                 sb.append("\n\tCONTENT CHUNK: ").append(chunk.getClass().getName()).append(", size: ")

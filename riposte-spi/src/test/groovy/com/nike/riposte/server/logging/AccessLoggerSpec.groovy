@@ -284,7 +284,7 @@ class AccessLoggerSpec extends Specification {
             HttpResponse finalResponseObj = null
             if (!finalResponseObjectIsNull) {
                 finalResponseObj = Mock(HttpResponse)
-                finalResponseObj.getStatus() >> finalResponseObjectGetStatus
+                finalResponseObj.status() >> finalResponseObjectGetStatus
             }
             ResponseInfo responseInfo = null
             if (!responseInfoIsNull)
@@ -437,7 +437,7 @@ class AccessLoggerSpec extends Specification {
             HttpResponse finalResponseObj = null
             if (!finalResponseObjectIsNull) {
                 finalResponseObj = Mock(HttpResponse)
-                finalResponseObj.getStatus() >> finalResponseObjectGetStatus
+                finalResponseObj.status() >> finalResponseObjectGetStatus
             }
             ResponseInfo responseInfo = null
             if (!responseInfoIsNull)

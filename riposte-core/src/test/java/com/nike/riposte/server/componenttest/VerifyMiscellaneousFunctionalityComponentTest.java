@@ -396,7 +396,7 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         @Override
         public void handleDownstreamResponseFirstChunk(HttpResponse downstreamResponseFirstChunk, RequestInfo<?> origRequestInfo) {
             downstreamResponseFirstChunk.headers().set(ORIG_HTTP_STATUS_CODE_RESPONSE_HEADER_KEY,
-                                                       String.valueOf(downstreamResponseFirstChunk.getStatus().code()));
+                                                       String.valueOf(downstreamResponseFirstChunk.status().code()));
             downstreamResponseFirstChunk.setStatus(new HttpResponseStatus(MODIFIED_HTTP_STATUS_RESPONSE_CODE, "junk status code"));
         }
 

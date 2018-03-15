@@ -163,12 +163,12 @@ public class RequestInfoImplTest {
         HttpVersion protocolVersion = HttpVersion.HTTP_1_1;
 
         FullHttpRequest nettyRequestMock = mock(FullHttpRequest.class);
-        doReturn(uri).when(nettyRequestMock).getUri();
-        doReturn(method).when(nettyRequestMock).getMethod();
+        doReturn(uri).when(nettyRequestMock).uri();
+        doReturn(method).when(nettyRequestMock).method();
         doReturn(headers).when(nettyRequestMock).headers();
         doReturn(trailingHeaders).when(nettyRequestMock).trailingHeaders();
         doReturn(contentByteBuf).when(nettyRequestMock).content();
-        doReturn(protocolVersion).when(nettyRequestMock).getProtocolVersion();
+        doReturn(protocolVersion).when(nettyRequestMock).protocolVersion();
 
         // when
         RequestInfoImpl<?> requestInfo = new RequestInfoImpl<>(nettyRequestMock);

@@ -67,7 +67,7 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpObjectDecoder;
 import io.netty.handler.codec.http.HttpObjectEncoder;
@@ -554,9 +554,9 @@ public class StreamingAsyncHttpClient {
 
             logger.debug("STREAMING REQUEST HEADERS: " + sb.toString());
             logger.debug("STREAMING REQUEST HOST:PORT/PATH: " + downstreamHost + ":" + downstreamPort
-                         + initialRequestChunk.getUri());
-            logger.debug("STREAMING REQUEST METHOD: " + initialRequestChunk.getMethod().name());
-            logger.debug("STREAMING REQUEST PROTOCOL: " + initialRequestChunk.getProtocolVersion().protocolName());
+                         + initialRequestChunk.uri());
+            logger.debug("STREAMING REQUEST METHOD: " + initialRequestChunk.method().name());
+            logger.debug("STREAMING REQUEST PROTOCOL: " + initialRequestChunk.protocolVersion().protocolName());
         }
     }
 
@@ -597,7 +597,7 @@ public class StreamingAsyncHttpClient {
         String hostHeaderValue = (isDefaultPort)
                                  ? downstreamHost
                                  : downstreamHost + ":" + downstreamPort;
-        initialRequestChunk.headers().set(HttpHeaders.Names.HOST, hostHeaderValue);
+        initialRequestChunk.headers().set(HttpHeaderNames.HOST, hostHeaderValue);
 
         long beforeConnectionStartTimeNanos = System.nanoTime();
 
@@ -652,8 +652,8 @@ public class StreamingAsyncHttpClient {
                 if (performSubSpanAroundDownstreamCalls) {
                     // Add the subspan.
                     String spanName = getSubspanSpanName(
-                        initialRequestChunk.getMethod().name(),
-                        downstreamHost + ":" + downstreamPort + initialRequestChunk.getUri()
+                        initialRequestChunk.method().name(),
+                        downstreamHost + ":" + downstreamPort + initialRequestChunk.uri()
                     );
                     if (Tracer.getInstance().getCurrentSpan() == null) {
                         // There is no parent span to start a subspan from, so we have to start a new span for this call
@@ -826,11 +826,11 @@ public class StreamingAsyncHttpClient {
                             HttpResponse httpResponse =
                                 (msg instanceof FullHttpResponse)
                                                         ? new DefaultFullHttpResponse(
-                                                            origHttpResponse.getProtocolVersion(),
-                                                            origHttpResponse.getStatus(),
+                                                            origHttpResponse.protocolVersion(),
+                                                            origHttpResponse.status(),
                                                             ((FullHttpResponse) msg).content())
-                                                        : new DefaultHttpResponse(origHttpResponse.getProtocolVersion(),
-                                                                                  origHttpResponse.getStatus());
+                                                        : new DefaultHttpResponse(origHttpResponse.protocolVersion(),
+                                                                                  origHttpResponse.status());
                             httpResponse.headers().add(origHttpResponse.headers());
                             msgToPass = httpResponse;
                         }

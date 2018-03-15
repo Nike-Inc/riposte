@@ -92,12 +92,12 @@ public class RequestInfoSetterHandlerTest {
         FullHttpRequest msgMock = mock(FullHttpRequest.class);
         String uri = "/some/url";
         HttpHeaders headers = new DefaultHttpHeaders();
-        doReturn(uri).when(msgMock).getUri();
+        doReturn(uri).when(msgMock).uri();
         doReturn(headers).when(msgMock).headers();
         doReturn(headers).when(msgMock).trailingHeaders();
         doReturn(byteBufMock).when(msgMock).content();
         doReturn(false).when(byteBufMock).isReadable();
-        doReturn(HttpVersion.HTTP_1_1).when(msgMock).getProtocolVersion();
+        doReturn(HttpVersion.HTTP_1_1).when(msgMock).protocolVersion();
         doReturn(null).when(stateMock).getRequestInfo();
 
         // when
@@ -118,9 +118,9 @@ public class RequestInfoSetterHandlerTest {
         HttpRequest msgMock = mock(HttpRequest.class);
         String uri = "/some/url";
         HttpHeaders headers = new DefaultHttpHeaders();
-        doReturn(uri).when(msgMock).getUri();
+        doReturn(uri).when(msgMock).uri();
         doReturn(headers).when(msgMock).headers();
-        doReturn(HttpVersion.HTTP_1_1).when(msgMock).getProtocolVersion();
+        doReturn(HttpVersion.HTTP_1_1).when(msgMock).protocolVersion();
         doReturn(requestInfo).when(stateMock).getRequestInfo();
 
         // when
@@ -296,7 +296,7 @@ public class RequestInfoSetterHandlerTest {
         HttpRequest msgMock = mock(HttpRequest.class);
         DecoderResult decoderResult = mock(DecoderResult.class);
         doReturn(true).when(decoderResult).isFailure();
-        doReturn(decoderResult).when(msgMock).getDecoderResult();
+        doReturn(decoderResult).when(msgMock).decoderResult();
         doReturn(null).when(stateMock).getRequestInfo();
 
         // when
@@ -311,7 +311,7 @@ public class RequestInfoSetterHandlerTest {
         // given
         DecoderResult decoderResult = mock(DecoderResult.class);
         doReturn(true).when(decoderResult).isFailure();
-        doReturn(decoderResult).when(httpContentMock).getDecoderResult();
+        doReturn(decoderResult).when(httpContentMock).decoderResult();
 
         // when
         Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
