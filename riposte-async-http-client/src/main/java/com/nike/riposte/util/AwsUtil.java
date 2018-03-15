@@ -1,13 +1,13 @@
 package com.nike.riposte.util;
 
-import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper;
+import com.nike.riposte.client.asynchttp.AsyncHttpClientHelper;
 import com.nike.riposte.server.config.AppInfo;
 import com.nike.riposte.server.config.impl.AppInfoImpl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ning.http.client.Response;
 
+import org.asynchttpclient.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

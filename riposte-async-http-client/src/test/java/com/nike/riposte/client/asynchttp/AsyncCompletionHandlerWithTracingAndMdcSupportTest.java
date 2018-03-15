@@ -1,4 +1,4 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
@@ -6,10 +6,10 @@ import com.nike.internal.util.Pair;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
 
-import com.ning.http.client.Response;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.asynchttpclient.Response;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,7 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-import static com.nike.riposte.client.asynchttp.ning.AsyncCompletionHandlerWithTracingAndMdcSupportTest.ExistingSpanStackState.EMPTY;
+import static com.nike.riposte.client.asynchttp.AsyncCompletionHandlerWithTracingAndMdcSupportTest.ExistingSpanStackState.EMPTY;
 import static java.lang.Boolean.TRUE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;

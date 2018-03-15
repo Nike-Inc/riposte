@@ -3,8 +3,8 @@ package com.nike.riposte.componenttest;
 import com.nike.backstopper.apierror.ApiError;
 import com.nike.backstopper.apierror.ApiErrorBase;
 import com.nike.backstopper.exception.ApiException;
-import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper;
-import com.nike.riposte.client.asynchttp.ning.RequestBuilderWrapper;
+import com.nike.riposte.client.asynchttp.AsyncHttpClientHelper;
+import com.nike.riposte.client.asynchttp.RequestBuilderWrapper;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
@@ -16,8 +16,8 @@ import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
 
-import com.ning.http.client.Response;
 
+import org.asynchttpclient.Response;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;

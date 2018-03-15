@@ -1,16 +1,16 @@
 package com.nike.riposte.util;
 
 import com.nike.internal.util.Pair;
-import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper;
-import com.nike.riposte.client.asynchttp.ning.AsyncResponseHandler;
-import com.nike.riposte.client.asynchttp.ning.RequestBuilderWrapper;
+import com.nike.riposte.client.asynchttp.AsyncHttpClientHelper;
+import com.nike.riposte.client.asynchttp.AsyncResponseHandler;
+import com.nike.riposte.client.asynchttp.RequestBuilderWrapper;
 import com.nike.riposte.server.config.AppInfo;
 import com.nike.riposte.server.config.impl.AppInfoImpl;
 
-import com.ning.http.client.Response;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.asynchttpclient.Response;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

@@ -1,6 +1,6 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
-import com.ning.http.client.Response;
+import org.asynchttpclient.Response;
 
 /**
  * Interface representing a handler for an async downstream HTTP call's response. Used by {@link AsyncHttpClientHelper}.

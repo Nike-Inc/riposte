@@ -1,4 +1,4 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
@@ -9,30 +9,28 @@ import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.AsyncHttpClientConfig;
-import com.ning.http.client.NameResolver;
-import com.ning.http.client.Response;
-import com.ning.http.client.SignatureCalculator;
-import com.ning.http.client.uri.Uri;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.EventLoop;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.resolver.DefaultNameResolver;
+import io.netty.resolver.RoundRobinInetAddressResolver;
+import io.netty.util.concurrent.ImmediateEventExecutor;
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.DefaultAsyncHttpClient;
+import org.asynchttpclient.DefaultAsyncHttpClientConfig;
+import org.asynchttpclient.Response;
+import org.asynchttpclient.SignatureCalculator;
+import org.asynchttpclient.uri.Uri;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.EventLoop;
-import io.netty.handler.codec.http.HttpMethod;
 
 import static com.nike.fastbreak.CircuitBreakerForHttpStatusCode.getDefaultHttpStatusCodeCircuitBreakerForKey;
 
@@ -83,8 +81,8 @@ public class AsyncHttpClientHelper {
     /**
      * The default amount of time in milliseconds that pooled downstream connections are eligible to be reused. If you
      * want a different value make sure you call the {@link
-     * AsyncHttpClientHelper#AsyncHttpClientHelper(AsyncHttpClientConfig.Builder, boolean)} constructor and set {@link
-     * AsyncHttpClientConfig.Builder#setConnectionTTL(int)} to your desired value. Pass in -1 to disable TTL, causing
+     * AsyncHttpClientHelper#AsyncHttpClientHelper(DefaultAsyncHttpClientConfig.Builder, boolean)} constructor and set {@link
+     * DefaultAsyncHttpClientConfig.Builder#setConnectionTtl(int)} to your desired value. Pass in -1 to disable TTL, causing
      * connections to be held onto and reused forever (as long as they are open and valid). <b>This is not recommended,
      * however - see below for the reason why you should have a reasonable TTL.</b>
      * <p/>
@@ -125,7 +123,7 @@ public class AsyncHttpClientHelper {
      *     on the downstream call, false if you do not want subspans performed. The subspans can be used to determine
      *     how much time is spent processing in your app vs. waiting for downstream requests.
      */
-    public AsyncHttpClientHelper(AsyncHttpClientConfig.Builder builder, boolean performSubSpanAroundDownstreamCalls) {
+    public AsyncHttpClientHelper(DefaultAsyncHttpClientConfig.Builder builder, boolean performSubSpanAroundDownstreamCalls) {
         this.performSubSpanAroundDownstreamCalls = performSubSpanAroundDownstreamCalls;
 
         Map<String, String> mdcContextMap = MDC.getCopyOfContextMap();
@@ -138,7 +136,7 @@ public class AsyncHttpClientHelper {
             distributedTraceStack = Tracer.getInstance().unregisterFromThread();
             MDC.clear();
             AsyncHttpClientConfig cf = builder.build();
-            asyncHttpClient = new AsyncHttpClient(cf);
+            asyncHttpClient = new DefaultAsyncHttpClient(cf);
         }
         finally {
             // Reattach the original tracing and MDC before we leave
@@ -162,11 +160,10 @@ public class AsyncHttpClientHelper {
      */
     public AsyncHttpClientHelper(boolean performSubSpanAroundDownstreamCalls) {
         this(
-            new AsyncHttpClientConfig.Builder()
-                .setAllowPoolingConnections(true)
+            new DefaultAsyncHttpClientConfig.Builder()
                 .setMaxRequestRetry(0)
                 .setRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MILLIS)
-                .setConnectionTTL(DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS),
+                .setConnectionTtl(DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS),
             performSubSpanAroundDownstreamCalls
         );
     }
@@ -224,15 +221,11 @@ public class AsyncHttpClientHelper {
             url, method, customCircuitBreaker, disableCircuitBreaker
         );
 
-        // The AsyncHttpClient doesn't properly split traffic when a DNS has multiple IP addresses associated with it,
-        //      so we have to hack it ourselves.
-        wrapper.requestBuilder.setNameResolver(getMultiIpAwareNameResolver());
+        // By default, The AsyncHttpClient doesn't properly split traffic when a DNS has multiple IP addresses associated with it,
+        //      so we have to set a name resolver that does.
+        wrapper.requestBuilder.setNameResolver(new RoundRobinInetAddressResolver(ImmediateEventExecutor.INSTANCE, new DefaultNameResolver(ImmediateEventExecutor.INSTANCE)));
 
         return wrapper;
-    }
-
-    protected MultiIpAwareNameResolver getMultiIpAwareNameResolver() {
-        return MultiIpAwareNameResolver.INSTANCE;
     }
 
     protected RequestBuilderWrapper generateRequestBuilderWrapper(String url, HttpMethod method,
@@ -412,37 +405,6 @@ public class AsyncHttpClientHelper {
                 defaultStatusCodeCircuitBreaker, response -> (response == null ? null : response.getStatusCode())
             )
         );
-    }
-
-    protected static class MultiIpAwareNameResolver implements NameResolver {
-
-        public static MultiIpAwareNameResolver INSTANCE = new MultiIpAwareNameResolver();
-        protected static final ConcurrentMap<String, AtomicInteger> HOST_ROUND_ROBIN_COUNTER_MAP =
-            new ConcurrentHashMap<>();
-
-        @Override
-        public InetAddress resolve(String hostName) throws UnknownHostException {
-            // Get ALL IP addresses associated with the requested host.
-            InetAddress[] ipAddresses = getAllAddressesForHost(hostName);
-            // Get-and-increment the atomic int associated with this host, then mod it against the number of instances
-            //      available. This effectively round robins the use of all the instances associated with the host.
-            AtomicInteger roundRobinCounter =
-                HOST_ROUND_ROBIN_COUNTER_MAP.computeIfAbsent(hostName, host -> new AtomicInteger(0));
-            int instanceIndexToUse = roundRobinCounter.getAndIncrement() % ipAddresses.length;
-
-            if (instanceIndexToUse < 0) {
-                // The counter went high enough to do an integer overflow. Fix the index so we don't blow up this call,
-                //      and reset the counter to 0.
-                instanceIndexToUse = Math.abs(instanceIndexToUse);
-                roundRobinCounter.set(0);
-            }
-
-            return ipAddresses[instanceIndexToUse];
-        }
-
-        protected InetAddress[] getAllAddressesForHost(String host) throws UnknownHostException {
-            return InetAddress.getAllByName(host);
-        }
     }
 
 }

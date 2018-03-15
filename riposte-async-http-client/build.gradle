@@ -3,7 +3,7 @@ evaluationDependsOn(':')
 dependencies {
     compile(
             project(":riposte-core"),
-            "com.ning:async-http-client:$ningAsyncHttpClientVersion"
+            "org.asynchttpclient:async-http-client:$asyncHttpClientVersion"
     )
 
     testCompile (

@@ -1,14 +1,12 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
 import com.nike.fastbreak.CircuitBreaker;
-
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.Response;
-
-import java.util.Optional;
-
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
+import org.asynchttpclient.BoundRequestBuilder;
+import org.asynchttpclient.Response;
+
+import java.util.Optional;
 
 /**
  * Wrapper around the actual {@link #requestBuilder} that also keeps track of the URL and HTTP method used to create the
@@ -26,7 +24,7 @@ public class RequestBuilderWrapper {
 
     String url;
     String httpMethod;
-    public final AsyncHttpClient.BoundRequestBuilder requestBuilder;
+    public final BoundRequestBuilder requestBuilder;
     /**
      * An Optional containing a custom circuit breaker if a custom one should be used, or empty if the request sender
      * should use a default circuit breaker. If you don't want *any* circuit breaker to be used, set {@link
@@ -49,7 +47,7 @@ public class RequestBuilderWrapper {
      * AsyncHttpClientHelper#getRequestBuilder(String, HttpMethod)}.
      */
     RequestBuilderWrapper(
-        String url, String httpMethod, AsyncHttpClient.BoundRequestBuilder requestBuilder,
+        String url, String httpMethod, BoundRequestBuilder requestBuilder,
         Optional<CircuitBreaker<Response>> customCircuitBreaker, boolean disableCircuitBreaker
     ) {
         this.url = url;
@@ -85,9 +83,9 @@ public class RequestBuilderWrapper {
 
     /**
      * <p>Use this method to update the url stored inside this {@link RequestBuilderWrapper}
-     * and the wrapped {@link AsyncHttpClient.BoundRequestBuilder}
+     * and the wrapped {@link BoundRequestBuilder}
      *
-     * <p>Setting the url only on the wrapped {@link AsyncHttpClient.BoundRequestBuilder} will impact logging
+     * <p>Setting the url only on the wrapped {@link BoundRequestBuilder} will impact logging
      * and circuit breakers potentially. Use this method to keep the two in sync.
      */
     public void setUrl(String url) {
@@ -101,9 +99,9 @@ public class RequestBuilderWrapper {
 
     /**
      * <p>Use this method to update the httpMethod stored inside this {@link RequestBuilderWrapper}
-     * and the wrapped {@link AsyncHttpClient.BoundRequestBuilder}
+     * and the wrapped {@link BoundRequestBuilder}
      *
-     * <p>Setting the httpMethod only on the wrapped {@link AsyncHttpClient.BoundRequestBuilder} will impact logging
+     * <p>Setting the httpMethod only on the wrapped {@link BoundRequestBuilder} will impact logging
      * and circuit breakers potentially. Use this method to keep the two in sync.
      */
     public void setHttpMethod(String httpMethod) {

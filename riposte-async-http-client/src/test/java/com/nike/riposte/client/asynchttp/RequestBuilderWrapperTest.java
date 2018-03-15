@@ -1,11 +1,11 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreakerImpl;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.Response;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
+import org.asynchttpclient.BoundRequestBuilder;
+import org.asynchttpclient.Response;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -21,7 +21,7 @@ public class RequestBuilderWrapperTest {
     private RequestBuilderWrapper requestBuilderWrapper;
     private String url;
     private String httpMethod;
-    private AsyncHttpClient.BoundRequestBuilder requestBuilder;
+    private BoundRequestBuilder requestBuilder;
     private Optional<CircuitBreaker<Response>> customCircuitBreaker;
     private boolean disableCircuitBreaker;
 
@@ -29,7 +29,7 @@ public class RequestBuilderWrapperTest {
     public void setup() {
         url = "http://localhost.com";
         httpMethod = HttpMethod.GET.name();
-        requestBuilder = mock(AsyncHttpClient.BoundRequestBuilder.class);
+        requestBuilder = mock(BoundRequestBuilder.class);
         customCircuitBreaker = Optional.of(new CircuitBreakerImpl<Response>());
         disableCircuitBreaker = true;
     }

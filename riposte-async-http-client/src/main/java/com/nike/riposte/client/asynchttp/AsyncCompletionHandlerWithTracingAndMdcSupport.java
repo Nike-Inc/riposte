@@ -1,4 +1,4 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.internal.util.Pair;
@@ -6,9 +6,8 @@ import com.nike.riposte.util.AsyncNettyHelper;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
 
-import com.ning.http.client.AsyncCompletionHandler;
-import com.ning.http.client.Response;
-
+import org.asynchttpclient.AsyncCompletionHandler;
+import org.asynchttpclient.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -21,13 +20,13 @@ import java.util.concurrent.CompletableFuture;
 import static com.nike.riposte.util.AsyncNettyHelper.linkTracingAndMdcToCurrentThread;
 
 /**
- * Extension of {@link com.ning.http.client.AsyncCompletionHandler} that handles distributed tracing and MDC issues so
+ * Extension of {@link org.asynchttpclient.AsyncCompletionHandler} that handles distributed tracing and MDC issues so
  * that the dtrace and MDC info you want are attached to the thread performing the work for the downstream call. The
  * {@link #completableFutureResponse} you pass in will be completed or completed exceptionally depending on the result
  * of the downstream call, and it will be completed with the result of the {@link #responseHandlerFunction} you pass
  * in.
  * <p/>
- * Used by {@link com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper}
+ * Used by {@link AsyncHttpClientHelper}
  *
  * @author Nic Munroe
  */

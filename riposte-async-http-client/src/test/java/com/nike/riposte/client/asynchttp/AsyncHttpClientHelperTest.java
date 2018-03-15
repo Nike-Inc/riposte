@@ -1,4 +1,4 @@
-package com.nike.riposte.client.asynchttp.ning;
+package com.nike.riposte.client.asynchttp;
 
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
@@ -6,23 +6,24 @@ import com.nike.fastbreak.CircuitBreakerDelegate;
 import com.nike.fastbreak.CircuitBreakerForHttpStatusCode;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
 import com.nike.internal.util.Pair;
-import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.MultiIpAwareNameResolver;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
 
-import com.ning.http.client.AsyncHandler;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.AsyncHttpClientConfig;
-import com.ning.http.client.Request;
-import com.ning.http.client.Response;
-import com.ning.http.client.SignatureCalculator;
-import com.ning.http.client.uri.Uri;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import io.netty.resolver.RoundRobinInetAddressResolver;
+import org.asynchttpclient.AsyncHandler;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.BoundRequestBuilder;
+import org.asynchttpclient.DefaultAsyncHttpClientConfig;
+import org.asynchttpclient.Request;
+import org.asynchttpclient.Response;
+import org.asynchttpclient.SignatureCalculator;
+import org.asynchttpclient.uri.Uri;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,8 +33,6 @@ import org.mockito.internal.util.reflection.Whitebox;
 import org.slf4j.Logger;
 import org.slf4j.MDC;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
@@ -43,7 +42,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import io.netty.channel.Channel;
@@ -52,8 +50,8 @@ import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.Attribute;
 
-import static com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS;
-import static com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.DEFAULT_REQUEST_TIMEOUT_MILLIS;
+import static com.nike.riposte.client.asynchttp.AsyncHttpClientHelper.DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS;
+import static com.nike.riposte.client.asynchttp.AsyncHttpClientHelper.DEFAULT_REQUEST_TIMEOUT_MILLIS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
@@ -118,10 +116,9 @@ public class AsyncHttpClientHelperTest {
 
     private void verifyDefaultUnderlyingClientConfig(AsyncHttpClientHelper instance) {
         AsyncHttpClientConfig config = instance.asyncHttpClient.getConfig();
-        assertThat(config.isAllowPoolingConnections()).isTrue();
         assertThat(config.getMaxRequestRetry()).isEqualTo(0);
         assertThat(config.getRequestTimeout()).isEqualTo(DEFAULT_REQUEST_TIMEOUT_MILLIS);
-        assertThat(config.getConnectionTTL()).isEqualTo(DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS);
+        assertThat(config.getConnectionTtl()).isEqualTo(DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS);
         assertThat(Whitebox.getInternalState(instance.asyncHttpClient, "signatureCalculator")).isNull();
     }
 
@@ -171,8 +168,8 @@ public class AsyncHttpClientHelperTest {
         // given
         int customRequestTimeoutVal = 4242;
         AsyncHttpClientConfig config =
-            new AsyncHttpClientConfig.Builder().setRequestTimeout(customRequestTimeoutVal).build();
-        AsyncHttpClientConfig.Builder builderMock = mock(AsyncHttpClientConfig.Builder.class);
+            new DefaultAsyncHttpClientConfig.Builder().setRequestTimeout(customRequestTimeoutVal).build();
+        DefaultAsyncHttpClientConfig.Builder builderMock = mock(DefaultAsyncHttpClientConfig.Builder.class);
         doReturn(config).when(builderMock).build();
 
         // when
@@ -194,8 +191,8 @@ public class AsyncHttpClientHelperTest {
     public void constructor_clears_out_tracing_and_mdc_info_before_building_underlying_client_and_resets_afterward(
         boolean emptyBeforeCall, boolean explode
     ) {
-        AsyncHttpClientConfig config = new AsyncHttpClientConfig.Builder().build();
-        AsyncHttpClientConfig.Builder builderMock = mock(AsyncHttpClientConfig.Builder.class);
+        AsyncHttpClientConfig config = new DefaultAsyncHttpClientConfig.Builder().build();
+        DefaultAsyncHttpClientConfig.Builder builderMock = mock(DefaultAsyncHttpClientConfig.Builder.class);
         List<Span> traceAtTimeOfBuildCall = new ArrayList<>();
         List<Map<String, String>> mdcAtTimeOfBuildCall = new ArrayList<>();
         RuntimeException explodeEx = new RuntimeException("kaboom");
@@ -244,7 +241,7 @@ public class AsyncHttpClientHelperTest {
         assertThat(req.getMethod()).isEqualTo(method);
         assertThat(req.getUri()).isEqualTo(Uri.create(url));
         assertThat(req.getUrl()).isEqualTo(url);
-        assertThat(req.getNameResolver()).isEqualTo(MultiIpAwareNameResolver.INSTANCE);
+        assertThat(req.getNameResolver()).isInstanceOf(RoundRobinInetAddressResolver.class);
     }
 
     @Test
@@ -385,7 +382,7 @@ public class AsyncHttpClientHelperTest {
 
         String url = "http://localhost/some/path";
         String method = "GET";
-        AsyncHttpClient.BoundRequestBuilder reqMock = mock(AsyncHttpClient.BoundRequestBuilder.class);
+        BoundRequestBuilder reqMock = mock(BoundRequestBuilder.class);
         RequestBuilderWrapper rbw = new RequestBuilderWrapper(url, method, reqMock, Optional.empty(), false);
         AsyncResponseHandler responseHandlerMock = mock(AsyncResponseHandler.class);
 
@@ -497,7 +494,7 @@ public class AsyncHttpClientHelperTest {
         String host = UUID.randomUUID().toString();
         String url = "http://" + host + "/some/path";
         String method = "GET";
-        AsyncHttpClient.BoundRequestBuilder reqMock = mock(AsyncHttpClient.BoundRequestBuilder.class);
+        BoundRequestBuilder reqMock = mock(BoundRequestBuilder.class);
         Optional<CircuitBreaker<Response>> customCb = Optional.empty();
         RequestBuilderWrapper rbw = new RequestBuilderWrapper(url, method, reqMock, customCb, false);
         if (useNettyEventLoop)
@@ -538,7 +535,7 @@ public class AsyncHttpClientHelperTest {
         // given
         Optional<CircuitBreaker<Response>> customCb = Optional.of(mock(CircuitBreaker.class));
         RequestBuilderWrapper rbw = new RequestBuilderWrapper(
-            "foo", "bar", mock(AsyncHttpClient.BoundRequestBuilder.class), customCb, false);
+            "foo", "bar", mock(BoundRequestBuilder.class), customCb, false);
 
         // when
         Optional<CircuitBreaker<Response>> result = helperSpy.getCircuitBreaker(rbw);
@@ -551,7 +548,7 @@ public class AsyncHttpClientHelperTest {
     public void getCircuitBreaker_returns_empty_if_disableCircuitBreaker_is_true() {
         // given
         RequestBuilderWrapper rbw = new RequestBuilderWrapper(
-            "foo", "bar", mock(AsyncHttpClient.BoundRequestBuilder.class), Optional.of(mock(CircuitBreaker.class)),
+            "foo", "bar", mock(BoundRequestBuilder.class), Optional.of(mock(CircuitBreaker.class)),
             true);
 
         // when
@@ -561,58 +558,4 @@ public class AsyncHttpClientHelperTest {
         assertThat(result).isEmpty();
     }
 
-    @Test
-    public void multiIpAwareNameResolver_resolve_works_as_expected() throws UnknownHostException {
-        // given
-        MultiIpAwareNameResolver resolver = spy(new MultiIpAwareNameResolver());
-        InetAddress[] ipAddresses = new InetAddress[]{
-            mock(InetAddress.class), mock(InetAddress.class), mock(InetAddress.class)
-        };
-        String host = UUID.randomUUID().toString();
-        doReturn(ipAddresses).when(resolver).getAllAddressesForHost(host);
-
-        for (int i = 0; i < (ipAddresses.length * 10); i++) {
-            InetAddress expectedAddress = ipAddresses[i % ipAddresses.length];
-
-            // when
-            InetAddress actualAddress = resolver.resolve(host);
-
-            // then
-            assertThat(actualAddress).isSameAs(expectedAddress);
-        }
-    }
-
-    @Test
-    public void multiIpAwareNameResolver_resets_HOST_ROUND_ROBIN_COUNTER_MAP_counter_if_it_overflows()
-        throws UnknownHostException {
-        // given
-        MultiIpAwareNameResolver resolver = spy(new MultiIpAwareNameResolver());
-        InetAddress[] ipAddresses = new InetAddress[]{
-            mock(InetAddress.class), mock(InetAddress.class), mock(InetAddress.class)
-        };
-        String host = UUID.randomUUID().toString();
-        doReturn(ipAddresses).when(resolver).getAllAddressesForHost(host);
-
-        // Initialize HOST_ROUND_ROBIN_COUNTER_MAP for this host.
-        resolver.resolve(host);
-
-        // Artificially set HOST_ROUND_ROBIN_COUNTER_MAP to have max int value for this host.
-        AtomicInteger counterForHost = MultiIpAwareNameResolver.HOST_ROUND_ROBIN_COUNTER_MAP.get(host);
-        counterForHost.set(Integer.MAX_VALUE);
-
-        assertThat(counterForHost.get()).isEqualTo(Integer.MAX_VALUE);
-
-        // Resolving again should overflow the counter
-        resolver.resolve(host);
-
-        assertThat(counterForHost.get()).isEqualTo(Integer.MIN_VALUE);
-
-        // when
-        resolver.resolve(host);
-
-        // then
-        // The resolve call with negative HOST_ROUND_ROBIN_COUNTER_MAP counter value should have caused the counter to
-        //      be reset to zero when the overflow was detected.
-        assertThat(counterForHost.get()).isEqualTo(0);
-    }
 }
