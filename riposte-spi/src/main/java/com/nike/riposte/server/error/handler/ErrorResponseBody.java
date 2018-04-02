@@ -20,4 +20,11 @@ public interface ErrorResponseBody {
      */
     String errorId();
 
+    /**
+     * @return The object that should be serialized into the response body payload, or null if you want a blank/empty
+     * response body payload.
+     */
+    default Object bodyToSerialize() {
+        return this;
+    }
 }
