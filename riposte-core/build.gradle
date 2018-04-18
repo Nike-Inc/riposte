@@ -28,5 +28,6 @@ dependencies {
             "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
             "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
             "commons-io:commons-io:$apacheCommonsIoVersion",
+            "com.nike.backstopper:backstopper-reusable-tests:$backstopperVersion"
     )
 }
