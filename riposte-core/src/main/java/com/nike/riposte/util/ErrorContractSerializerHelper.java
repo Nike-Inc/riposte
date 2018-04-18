@@ -36,6 +36,8 @@ public class ErrorContractSerializerHelper {
         return errorResponseBody -> {
             try {
                 if (errorResponseBody == null || errorResponseBody.bodyToSerialize() == null) {
+                    // errorResponseBody itself is null, or errorResponseBody.bodyToSerialize() is null. Either case
+                    //      indicates empty response body payload, so we should return null.
                     return null;
                 }
                 return objectMapper.writeValueAsString(errorResponseBody.bodyToSerialize());

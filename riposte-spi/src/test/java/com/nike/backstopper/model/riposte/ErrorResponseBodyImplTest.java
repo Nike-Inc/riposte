@@ -73,10 +73,4 @@ public class ErrorResponseBodyImplTest {
         ErrorResponseBodyImpl adapter = new ErrorResponseBodyImpl(errorContract);
         verifyAdapter(adapter, errorUuid, errorsList);
     }
-
-    @Test
-    public void backwardsCompatibleSerialization() {
-        ErrorResponseBodyImpl adapter = new ErrorResponseBodyImpl();
-        assertThat(adapter, is(adapter.bodyToSerialize()));
-    }
 }
