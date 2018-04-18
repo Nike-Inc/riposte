@@ -8,11 +8,24 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.12.x` Releases - [0.12.1](#0121), [0.12.0](#0120) 
+- `0.12.x` Releases - [0.12.2](#0122), [0.12.1](#0121), [0.12.0](#0120) 
 - `0.11.x` Releases - [0.11.2](#0112), [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.12.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.12.2)
+
+Released on 2018-04-18.
+
+### Changed
+
+- Changed error handling system to allow you to specify blank response payloads or delegate serialization to an object 
+other than the `ErrorResponseBody` impl when using custom `RiposteErrorHandler` and/or `RiposteUnhandledErrorHandler` 
+impls (specified via your `ServerConfig`). See the javadocs and source for `ErrorResponseBody.bodyToSerialize()`, and 
+then `RiposteApiExceptionHandler.prepareFrameworkRepresentation(...)` and 
+`RiposteUnhandledExceptionHandler.prepareFrameworkRepresentation(...)` for where you'd hook in.  
+    - Changed by [Alexander Banker][contrib_scientificmethod] in pull request [#99](https://github.com/Nike-Inc/riposte/pull/99).
 
 ## [0.12.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.12.1)
 
@@ -342,3 +355,4 @@ Released on 2016-11-03.
 [contrib_tlisonbee]: https://github.com/tlisonbee
 [contrib_cjha]: https://github.com/cjha
 [contrib_jcnorman48]: https://github.com/jcnorman48
+[contrib_scientificmethod]: https://github.com/ScientificMethod
