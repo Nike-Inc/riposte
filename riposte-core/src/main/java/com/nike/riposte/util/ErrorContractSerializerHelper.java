@@ -35,7 +35,10 @@ public class ErrorContractSerializerHelper {
     public static ErrorResponseBodySerializer asErrorResponseBodySerializer(ObjectMapper objectMapper) {
         return errorResponseBody -> {
             try {
-                return objectMapper.writeValueAsString(errorResponseBody);
+                if (errorResponseBody == null || errorResponseBody.bodyToSerialize() == null) {
+                    return null;
+                }
+                return objectMapper.writeValueAsString(errorResponseBody.bodyToSerialize());
             }
             catch (JsonProcessingException e) {
                 throw new RuntimeException("An error occurred while serializing an ErrorResponseBody to a string", e);
