@@ -47,8 +47,6 @@ import static com.nike.riposte.util.AsyncNettyHelper.supplierWithTracingAndMdc;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONNECTION;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
-import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
-import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
@@ -262,6 +260,11 @@ public class ResponseSender {
 
     protected void sendFirstChunk(ChannelHandlerContext ctx, RequestInfo<?> requestInfo, ResponseInfo<?> responseInfo,
                                   ObjectMapper serializer) {
+        // Set the HTTP status code on the ResponseInfo object to the default if necessary.
+        if (responseInfo.getHttpStatusCode() == null) {
+            responseInfo.setHttpStatusCode(DEFAULT_HTTP_STATUS_CODE);
+        }
+        
         // Build the actual response object, which may or may not be a full response with content
         HttpResponse actualResponseObject = createActualResponseObjectForFirstChunk(responseInfo, serializer, ctx);
 
@@ -282,25 +285,27 @@ public class ResponseSender {
             HttpResponseStatus.valueOf(responseInfo.getHttpStatusCodeWithDefault(DEFAULT_HTTP_STATUS_CODE));
         determineAndSetCharsetAndMimeTypeForResponseInfoIfNecessary(responseInfo);
         if (responseInfo.isChunkedResponse()) {
-            // Chunked response. No content (yet).
+            // Chunked response. No content (yet). Create a DefaultHttpResponse (not a full one) for the first chunk
+            //      of a chunked response.
             actualResponseObject = new DefaultHttpResponse(HTTP_1_1, httpStatus);
         }
         else {
             // Full response. There may or may not be content.
-            if (responseInfo.getContentForFullResponse() == null) {
-                // No content, so create a simple full response.
+            Object content = responseInfo.getContentForFullResponse();
+            if (content == null || isContentAlwaysEmpty(responseInfo)) {
+                // No content, or this is a response status code that MUST NOT send a payload, so create a simple full
+                //      response without a payload.
                 actualResponseObject = new DefaultFullHttpResponse(HTTP_1_1, httpStatus);
             }
             else {
-                // There is content. If it's a raw byte buffer then use it as-is. Otherwise serialize it to a string
-                //      using the provided serializer.
-                Object content = responseInfo.getContentForFullResponse();
+                // There is content and this is not a response that prohibits a payload. If it's a raw byte buffer then
+                //      use it as-is. Otherwise serialize it to a string using the provided serializer.
                 ByteBuf bytesForResponse;
                 if (content instanceof byte[])
                     bytesForResponse = Unpooled.wrappedBuffer((byte[]) content);
                 else {
                     bytesForResponse = Unpooled.copiedBuffer(
-                        serializeOutput(responseInfo.getContentForFullResponse(), serializer, responseInfo, ctx),
+                        serializeOutput(content, serializer, responseInfo, ctx),
                         responseInfo.getDesiredContentWriterEncoding());
                 }
                 // Turn the serialized string to bytes for the response content, create the full response with content,
@@ -315,19 +320,16 @@ public class ResponseSender {
     protected void synchronizeAndSetupResponseInfoAndFirstChunk(ResponseInfo<?> responseInfo,
                                                                 HttpResponse actualResponseObject,
                                                                 RequestInfo requestInfo, ChannelHandlerContext ctx) {
-        // Set the content type header.
-        //      NOTE: This is ok even if the response doesn't have a body - in the case of chunked messages we don't
-        //            know whether body content will be coming later or not so we have to be proactive here in case
-        //            there *is* body content later.
-        //      ALSO NOTE: The responseInfo may have already had a Content-Type header specified (e.g. reverse proxied
-        //            response), but the way we build the header this will be ok. If responseInfo wanted to override it
-        //            we allow that, and if not then the Content-Type in the headers will be honored, and if both of
-        //            those are unspecified then the default mime type and charset are used.
-        responseInfo.getHeaders().set(CONTENT_TYPE, buildContentTypeHeader(responseInfo));
-
-        // Set the HTTP status code on the ResponseInfo object from the actualResponseObject if necessary.
-        if (responseInfo.getHttpStatusCode() == null)
-            responseInfo.setHttpStatusCode(actualResponseObject.getStatus().code());
+        // Set the content type header, but only for full responses. We *don't* do this for chunked responses because
+        //      at the moment chunked responses can only come from ProxyRouterEndpoints, and we should not be guessing
+        //      what the downstream system's content type will be if they didn't specify one.
+        // TODO: If we ever have the ability to specify chunked responses that *aren't* ProxyRouterEndpoints, then this
+        //      may need to be adjusted to only omit proxy calls rather than blindly triggering on isChunkedResponse().
+        if (!responseInfo.isChunkedResponse()) {
+            // NOTE: This is ok even if the response doesn't have a body (may even be desired for things like HEAD
+            //      requests where there's no body but you want to tell the caller what the content-type would be).
+            responseInfo.getHeaders().set(CONTENT_TYPE, buildContentTypeHeader(responseInfo));
+        }
 
         // Make sure a trace ID is in the headers.
         if (!responseInfo.getHeaders().contains(TraceHeaders.TRACE_ID)) {
@@ -354,31 +356,23 @@ public class ResponseSender {
         }
         else if (requestInfo.isKeepAliveRequested()) {
             // Add/override the 'Content-Length' header only for a keep-alive connection, and only if we know for sure
-            //      what the content length will be.
+            //      what the content length will/should be.
             if (actualResponseObject instanceof LastHttpContent) {
-                responseInfo.getHeaders().set(
-                    CONTENT_LENGTH, ((LastHttpContent) actualResponseObject).content().readableBytes()
-                );
-            }
-            else {
-                // Some responses should *never* be chunked per RFC 2616 and should always have an empty payload.
-                //      If we have one of those responses, we mark it with content-length 0
-                if (isContentAlwaysEmpty(responseInfo)) {
-                    responseInfo.getHeaders().remove(TRANSFER_ENCODING);
-                    responseInfo.getHeaders().set(CONTENT_LENGTH, 0);
+                if (isAllowedToLieAboutContentLength(responseInfo)
+                    && responseInfo.getHeaders().contains(CONTENT_LENGTH)
+                ) {
+                    // Do nothing - this response status code is allowed to lie about its content-length, and the
+                    //      responseInfo has explicitly specified something.
                 }
                 else {
-                    // Not a must-be-empty-payload status code. For these there might be a payload and we can't know the
-                    //      content length since it's being sent to us in chunks, so we have to set the
-                    //      Transfer-Encoding header to chunked in order for the response sending to be successful
-                    //      (otherwise the receiving client would just hang waiting for the connection to be closed).
-                    // See http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6
-                    // and http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1 for the technical explanation.
-                    // See http://en.wikipedia.org/wiki/Chunked_transfer_encoding for a more straightforward explanation
-                    responseInfo.getHeaders().remove(CONTENT_LENGTH);
-                    responseInfo.getHeaders().set(TRANSFER_ENCODING, CHUNKED);
+                    // Not allowed to lie about content length or not explicitly specified in responseInfo, so set it
+                    //      to whatever the response actually contains.
+                    responseInfo.getHeaders().set(
+                        CONTENT_LENGTH, ((LastHttpContent) actualResponseObject).content().readableBytes()
+                    );
                 }
             }
+
             // Add keep alive header as per
             //      http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
             responseInfo.getHeaders().set(CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
@@ -430,6 +424,22 @@ public class ResponseSender {
         }
 
         return false;
+    }
+
+    /**
+     * Some response scenarios are allowed to lie about content-length.
+     *
+     * <p>See <a href="https://tools.ietf.org/html/rfc7230#section-3.3.2">RFC 7230 Section 3.3.2</a>.
+     *
+     * @return true if the given response is allowed to lie about its content length, false otherwise.
+     */
+    private boolean isAllowedToLieAboutContentLength(ResponseInfo<?> responseInfo) {
+        switch (responseInfo.getHttpStatusCode()) {
+            case 304:
+                return true;
+            default:
+                return false;
+        }
     }
 
     protected void logResponseFirstChunk(HttpResponse response, ChannelHandlerContext ctx) {

@@ -16,7 +16,8 @@ import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -24,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
@@ -55,13 +55,9 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.CharsetUtil;
 
 import static io.netty.util.CharsetUtil.UTF_8;
-import static java.util.Arrays.stream;
-import static org.apache.commons.lang3.StringUtils.containsOnly;
 import static org.apache.commons.lang3.StringUtils.split;
 import static org.apache.commons.lang3.StringUtils.substringAfter;
 import static org.apache.commons.lang3.StringUtils.substringBefore;
-import static org.apache.commons.lang3.StringUtils.substringBetween;
-import static org.apache.commons.lang3.StringUtils.substringsBetween;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -417,25 +413,55 @@ public class ComponentTestUtils {
         assertThat(responseAsError.errors.get(0).metadata).isEqualTo(expectedApiError.getMetadata());
     }
 
-    public static String extractBodyFromRawRequest(String request) {
-        return substringAfter(request.toString(), "\r\n\r\n"); //body start after \r\n\r\n combo
+    public static String extractBodyFromRawRequestOrResponse(String request) {
+        return substringAfter(request, "\r\n\r\n"); //body start after \r\n\r\n combo
     }
 
-    public static String extractFullBodyFromChunks(String downstreamBody) {
-        return stream(substringsBetween(downstreamBody, "\r\n", "\r\n")) //get all chunks
-                .filter(chunk -> containsOnly(chunk, payloadDictionary)) //filter out chunk sizes
-                .collect(Collectors.joining());
+    public static String extractFullBodyFromChunks(String chunkedBody) {
+        if (!chunkedBody.contains("\r\n")) {
+            return chunkedBody;
+        }
+
+        // https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.6.1
+        String[] chunksWithSizes = chunkedBody.split("\r\n");
+        boolean nextChunkIsChunkSize = true;
+        StringBuilder finalResultMinusChunkMetadata = new StringBuilder();
+        for (String chunk : chunksWithSizes) {
+            if (!nextChunkIsChunkSize) {
+                // This is not metadata - it is actual body payload.
+                finalResultMinusChunkMetadata.append(chunk);
+            }
+
+            // Toggle our "next is metadata" flag, as according to the RFC it should alternate between
+            //      chunk-size and chunk-data.
+            nextChunkIsChunkSize = !nextChunkIsChunkSize;
+        }
+
+        return finalResultMinusChunkMetadata.toString();
     }
 
-    public static Map<String, Object> extractHeaders(String requestHeaderString) {
-        String concatHeaders = substringBetween(requestHeaderString, "HTTP/1.1\r\n", "\r\n\r\n");
+    public static HttpHeaders extractHeaders(String rawRequestOrResponseString) {
+        int indexOfFirstCrlf = rawRequestOrResponseString.indexOf("\r\n");
+        int indexOfBodySeparator = rawRequestOrResponseString.indexOf("\r\n\r\n");
 
-        Map<String, Object> extractedHeaders = new HashMap<>();
+        if (indexOfFirstCrlf == -1 || indexOfBodySeparator == -1) {
+            throw new IllegalArgumentException("The given rawRequestOrResponseString does not appear to be a valid HTTP message");
+        }
+
+        String concatHeaders = rawRequestOrResponseString.substring(indexOfFirstCrlf + "\r\n".length(), indexOfBodySeparator);
+
+        HttpHeaders extractedHeaders = new DefaultHttpHeaders();
 
         for (String concatHeader : split(concatHeaders, "\r\n")) {
-            extractedHeaders.put(substringBefore(concatHeader, HEADER_SEPARATOR).trim(), substringAfter(concatHeader, HEADER_SEPARATOR).trim());
+            extractedHeaders.add(substringBefore(concatHeader, HEADER_SEPARATOR).trim(), substringAfter(concatHeader, HEADER_SEPARATOR).trim());
         }
 
         return extractedHeaders;
+    }
+
+    public static Map<String, List<String>> headersToMap(HttpHeaders headers) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        headers.names().forEach(headerKey -> result.put(headerKey, headers.getAll(headerKey)));
+        return result;
     }
 }
