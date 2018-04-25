@@ -20,9 +20,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.Charset;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -34,12 +36,14 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMessage;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
+import io.netty.util.ReferenceCountUtil;
 
 import static com.nike.riposte.util.AsyncNettyHelper.consumerWithTracingAndMdc;
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
@@ -47,6 +51,8 @@ import static com.nike.riposte.util.AsyncNettyHelper.supplierWithTracingAndMdc;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONNECTION;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
+import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
@@ -107,8 +113,8 @@ public class ResponseSender {
         this.errorResponseBodySerializer = errorResponseBodySerializer;
     }
 
-    protected String serializeOutput(Object output, ObjectMapper serializer, ResponseInfo<?> responseInfo,
-                                     ChannelHandlerContext ctx) {
+    protected String serializeOutputToString(Object output, ObjectMapper serializer, ResponseInfo<?> responseInfo,
+                                             ChannelHandlerContext ctx) {
         if (output instanceof CharSequence)
             return output.toString();
 
@@ -260,13 +266,14 @@ public class ResponseSender {
 
     protected void sendFirstChunk(ChannelHandlerContext ctx, RequestInfo<?> requestInfo, ResponseInfo<?> responseInfo,
                                   ObjectMapper serializer) {
-        // Set the HTTP status code on the ResponseInfo object to the default if necessary.
-        if (responseInfo.getHttpStatusCode() == null) {
-            responseInfo.setHttpStatusCode(DEFAULT_HTTP_STATUS_CODE);
-        }
-        
-        // Build the actual response object, which may or may not be a full response with content
-        HttpResponse actualResponseObject = createActualResponseObjectForFirstChunk(responseInfo, serializer, ctx);
+        // Sanitize the responseInfo
+        sanitizeResponseInfo(responseInfo, requestInfo, serializer, ctx);
+
+        // Build the actual response object, which may or may not be a full response with content, and then synchronize
+        //      it with responseInfo.
+        HttpResponse actualResponseObject = createActualResponseObjectForFirstChunk(
+            responseInfo, requestInfo, serializer, ctx
+        );
 
         synchronizeAndSetupResponseInfoAndFirstChunk(responseInfo, actualResponseObject, requestInfo, ctx);
 
@@ -278,48 +285,21 @@ public class ResponseSender {
         writeChunk(ctx, actualResponseObject, requestInfo, responseInfo, state);
     }
 
-    protected HttpResponse createActualResponseObjectForFirstChunk(ResponseInfo<?> responseInfo,
-                                                                   ObjectMapper serializer, ChannelHandlerContext ctx) {
-        HttpResponse actualResponseObject;
-        HttpResponseStatus httpStatus =
-            HttpResponseStatus.valueOf(responseInfo.getHttpStatusCodeWithDefault(DEFAULT_HTTP_STATUS_CODE));
+    protected void sanitizeResponseInfo(
+        ResponseInfo<?> responseInfo,
+        RequestInfo<?> requestInfo,
+        ObjectMapper serializer,
+        ChannelHandlerContext ctx
+    ) {
+        // Set the HTTP status code on the ResponseInfo object to the default if it is currently unspecified.
+        if (responseInfo.getHttpStatusCode() == null) {
+            responseInfo.setHttpStatusCode(DEFAULT_HTTP_STATUS_CODE);
+        }
+
+        // Determine and set responseInfo's charset and mime type fields if they are not already set (note this does
+        //      not by itself affect any headers, so it is safe even for proxied responses).
         determineAndSetCharsetAndMimeTypeForResponseInfoIfNecessary(responseInfo);
-        if (responseInfo.isChunkedResponse()) {
-            // Chunked response. No content (yet). Create a DefaultHttpResponse (not a full one) for the first chunk
-            //      of a chunked response.
-            actualResponseObject = new DefaultHttpResponse(HTTP_1_1, httpStatus);
-        }
-        else {
-            // Full response. There may or may not be content.
-            Object content = responseInfo.getContentForFullResponse();
-            if (content == null || isContentAlwaysEmpty(responseInfo)) {
-                // No content, or this is a response status code that MUST NOT send a payload, so create a simple full
-                //      response without a payload.
-                actualResponseObject = new DefaultFullHttpResponse(HTTP_1_1, httpStatus);
-            }
-            else {
-                // There is content and this is not a response that prohibits a payload. If it's a raw byte buffer then
-                //      use it as-is. Otherwise serialize it to a string using the provided serializer.
-                ByteBuf bytesForResponse;
-                if (content instanceof byte[])
-                    bytesForResponse = Unpooled.wrappedBuffer((byte[]) content);
-                else {
-                    bytesForResponse = Unpooled.copiedBuffer(
-                        serializeOutput(content, serializer, responseInfo, ctx),
-                        responseInfo.getDesiredContentWriterEncoding());
-                }
-                // Turn the serialized string to bytes for the response content, create the full response with content,
-                //      and set the content type header.
-                actualResponseObject = new DefaultFullHttpResponse(HTTP_1_1, httpStatus, bytesForResponse);
-            }
-        }
 
-        return actualResponseObject;
-    }
-
-    protected void synchronizeAndSetupResponseInfoAndFirstChunk(ResponseInfo<?> responseInfo,
-                                                                HttpResponse actualResponseObject,
-                                                                RequestInfo requestInfo, ChannelHandlerContext ctx) {
         // Set the content type header, but only for full responses. We *don't* do this for chunked responses because
         //      at the moment chunked responses can only come from ProxyRouterEndpoints, and we should not be guessing
         //      what the downstream system's content type will be if they didn't specify one.
@@ -331,7 +311,7 @@ public class ResponseSender {
             responseInfo.getHeaders().set(CONTENT_TYPE, buildContentTypeHeader(responseInfo));
         }
 
-        // Make sure a trace ID is in the headers.
+        // Make sure a trace ID is in the response headers.
         if (!responseInfo.getHeaders().contains(TraceHeaders.TRACE_ID)) {
             // All responses must contain a trace ID. Try to get it from the request
             //      since it wasn't already in the response.
@@ -349,33 +329,182 @@ public class ResponseSender {
             responseInfo.getHeaders().set(TraceHeaders.TRACE_ID, traceId);
         }
 
-        // Handle any keep-alive stuff
+        // Do some RFC conforming and helpful calculation/sanitization regarding transfer-encoding and content-length
+        //      headers. We only do this for non-chunked responses as we don't want to modify anything passing through
+        //      when it's a ProxyRouterEndpoint response.
+        if (!responseInfo.isChunkedResponse()) {
+            // If this response should *not* have a payload per the HTTP spec, then we should remove any payload
+            //      from responseInfo.
+            if (isContentAlwaysEmpty(requestInfo, responseInfo)) {
+                Object origResponseContent = responseInfo.getContentForFullResponse();
+                if (origResponseContent != null) {
+                    // The response should have an empty payload per the HTTP spec, but we found non-empty content in
+                    //      responseInfo. Remove the payload. This may or may not be an error on the part of whoever
+                    //      generated the responseInfo.
+                    responseInfo.setContentForFullResponse(null);
+
+                    if (isAllowedToLieAboutContentLength(requestInfo, responseInfo)) {
+                        // This is a HEAD request or 304 response, and for those cases you are allowed to specify
+                        //      content-length to indicate the size of what *would* have been returned for a normal GET
+                        //      with 2xx response even though you don't actually return a payload.
+                        //      See https://tools.ietf.org/html/rfc7230#section-3.3.2 for the explanation on how the
+                        //      HEAD method and 304 HTTP status code relates to the content-length header.
+                        // Practically speaking, we honor any explicit content-length value the user specified in
+                        //      responseInfo in case they know exactly what value they want to return, or if no
+                        //      content-length is specified then we fallback to the actual content object they had set
+                        //      on responseInfo. That way the endpoints can use the same logic as they would for a GET
+                        //      request, including specifying non-serialized payload, and we'll calculate the
+                        //      content-length for them the same way we would have for the GET request.
+                        if (responseInfo.getHeaders().get(CONTENT_LENGTH) == null) {
+                            // No explicit content-length header, and responseInfo did contain some content. Serialize
+                            //      that content the same way as what would have been done for a non-HEAD/304 request
+                            //      and use the resulting size-in-bytes for the content-length header.
+                            ByteBuf serializedBytes = serializeOutputToByteBufForResponse(
+                                origResponseContent, responseInfo, serializer, ctx
+                            );
+
+                            try {
+                                responseInfo.getHeaders().set(CONTENT_LENGTH, serializedBytes.readableBytes());
+                            }
+                            finally {
+                                // We're not actually going to use the serializedBytes ByteBuf, so we need to make sure
+                                //      its memory is released.
+                                if (serializedBytes.refCnt() > 0) {
+                                    ReferenceCountUtil.safeRelease(serializedBytes);
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        // Not a HEAD request or 304 response, so the payload on responseInfo was invalid. Log a
+                        //      warning so the dev knows why their payload got stripped out.
+                        logger.warn(
+                            "The response contained non-empty payload, but per the HTTP specification the request's "
+                            + "HTTP method and/or the response's HTTP status code means we MUST NOT return a payload, "
+                            + "so we will prevent a payload from being returned. "
+                            + "request_http_method={}, response_http_status_code={}",
+                            requestInfo.getMethod(), responseInfo.getHttpStatusCode()
+                        );
+                    }
+                }
+            }
+
+            // This is a full response (not chunked) so we should not have chunked transfer-encoding or it will cause
+            //      problems.
+            removeTransferEncodingChunked(responseInfo.getHeaders());
+
+            if (isContentLengthHeaderShouldBeMissing(requestInfo, responseInfo)) {
+                // This request/response combo should *never* return content-length header as per
+                //      https://tools.ietf.org/html/rfc7230#section-3.3.2.
+                responseInfo.getHeaders().remove(CONTENT_LENGTH);
+            }
+        }
+    }
+
+    protected void removeTransferEncodingChunked(HttpHeaders headers) {
+        if (headers.contains(TRANSFER_ENCODING, CHUNKED, true)) {
+            List<String> transferEncodingsMinusChunked =
+                headers.getAll(TRANSFER_ENCODING).stream()
+                       .filter(encoding -> !CHUNKED.equalsIgnoreCase(encoding))
+                       .collect(Collectors.toList());
+
+            if (transferEncodingsMinusChunked.isEmpty()) {
+                headers.remove(TRANSFER_ENCODING);
+            }
+            else {
+                headers.set(TRANSFER_ENCODING, transferEncodingsMinusChunked);
+            }
+        }
+    }
+
+    protected HttpResponse createActualResponseObjectForFirstChunk(
+        ResponseInfo<?> responseInfo,
+        RequestInfo<?> requestInfo,
+        ObjectMapper serializer,
+        ChannelHandlerContext ctx
+    ) {
+        HttpResponseStatus httpStatus =
+            HttpResponseStatus.valueOf(responseInfo.getHttpStatusCodeWithDefault(DEFAULT_HTTP_STATUS_CODE));
+
+        if (responseInfo.isChunkedResponse()) {
+            // Chunked response. No content (yet). Return a DefaultHttpResponse (not a full one) for the first chunk
+            //      of a chunked response.
+            return new DefaultHttpResponse(HTTP_1_1, httpStatus);
+        }
+        else {
+            // Full response. There may or may not be content.
+            Object content = responseInfo.getContentForFullResponse();
+            if (content == null || isContentAlwaysEmpty(requestInfo, responseInfo)) {
+                // No content, or this is a response status code that MUST NOT send a payload, so return a simple full
+                //      response without a payload.
+                return new DefaultFullHttpResponse(HTTP_1_1, httpStatus);
+            }
+            else {
+                // There is content and this is not a response that prohibits a payload. Serialize the content to a
+                //      ByteBuf for the response.
+                ByteBuf bytesForResponse = serializeOutputToByteBufForResponse(
+                    responseInfo.getContentForFullResponse(), responseInfo, serializer, ctx
+                );
+                // Return a full response with the serialized payload.
+                return new DefaultFullHttpResponse(HTTP_1_1, httpStatus, bytesForResponse);
+            }
+        }
+    }
+
+    protected ByteBuf serializeOutputToByteBufForResponse(
+        Object content,
+        ResponseInfo<?> responseInfo,
+        ObjectMapper serializer,
+        ChannelHandlerContext ctx
+    ) {
+        // If the content is a raw byte array then use it as-is via a wrapped ByteBuf. Otherwise serialize it to a
+        //      string using the provided serializer.
+        if (content instanceof byte[]) {
+            return Unpooled.wrappedBuffer((byte[]) content);
+        }
+        else {
+            return Unpooled.copiedBuffer(
+                serializeOutputToString(content, serializer, responseInfo, ctx),
+                responseInfo.getDesiredContentWriterEncoding()
+            );
+        }
+    }
+
+    protected void synchronizeAndSetupResponseInfoAndFirstChunk(
+        ResponseInfo<?> responseInfo,
+        HttpResponse actualResponseObject,
+        RequestInfo requestInfo,
+        ChannelHandlerContext ctx
+    ) {
+        // Handle any keep-alive stuff - we unfortunately can't do all of this in sanitizeResponseInfo because we don't
+        //      yet have the Netty actualResponseObject, so we'll do it here.
         if (responseInfo.isForceConnectionCloseAfterResponseSent()) {
             // We'll be closing the connection after this response is sent, so send the appropriate Connection header.
             responseInfo.getHeaders().set(CONNECTION, HttpHeaders.Values.CLOSE);
         }
         else if (requestInfo.isKeepAliveRequested()) {
+            // Set keep alive header as per
+            //      http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
+            responseInfo.getHeaders().set(CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
+            
             // Add/override the 'Content-Length' header only for a keep-alive connection, and only if we know for sure
-            //      what the content length will/should be.
+            //      what the content length will/should be (i.e. actualResponseObject must be a LastHttpContent
+            //      indicating a full response where we have the full payload).
             if (actualResponseObject instanceof LastHttpContent) {
-                if (isAllowedToLieAboutContentLength(responseInfo)
+                if (isAllowedToLieAboutContentLength(requestInfo, responseInfo)
                     && responseInfo.getHeaders().contains(CONTENT_LENGTH)
                 ) {
                     // Do nothing - this response status code is allowed to lie about its content-length, and the
                     //      responseInfo has explicitly specified something.
                 }
                 else {
-                    // Not allowed to lie about content length or not explicitly specified in responseInfo, so set it
+                    // Not allowed to lie about content-length or not explicitly specified in responseInfo, so set it
                     //      to whatever the response actually contains.
                     responseInfo.getHeaders().set(
                         CONTENT_LENGTH, ((LastHttpContent) actualResponseObject).content().readableBytes()
                     );
                 }
             }
-
-            // Add keep alive header as per
-            //      http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
-            responseInfo.getHeaders().set(CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
         }
 
         // Synchronize the ResponseInfo headers with the actualResponseObject
@@ -393,16 +522,29 @@ public class ResponseSender {
 
     /**
      * Copied from {@link io.netty.handler.codec.http.HttpObjectDecoder#isContentAlwaysEmpty(HttpMessage)} in Netty
-     * version 4.0.36-Final.
+     * version 4.0.36-Final, and adjusted to include HEAD requests which are also *not* allowed to have a response
+     * payload per the HTTP spec.
      *
-     * <p>See <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html">RFC 2616 Section 4.4</a> and <a
-     * href="https://github.com/netty/netty/issues/222">Netty Issue 222</a> for details on why this logic is necessary.
+     * <p>See <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html">RFC 2616 Section 4.4</a>,
+     * <a href="https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html#sec9.4">RFC 2616 Section 9.4</a>, and
+     * <a href="https://github.com/netty/netty/issues/222">Netty Issue 222</a> for details on why this logic is
+     * necessary.
      *
-     * @return true if this response should always be an empty body (per the RFC) and therefore *not* chunked (and with
-     * a content-length header of 0), false if the RFC does not forbid a body and it is therefore eligible for
-     * chunking.
+     * Note: If this is true it doesn't necessarily mean content-length of 0, for example 204 is not allowed to return
+     * a content-length header at all, and HEAD and 304 responses are allowed to "lie" about content-length (i.e. tell
+     * the caller what the content-length would have been for a normal GET request or 200 response). See
+     * <a href="https://tools.ietf.org/html/rfc7230#section-3.3.2">RFC 7230 Section 3.3.2</a> for details on
+     * content-length, but bottom line is that this method should only be used to see if any payload should be stripped
+     * from a response, *not* for determining what content-length should be.
+     *
+     * @return true if this response should always be an empty body (per the RFC), false if the RFC does not forbid a
+     * body.
      */
-    protected boolean isContentAlwaysEmpty(ResponseInfo<?> res) {
+    protected boolean isContentAlwaysEmpty(RequestInfo<?> req, ResponseInfo<?> res) {
+        if (HttpMethod.HEAD.equals(req.getMethod())) {
+            return true;
+        }
+
         int code = res.getHttpStatusCode();
 
         // Correctly handle return codes of 1xx.
@@ -427,19 +569,41 @@ public class ResponseSender {
     }
 
     /**
+     * The content-length header should never be returned for status codes 1xx and 204, or when it was a CONNECT
+     * request with a 2xx response. See
+     * <a href="https://tools.ietf.org/html/rfc7230#section-3.3.2">RFC 7230 Section 3.3.2</a> for details.
+     *
+     * @return true if this is a 1xx or 204 response HTTP status code, or if it was a CONNECT request with a 2xx
+     * response, false otherwise.
+     */
+    protected boolean isContentLengthHeaderShouldBeMissing(RequestInfo<?> req, ResponseInfo<?> res) {
+        int statusCode = res.getHttpStatusCode();
+
+        if (statusCode >= 100 && statusCode < 200) {
+            return true;
+        }
+
+        if (statusCode == 204) {
+            return true;
+        }
+
+        //noinspection RedundantIfStatement
+        if (HttpMethod.CONNECT.equals(req.getMethod()) && statusCode >= 200 && statusCode < 300) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Some response scenarios are allowed to lie about content-length.
      *
      * <p>See <a href="https://tools.ietf.org/html/rfc7230#section-3.3.2">RFC 7230 Section 3.3.2</a>.
      *
      * @return true if the given response is allowed to lie about its content length, false otherwise.
      */
-    private boolean isAllowedToLieAboutContentLength(ResponseInfo<?> responseInfo) {
-        switch (responseInfo.getHttpStatusCode()) {
-            case 304:
-                return true;
-            default:
-                return false;
-        }
+    private boolean isAllowedToLieAboutContentLength(RequestInfo<?> req, ResponseInfo<?> res) {
+        return HttpMethod.HEAD.equals(req.getMethod()) || res.getHttpStatusCode() == 304;
     }
 
     protected void logResponseFirstChunk(HttpResponse response, ChannelHandlerContext ctx) {

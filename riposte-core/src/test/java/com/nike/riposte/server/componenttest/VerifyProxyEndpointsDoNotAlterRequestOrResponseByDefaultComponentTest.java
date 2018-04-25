@@ -62,7 +62,7 @@ import io.netty.util.CharsetUtil;
 
 import static com.nike.riposte.server.testutils.ComponentTestUtils.extractBodyFromRawRequestOrResponse;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.extractFullBodyFromChunks;
-import static com.nike.riposte.server.testutils.ComponentTestUtils.extractHeaders;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.extractHeadersFromRawRequestOrResponse;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.headersToMap;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.request;
@@ -308,8 +308,8 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
             // Verify content-length header. We have to do this on the raw on-the-wire data because the Netty
             //      HttpObjectAggregator (which is used by NettyHttpClientResponse) adds a Content-Length header even
             //      if the original response didn't have one (e.g. 204 response).
-            HttpHeaders proxyResponseHeaders = extractHeaders(proxyServerRawResponse.toString());
-            HttpHeaders downstreamResponseHeaders = extractHeaders(downstreamServerRawResponse.toString());
+            HttpHeaders proxyResponseHeaders = extractHeadersFromRawRequestOrResponse(proxyServerRawResponse.toString());
+            HttpHeaders downstreamResponseHeaders = extractHeadersFromRawRequestOrResponse(downstreamServerRawResponse.toString());
             String proxyResponseContentLengthHeader = proxyResponseHeaders.get(CONTENT_LENGTH);
             assertThat(proxyResponseContentLengthHeader).isEqualTo(downstreamResponseHeaders.get(CONTENT_LENGTH));
 
@@ -446,8 +446,8 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
     }
 
     private void verifyProxyAndDownstreamRequestHeaders() {
-        HttpHeaders proxyRequestHeaders = extractHeaders(proxyServerRawRequest.toString());
-        HttpHeaders downstreamRequestHeaders = extractHeaders(downstreamServerRawRequest.toString());
+        HttpHeaders proxyRequestHeaders = extractHeadersFromRawRequestOrResponse(proxyServerRawRequest.toString());
+        HttpHeaders downstreamRequestHeaders = extractHeadersFromRawRequestOrResponse(downstreamServerRawRequest.toString());
 
         // Verify that request headers are passed downstream as expected. The host may change, but content length
         //      and transfer encoding in particular should be unchanged as it passes through the proxy.
@@ -492,8 +492,8 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
      * ignore the transfer-encoding header.
      */
     private void verifyProxyAndDownstreamResponseHeaders(boolean expectProxyToRemoveTransferEncoding) {
-        HttpHeaders proxyResponseHeaders = extractHeaders(proxyServerRawResponse.toString());
-        HttpHeaders downstreamResponseHeaders = extractHeaders(downstreamServerRawResponse.toString());
+        HttpHeaders proxyResponseHeaders = extractHeadersFromRawRequestOrResponse(proxyServerRawResponse.toString());
+        HttpHeaders downstreamResponseHeaders = extractHeadersFromRawRequestOrResponse(downstreamServerRawResponse.toString());
 
         // Verify that trace ID was added by the proxy.
         assertThat(downstreamResponseHeaders.get("X-B3-TraceId")).isNull();
@@ -756,7 +756,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
     }
 
-    public static class RecordDownstreamServerInboundRequest extends ChannelInboundHandlerAdapter {
+    private static class RecordDownstreamServerInboundRequest extends ChannelInboundHandlerAdapter {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             ByteBuf byteBuf = (ByteBuf) msg;
@@ -767,8 +767,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
     }
 
-    public static class RecordDownstreamServerOutboundResponse extends ChannelOutboundHandlerAdapter {
-
+    private static class RecordDownstreamServerOutboundResponse extends ChannelOutboundHandlerAdapter {
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
             ByteBuf byteBuf = (ByteBuf) msg;
@@ -777,7 +776,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
     }
 
-    public static class RecordProxyServerInboundRequest extends ChannelInboundHandlerAdapter {
+    private static class RecordProxyServerInboundRequest extends ChannelInboundHandlerAdapter {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             ByteBuf byteBuf = (ByteBuf) msg;
@@ -788,8 +787,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
     }
 
-    public static class RecordProxyServerOutboundResponse extends ChannelOutboundHandlerAdapter {
-
+    private static class RecordProxyServerOutboundResponse extends ChannelOutboundHandlerAdapter {
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
             ByteBuf byteBuf = (ByteBuf) msg;

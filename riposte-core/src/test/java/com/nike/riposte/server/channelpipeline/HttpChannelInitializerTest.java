@@ -67,7 +67,7 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.JdkSslClientContext;
 import io.netty.handler.ssl.SslContext;
@@ -384,9 +384,8 @@ public class HttpChannelInitializerTest {
         // then
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SERVER_WORKER_CHANNEL_DEBUG_LOGGING_HANDLER_NAME), any(LoggingHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.SSL_HANDLER_NAME), any(SslHandler.class));
-        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.HTTP_RESPONSE_ENCODER_HANDLER_NAME), any(HttpResponseEncoder.class));
+        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.HTTP_SERVER_CODEC_HANDLER_NAME), any(HttpServerCodec.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.PROCESS_FINAL_RESPONSE_OUTPUT_HANDLER_NAME), any(ProcessFinalResponseOutputHandler.class));
-        verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.HTTP_REQUEST_DECODER_HANDLER_NAME), any(HttpRequestDecoder.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.REQUEST_STATE_CLEANER_HANDLER_NAME), any(RequestStateCleanerHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.DTRACE_START_HANDLER_NAME), any(DTraceStartHandler.class));
         verify(channelPipelineMock).addLast(eq(HttpChannelInitializer.ACCESS_LOG_START_HANDLER_NAME), any(AccessLogStartHandler.class));
@@ -485,7 +484,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_HttpResponseEncoder_as_the_last_outbound_handler_before_sslCtx() {
+    public void initChannel_adds_HttpServerCodec_as_the_last_outbound_handler_before_sslCtx() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
@@ -496,7 +495,7 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, HttpResponseEncoder> foundHandler = findChannelHandler(handlers, HttpResponseEncoder.class);
+        Pair<Integer, HttpServerCodec> foundHandler = findChannelHandler(handlers, HttpServerCodec.class);
 
         assertThat(foundHandler, notNullValue());
 
@@ -505,7 +504,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_HttpRequestDecoder_as_the_first_inbound_handler_after_sslCtx() {
+    public void initChannel_adds_HttpServerCodec_as_the_first_inbound_handler_after_sslCtx() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
@@ -517,7 +516,7 @@ public class HttpChannelInitializerTest {
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
         Pair<Integer, ChannelInboundHandler> firstInboundHandler = findChannelHandler(handlers, ChannelInboundHandler.class);
-        Pair<Integer, HttpRequestDecoder> foundHandler = findChannelHandler(handlers, HttpRequestDecoder.class);
+        Pair<Integer, HttpServerCodec> foundHandler = findChannelHandler(handlers, HttpServerCodec.class);
 
         assertThat(firstInboundHandler, notNullValue());
         assertThat(foundHandler, notNullValue());
@@ -528,7 +527,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_HttpRequestDecoder_with_config_values_coming_from_httpRequestDecoderConfig() {
+    public void initChannel_adds_HttpServerCodec_with_config_values_coming_from_httpRequestDecoderConfig() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
         HttpRequestDecoderConfig configWithCustomValues = new HttpRequestDecoderConfig() {
@@ -556,11 +555,12 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, HttpRequestDecoder> requestDecoderHandlerPair = findChannelHandler(handlers, HttpRequestDecoder.class);
+        Pair<Integer, HttpServerCodec> httpServerCodecHandlerPair = findChannelHandler(handlers, HttpServerCodec.class);
 
-        Assertions.assertThat(requestDecoderHandlerPair).isNotNull();
+        Assertions.assertThat(httpServerCodecHandlerPair).isNotNull();
 
-        HttpRequestDecoder decoderHandler = requestDecoderHandlerPair.getValue();
+        HttpServerCodec httpServerCodecHandler = httpServerCodecHandlerPair.getValue();
+        HttpRequestDecoder decoderHandler = (HttpRequestDecoder) Whitebox.getInternalState(httpServerCodecHandler, "inboundHandler");
         int actualMaxInitialLineLength = extractField(extractField(decoderHandler, "lineParser"), "maxLength");
         int actualMaxHeaderSize = extractField(extractField(decoderHandler, "headerParser"), "maxLength");
         int actualMaxChunkSize = extractField(decoderHandler, "maxChunkSize");
@@ -571,7 +571,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_RequestStateCleanerHandler_immediately_after_HttpRequestDecoder() {
+    public void initChannel_adds_RequestStateCleanerHandler_immediately_after_HttpServerCodec_and_ProcessFinalResponseOutputHandler() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
         MetricsListener expectedMetricsListener = mock(MetricsListener.class);
@@ -586,17 +586,22 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, HttpRequestDecoder> httpRequestDecoderHandler = findChannelHandler(handlers, HttpRequestDecoder.class);
+        Pair<Integer, HttpServerCodec> httpServerCodecHandler = findChannelHandler(handlers, HttpServerCodec.class);
+        Pair<Integer, ProcessFinalResponseOutputHandler> processFinalResponseOutputHandler = findChannelHandler(
+            handlers, ProcessFinalResponseOutputHandler.class
+        );
         Pair<Integer, RequestStateCleanerHandler> requestStateCleanerHandler = findChannelHandler(handlers, RequestStateCleanerHandler.class);
 
-        assertThat(httpRequestDecoderHandler, notNullValue());
+        assertThat(httpServerCodecHandler, notNullValue());
+        assertThat(processFinalResponseOutputHandler, notNullValue());
         assertThat(requestStateCleanerHandler, notNullValue());
 
-        assertThat(requestStateCleanerHandler.getLeft(), is(httpRequestDecoderHandler.getLeft() + 1));
+        assertThat(processFinalResponseOutputHandler.getLeft(), is(httpServerCodecHandler.getLeft() + 1));
+        assertThat(requestStateCleanerHandler.getLeft(), is(httpServerCodecHandler.getLeft() + 2));
 
         RequestStateCleanerHandler handler = requestStateCleanerHandler.getRight();
-        assertThat(Whitebox.getInternalState(hci, "metricsListener"), is(expectedMetricsListener));
-        assertThat(Whitebox.getInternalState(hci, "incompleteHttpCallTimeoutMillis"), is(expectedIncompleteCallTimeoutMillis));
+        assertThat(Whitebox.getInternalState(handler, "metricsListener"), is(expectedMetricsListener));
+        assertThat(Whitebox.getInternalState(handler, "incompleteHttpCallTimeoutMillis"), is(expectedIncompleteCallTimeoutMillis));
     }
 
     @Test
@@ -642,7 +647,7 @@ public class HttpChannelInitializerTest {
     }
 
     @Test
-    public void initChannel_adds_SmartHttpContentCompressor_before_HttpResponseEncoder_for_outbound_handler() {
+    public void initChannel_adds_SmartHttpContentCompressor_before_HttpServerCodec_for_outbound_handler() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
@@ -654,15 +659,15 @@ public class HttpChannelInitializerTest {
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
         Pair<Integer, SmartHttpContentCompressor> httpContentCompressor = findChannelHandler(handlers, SmartHttpContentCompressor.class);
-        Pair<Integer, HttpResponseEncoder> httpResponseEncoder = findChannelHandler(handlers, HttpResponseEncoder.class);
+        Pair<Integer, HttpServerCodec> httpServerCodec = findChannelHandler(handlers, HttpServerCodec.class);
 
         assertThat(httpContentCompressor, notNullValue());
-        assertThat(httpResponseEncoder, notNullValue());
+        assertThat(httpServerCodec, notNullValue());
 
         // SmartHttpContentCompressor's index should be later than HttpResponseEncoder's index to verify that it comes
         //      BEFORE HttpResponseEncoder on the OUTBOUND handlers (since the outbound handlers are processed in
         //      reverse order).
-        assertThat(httpContentCompressor.getLeft(), is(greaterThan(httpResponseEncoder.getLeft())));
+        assertThat(httpContentCompressor.getLeft(), is(greaterThan(httpServerCodec.getLeft())));
         // Verify that SmartHttpContentCompressor's threshold is set to the specified config value.
         long expectedThresholdValue = ((Integer)extractField(hci, "responseCompressionThresholdBytes")).longValue();
         assertThat(extractField(httpContentCompressor.getRight(), "responseSizeThresholdBytes"),
@@ -902,8 +907,8 @@ public class HttpChannelInitializerTest {
         ArgumentCaptor<ChannelHandler> channelHandlerArgumentCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
         verify(channelPipelineMock, atLeastOnce()).addLast(anyString(), channelHandlerArgumentCaptor.capture());
         List<ChannelHandler> handlers = channelHandlerArgumentCaptor.getAllValues();
-        Pair<Integer, HttpResponseEncoder> httpResponseEncoder = findChannelHandler(handlers, HttpResponseEncoder.class);
-        assertThat(httpResponseEncoder, notNullValue());
+        Pair<Integer, HttpServerCodec> httpServerCodec = findChannelHandler(handlers, HttpServerCodec.class);
+        assertThat(httpServerCodec, notNullValue());
     }
 
     @Test

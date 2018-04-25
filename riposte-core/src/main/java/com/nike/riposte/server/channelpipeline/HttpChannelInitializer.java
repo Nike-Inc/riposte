@@ -57,8 +57,7 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
@@ -111,9 +110,9 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
      */
     public static final String SSL_HANDLER_NAME = "SslHandler";
     /**
-     * The name of the {@link HttpRequestDecoder} handler in the pipeline.
+     * The name of the {@link HttpServerCodec} handler in the pipeline.
      */
-    public static final String HTTP_REQUEST_DECODER_HANDLER_NAME = "HttpRequestDecoderHandler";
+    public static final String HTTP_SERVER_CODEC_HANDLER_NAME = "HttpServerCodecHandler";
     /**
      * The name of the {@link RequestStateCleanerHandler} handler in the pipeline.
      */
@@ -206,10 +205,6 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
     public static final String CHANNEL_PIPELINE_FINALIZER_HANDLER_NAME = "ChannelPipelineFinalizerHandler";
 
     // Outbound-only handlers
-    /**
-     * The name of the {@link HttpResponseEncoder} handler in the pipeline.
-     */
-    public static final String HTTP_RESPONSE_ENCODER_HANDLER_NAME = "HttpResponseEncoderHandler";
     /**
      * The name of the {@link ProcessFinalResponseOutputHandler} handler in the pipeline.
      */
@@ -448,26 +443,23 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         if (sslCtx != null)
             p.addLast(SSL_HANDLER_NAME, sslCtx.newHandler(ch.alloc()));
 
-        // OUTBOUND - Add HttpResponseEncoder to encode our responses appropriately.
-        //            This MUST be the earliest "outbound" handler after the SSL handler since outbound handlers are
-        //            processed in reverse order.
-        p.addLast(HTTP_RESPONSE_ENCODER_HANDLER_NAME, new HttpResponseEncoder());
+        // IN/OUT - Add the HttpServerCodec to decode requests into the appropriate HttpObjects and encode responses
+        //          from HttpObjects into bytes. This MUST be the earliest "outbound" handler after the SSL handler
+        //          since outbound handlers are processed in reverse order.
+        p.addLast(HTTP_SERVER_CODEC_HANDLER_NAME,
+                  new HttpServerCodec(
+                      httpRequestDecoderConfig.maxInitialLineLength(),
+                      httpRequestDecoderConfig.maxHeaderSize(),
+                      httpRequestDecoderConfig.maxChunkSize()
+                  )
+        );
 
         // OUTBOUND - Add ProcessFinalResponseOutputHandler to get the final response headers, calculate the final
         //            content length (after compression/gzip and/or any other modifications), etc, and set those values
         //            on the channel's HttpProcessingState.
         p.addLast(PROCESS_FINAL_RESPONSE_OUTPUT_HANDLER_NAME, new ProcessFinalResponseOutputHandler());
 
-        // INBOUND - Add HttpRequestDecoder so that incoming messages are translated into the appropriate HttpMessage
-        //           objects.
-        p.addLast(HTTP_REQUEST_DECODER_HANDLER_NAME,
-                  new HttpRequestDecoder(
-                      httpRequestDecoderConfig.maxInitialLineLength(),
-                      httpRequestDecoderConfig.maxHeaderSize(),
-                      httpRequestDecoderConfig.maxChunkSize()
-                  )
-        );
-        // INBOUND - Now that the message is translated into HttpMessages we can add RequestStateCleanerHandler to
+        // INBOUND - Now that the message is translated into HttpObjects we can add RequestStateCleanerHandler to
         //           setup/clean state for the rest of the pipeline.
         p.addLast(REQUEST_STATE_CLEANER_HANDLER_NAME, new RequestStateCleanerHandler(metricsListener,
                                                                                      incompleteHttpCallTimeoutMillis));
@@ -477,9 +469,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(ACCESS_LOG_START_HANDLER_NAME, new AccessLogStartHandler());
 
         // IN/OUT - Add SmartHttpContentCompressor for automatic content compression (if appropriate for the
-        //          request/response/size threshold). This must be after HttpRequestDecoder on the incoming pipeline and
-        //          before HttpResponseEncoder on the outbound pipeline (keep in mind that "before" on outbound means
-        //          later in the list since outbound is processed in reverse order).
+        //          request/response/size threshold). This must be added after HttpServerCodec so that it can process
+        //          after the request on the incoming pipeline and before the response on the outbound pipeline.
         p.addLast(SMART_HTTP_CONTENT_COMPRESSOR_HANDLER_NAME,
                   new SmartHttpContentCompressor(responseCompressionThresholdBytes));
 

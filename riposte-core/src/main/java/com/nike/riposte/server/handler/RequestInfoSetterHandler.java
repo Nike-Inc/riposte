@@ -26,7 +26,7 @@ import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled
  * the incoming request is chunked then the later chunks are added to the stored request info via {@link
  * RequestInfo#addContentChunk(HttpContent)}.
  * <p/>
- * This handler should come after {@link io.netty.handler.codec.http.HttpRequestDecoder}, {@link
+ * This handler should come after {@link io.netty.handler.codec.http.HttpServerCodec}, {@link
  * SmartHttpContentCompressor}, and {@link SmartHttpContentDecompressor} in the pipeline.
  *
  * The request size is tracked and if it exceeds the configured global or a given endpoint's override, an exception
