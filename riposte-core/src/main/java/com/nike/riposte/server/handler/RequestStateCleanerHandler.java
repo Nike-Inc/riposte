@@ -26,7 +26,8 @@ import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.INC
  * Handler that makes sure the channel has a clean instance of {@link com.nike.riposte.server.http.HttpProcessingState}
  * for every new {@link HttpRequest}.
  * <p/>
- * This should be the first handler in a pipeline following {@link io.netty.handler.codec.http.HttpRequestDecoder}.
+ * This should be the first handler on the inbound side in a pipeline following
+ * {@link io.netty.handler.codec.http.HttpServerCodec}.
  *
  * @author Nic Munroe
  */

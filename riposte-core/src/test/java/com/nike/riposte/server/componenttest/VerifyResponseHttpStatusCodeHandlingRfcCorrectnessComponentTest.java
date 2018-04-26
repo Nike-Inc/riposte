@@ -3,6 +3,7 @@ package com.nike.riposte.server.componenttest;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.hooks.PipelineCreateHook;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
@@ -16,6 +17,7 @@ import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -37,8 +39,12 @@ import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.CharsetUtil;
 import io.restassured.response.ExtractableResponse;
@@ -46,12 +52,17 @@ import io.restassured.response.ExtractableResponse;
 import static com.nike.riposte.server.componenttest.VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest.BackendEndpoint.ATTEMPTED_CONTENT_LENGTH_LIE_VALUE_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest.BackendEndpoint.ATTEMPTED_RESPONSE_PAYLOAD_SIZE_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest.BackendEndpoint.CALL_ID_RESPONSE_HEADER_KEY;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.extractBodyFromRawRequestOrResponse;
+import static com.nike.riposte.server.testutils.ComponentTestUtils.extractHeadersFromRawRequestOrResponse;
 import static com.nike.riposte.server.testutils.ComponentTestUtils.generatePayload;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
+import static io.netty.util.CharsetUtil.UTF_8;
 import static io.restassured.RestAssured.config;
 import static io.restassured.RestAssured.given;
 import static io.restassured.config.RedirectConfig.redirectConfig;
+import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -76,6 +87,13 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
     private static ServerConfig edgeRouterServerConfig;
 
     private static Level logPrintLevelAtStart;
+
+    private static StringBuilder backendServerRawResponse;
+
+    @Before
+    public void beforeMethod() {
+        backendServerRawResponse = new StringBuilder();
+    }
 
     @BeforeClass
     public static void setUpClass() throws Exception {
@@ -255,6 +273,61 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         }
     }
 
+    private enum AllowedToLieAboutContentLengthScenario {
+        HEAD_REQUEST("HEAD", 200),
+        STATUS_CODE_304_RESPOSNE("GET", 304),
+        HEAD_REQUEST_WITH_304_RESPONSE("HEAD", 304);
+
+        public final String httpMethod;
+        public final int statusCode;
+
+        AllowedToLieAboutContentLengthScenario(String httpMethod, int statusCode) {
+            this.httpMethod = httpMethod;
+            this.statusCode = statusCode;
+        }
+    }
+
+    @DataProvider(value = {
+        "HEAD_REQUEST",
+        "STATUS_CODE_304_RESPOSNE",
+        "HEAD_REQUEST_WITH_304_RESPONSE"
+    })
+    @Test
+    public void verify_riposte_sets_content_length_header_automatically_for_responses_that_are_allowed_to_lie_about_content_length(
+        AllowedToLieAboutContentLengthScenario scenario
+    ) {
+        ExtractableResponse response = given()
+            .config(config().redirect(redirectConfig().followRedirects(false)))
+            .baseUri("http://localhost")
+            .port(backendServerConfig.endpointsPort())
+            .basePath(AllowedToLieAboutContentLengthEndpoint.MATCHING_PATH)
+            .header(AllowedToLieAboutContentLengthEndpoint.DESIRED_HTTP_RESPONSE_CODE, scenario.statusCode)
+            .log().all()
+        .when()
+            .request(scenario.httpMethod)
+        .then()
+            .log().all()
+            .extract();
+
+        String expectedContentLengthAsString =
+            String.valueOf(AllowedToLieAboutContentLengthEndpoint.RESPONSE_PAYLOAD.length());
+
+        // Sanity check the response from the receiving client's point of view.
+        assertThat(response.asString()).isNullOrEmpty();
+        assertThat(response.header(CONTENT_LENGTH)).isEqualTo(expectedContentLengthAsString);
+        assertThat(response.contentType()).isEqualTo(AllowedToLieAboutContentLengthEndpoint.SPECIFIED_CONTENT_TYPE);
+
+        // Verify the actual raw bytes-on-the-wire coming from the backend server.
+        String rawBytesOnTheWireResponse = backendServerRawResponse.toString();
+        String rawBytesOnTheWireBody = extractBodyFromRawRequestOrResponse(rawBytesOnTheWireResponse);
+        HttpHeaders headersFromRawResponse = extractHeadersFromRawRequestOrResponse(rawBytesOnTheWireResponse);
+
+        assertThat(rawBytesOnTheWireBody).isNullOrEmpty();
+        assertThat(headersFromRawResponse.get(CONTENT_LENGTH)).isEqualTo(expectedContentLengthAsString);
+        assertThat(headersFromRawResponse.get(CONTENT_TYPE))
+            .isEqualTo(AllowedToLieAboutContentLengthEndpoint.SPECIFIED_CONTENT_TYPE);
+    }
+
     public static class RouterServerConfig implements ServerConfig {
         private final int myPort;
         private final Endpoint<?> proxyEndpoint;
@@ -291,16 +364,17 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
 
     public static class BackendServerConfig implements ServerConfig {
         private final int port;
-        private final Endpoint<?> backendEndpoint;
+        private final List<Endpoint<?>> endpoints = Arrays.asList(
+            new BackendEndpoint(), new AllowedToLieAboutContentLengthEndpoint()
+        );
 
         public BackendServerConfig(int port) {
             this.port = port;
-            this.backendEndpoint = new BackendEndpoint();
         }
 
         @Override
         public Collection<Endpoint<?>> appEndpoints() {
-            return Collections.singleton(backendEndpoint);
+            return endpoints;
         }
 
         @Override
@@ -311,6 +385,13 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         @Override
         public long workerChannelIdleTimeoutMillis() {
             return -1;
+        }
+
+        @Override
+        public List<PipelineCreateHook> pipelineCreateHooks() {
+            return singletonList(pipeline -> pipeline
+                .addFirst("recordBackendRawOutboundResponse", new RecordBackendServerRawOutboundResponse())
+            );
         }
     }
 
@@ -354,6 +435,42 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         @Override
         public Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
+        }
+    }
+
+    public static class AllowedToLieAboutContentLengthEndpoint extends StandardEndpoint<Void, String> {
+
+        public static final String MATCHING_PATH = "/allowedToLieAboutContentLengthEndpoint";
+        public static final String DESIRED_HTTP_RESPONSE_CODE = "desired-http-response-code";
+        public static final String SPECIFIED_CONTENT_TYPE = "foo/bar; charset=ISO-8859-1";
+        public static final String RESPONSE_PAYLOAD = generatePayload(1042);
+
+        @Override
+        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
+                                                               Executor longRunningTaskExecutor,
+                                                               ChannelHandlerContext ctx) {
+            int statusCode = Integer.parseInt(request.getHeaders().get(DESIRED_HTTP_RESPONSE_CODE));
+
+            return CompletableFuture.completedFuture(
+                ResponseInfo.newBuilder(RESPONSE_PAYLOAD)
+                            .withHttpStatusCode(statusCode)
+                            .withHeaders(new DefaultHttpHeaders().set(CONTENT_TYPE, SPECIFIED_CONTENT_TYPE))
+                            .build()
+            );
+        }
+
+        @Override
+        public Matcher requestMatcher() {
+            return Matcher.match(MATCHING_PATH, HttpMethod.GET, HttpMethod.HEAD);
+        }
+    }
+
+    private static class RecordBackendServerRawOutboundResponse extends ChannelOutboundHandlerAdapter {
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            ByteBuf byteBuf = (ByteBuf) msg;
+            backendServerRawResponse.append(byteBuf.toString(UTF_8));
+            super.write(ctx, msg, promise);
         }
     }
 }

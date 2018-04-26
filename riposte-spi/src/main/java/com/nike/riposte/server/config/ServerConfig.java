@@ -527,7 +527,7 @@ public interface ServerConfig {
 
     /**
      * @return The {@link HttpRequestDecoderConfig} that should be used when creating the {@link
-     * io.netty.handler.codec.http.HttpRequestDecoder#HttpRequestDecoder(int, int, int)} handler used to decode incoming
+     * io.netty.handler.codec.http.HttpServerCodec#HttpServerCodec(int, int, int)} handler used to decode incoming
      * bytes into HTTP message objects, or null if you want to use the default values.
      *
      * <p><b>It's recommended that you return null or use the {@link HttpRequestDecoderConfig#DEFAULT_IMPL} unless
@@ -542,8 +542,9 @@ public interface ServerConfig {
 
     /**
      * Config options that will be used when creating the {@link
-     * io.netty.handler.codec.http.HttpRequestDecoder#HttpRequestDecoder(int, int, int)} handler used to decode incoming
-     * bytes into HTTP message objects.
+     * io.netty.handler.codec.http.HttpRequestDecoder#HttpRequestDecoder(int, int, int)} (or
+     * {@link io.netty.handler.codec.http.HttpServerCodec}) handler used to decode incoming bytes into HTTP message
+     * objects.
      *
      * <p><b>It's recommended that you use the {@link #DEFAULT_IMPL} unless you're sure you know what you're doing!</b>
      *

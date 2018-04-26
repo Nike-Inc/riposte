@@ -413,8 +413,8 @@ public class ComponentTestUtils {
         assertThat(responseAsError.errors.get(0).metadata).isEqualTo(expectedApiError.getMetadata());
     }
 
-    public static String extractBodyFromRawRequestOrResponse(String request) {
-        return substringAfter(request, "\r\n\r\n"); //body start after \r\n\r\n combo
+    public static String extractBodyFromRawRequestOrResponse(String rawRequestOrResponse) {
+        return substringAfter(rawRequestOrResponse, "\r\n\r\n"); //body start after \r\n\r\n combo
     }
 
     public static String extractFullBodyFromChunks(String chunkedBody) {
@@ -440,7 +440,7 @@ public class ComponentTestUtils {
         return finalResultMinusChunkMetadata.toString();
     }
 
-    public static HttpHeaders extractHeaders(String rawRequestOrResponseString) {
+    public static HttpHeaders extractHeadersFromRawRequestOrResponse(String rawRequestOrResponseString) {
         int indexOfFirstCrlf = rawRequestOrResponseString.indexOf("\r\n");
         int indexOfBodySeparator = rawRequestOrResponseString.indexOf("\r\n\r\n");
 
