@@ -12,8 +12,9 @@ import com.nike.backstopper.model.riposte.ErrorResponseBodyImpl;
  * implement this interface).
  *
  * <p>You can create your own instance of this class, however it's highly recommended that you just use the prebuilt
- * {@link ErrorResponseBodyImpl} class which is part of the default error handling and validation system that is
- * designed to make error handling and validation easy and is based on Backstopper.
+ * {@link ErrorResponseBodyImpl} class which is part of the default error handling and validation system (based on
+ * Backstopper) and is designed to make error handling and validation easy and consistent. If you have some other object
+ * that you want to serialize you can use {@link com.nike.riposte.server.error.handler.impl.DelegatedErrorResponseBody}.
  *
  * @author Nic Munroe
  */
