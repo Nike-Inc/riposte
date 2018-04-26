@@ -8,11 +8,65 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.13.x` Releases - [0.13.0](#0130)
 - `0.12.x` Releases - [0.12.2](#0122), [0.12.1](#0121), [0.12.0](#0120) 
 - `0.11.x` Releases - [0.11.2](#0112), [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.13.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.13.0)
+
+Released on 2018-04-26.
+
+### Potentially breaking changes
+
+Some of the changes in version `0.13.0` can affect what is returned to the caller in some situations. Although these
+changes are effectively bug fixes that bring Riposte more in line with the HTTP specification, and therefore should be 
+invisible and fully backwards compatible changes for most Riposte users, they can technically change what callers have 
+been receiving for some requests/responses, so it is strongly advised that you look over the changes below to determine 
+what impact updating to `0.13.0` might have for your services. 
+
+### Fixed
+
+- Fixed `StandardEndpoint` responses to force-remove payloads for situations where the HTTP specification forbids 
+returning a payload, including HTTP status code 204, 205, and 304 responses, and responses to HEAD requests (see 
+[RFC 2616 Section 4.4](https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4) and 
+[RFC 2616 Section 10.2.6](https://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.2.6)). Some of these were 
+already being handled by Netty (204, 304), but now 205 and HEAD requests are included. 
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull requests [#102](https://github.com/Nike-Inc/riposte/pull/102)
+    and [#103](https://github.com/Nike-Inc/riposte/pull/103).
+- Fixed `StandardEndpoint`s to allow you to specify a non-zero content-length header for HEAD or 304 responses even 
+though the actual payload is empty. See [RFC 7230 Section 3.3.2](https://tools.ietf.org/html/rfc7230#section-3.3.2).
+If you explicitly specify a content-length header in your `ResponseInfo` then that will be honored, otherwise Riposte
+will calculate content-length from whatever payload you provide (serialized the same way Riposte would serialize a 
+normal GET 200 response) before dropping the payload for the actual response. *This allows you to simply add the `HEAD` 
+method to the `Matcher` for your `GET` endpoint and you will have proper `HEAD` support without any further changes.* 
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull requests [#102](https://github.com/Nike-Inc/riposte/pull/102) 
+    and [#103](https://github.com/Nike-Inc/riposte/pull/103).
+- Fixed a bug where `ProxyRouterEndpoint` responses were adding a default `application/json` content-type header 
+if the downstream system wasn't returning a content-type. `ProxyRouterEndpoint`s will no longer do this.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#102](https://github.com/Nike-Inc/riposte/pull/102).
+- Fixed `ProxyRouterEndpoint` responses to not force chunked transfer-encoding. After this change, if the downstream 
+returns a content-length and the payload has no chunked transfer encoding applied then that's what will reach the 
+caller. This allows callers to know how big the payload is before it arrives, enabling progress bars (for example). 
+Between this and the previous fix for content-type, Riposte no longer makes any changes to the `ProxyRouterEndpoint` 
+response from the downstream.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#102](https://github.com/Nike-Inc/riposte/pull/102).   
+
+### Added
+
+- Added `DelegatedErrorResponseBody` - a simple implementation of `ErrorResponseBody` that allows you to delegate
+serialization of the error contract to a different object. 
+
+### Changed
+
+- Changed the Netty pipeline used by Riposte to use a combined `HttpServerCodec` handler rather than separate 
+`HttpRequestDecoder` and `HttpResponseEncoder` handlers. This allows Netty to detect and fix more HTTP specification
+violations (e.g. forcing empty payloads on responses to HEAD requests) but is otherwise equivalent. You should
+not notice any difference with this change unless your service uses a `PipelineCreateHook` that expects to find a
+`HttpRequestDecoder` or `HttpResponseEncoder` handler in the pipeline - you would need to adjust it to look for the new
+`HttpServerCodec` instead. 
 
 ## [0.12.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.12.2)
 
