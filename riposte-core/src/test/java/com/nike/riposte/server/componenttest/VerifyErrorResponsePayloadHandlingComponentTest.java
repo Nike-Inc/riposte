@@ -105,6 +105,27 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
     }
 
     @Test
+    public void should_return_string_payload_when_ErrorResponseBody_bodyToSerialize_is_string() throws IOException {
+        String payload = "<html><body prop=\"value\" anotherprop=\"value2\">Internal Server Error</body></html>";
+
+        ExtractableResponse response =
+                given()
+                    .baseUri(BASE_URI)
+                    .port(serverConfig.endpointsPort())
+                    .basePath(StringErrorContractEndpoint.MATCHING_PATH)
+                    .header(StringErrorContractEndpoint.DESIRED_ERROR_PAYLOAD_HEADER_KEY, payload)
+                    .log().all()
+                .when()
+                    .get()
+                .then()
+                    .log().headers()
+                    .extract();
+
+        assertThat(response.statusCode()).isEqualTo(INTERNAL_SERVER_ERROR.code());
+        assertThat(response.response().body().print()).isEqualTo(payload);
+    }
+
+    @Test
     public void should_return_default_payload_when_default_error_handling_occurs() throws IOException {
         ObjectMapper mapper = new ObjectMapper();
 
@@ -167,6 +188,22 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         }
     }
 
+    static class StringErrorContractEndpoint extends StandardEndpoint<Void, Void> {
+
+        static final String MATCHING_PATH = "/stringErrorContractEndpoint";
+        static final String DESIRED_ERROR_PAYLOAD_HEADER_KEY = "desired-error-payload";
+
+        @Override
+        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
+                                                            Executor longRunningTaskExecutor,
+                                                            ChannelHandlerContext ctx) {
+            throw new StringErrorContractException(request.getHeaders().get(DESIRED_ERROR_PAYLOAD_HEADER_KEY));
+        }
+
+        @Override
+        public Matcher requestMatcher() { return Matcher.match(MATCHING_PATH, HttpMethod.GET); }
+    }
+
     static class DefaultErrorContractEndpoint extends StandardEndpoint<Void, Void> {
 
         static final String MATCHING_PATH = "/defaultErrorContractEndpoint";
@@ -192,6 +229,14 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         }
     }
 
+    private static class StringErrorContractException extends RuntimeException {
+        String message;
+
+        StringErrorContractException(final String message) {
+            this.message = message;
+        }
+    }
+
     private static class BlankPayloadErrorContractException extends RuntimeException {}
 
     private static class DelegatedErrorContract {
@@ -211,6 +256,7 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
     public static class ErrorResponsePayloadTestingServerConfig implements ServerConfig {
         private final Collection<Endpoint<?>> endpoints = Arrays.asList(
             new DelegatedErrorContractEndpoint(),
+            new StringErrorContractEndpoint(),
             new BlankPayloadErrorContractEndpoint(),
             new DefaultErrorContractEndpoint()
         );
@@ -266,6 +312,10 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
                 return handleDelegatedErrorContract((DelegatedErrorContractException) originalException.getCause());
             }
 
+            if (cause instanceof StringErrorContractException) {
+                return handleStringErrorContract((StringErrorContractException) originalException.getCause());
+            }
+
             return super.prepareFrameworkRepresentation(errorContractDTO, httpStatusCode, rawFilteredApiErrors,
                                                         originalException, request);
         }
@@ -299,6 +349,18 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
                 public Object bodyToSerialize() {
                     return new DelegatedErrorContract(originalException.message);
                 }
+            };
+        }
+
+        ErrorResponseBody handleStringErrorContract(StringErrorContractException originalException) {
+            String errorId = EXPECTED_CUSTOM_ERROR_UID_RESPONSE_HEADER_PREFIX + UUID.randomUUID().toString();
+
+            return new ErrorResponseBody() {
+                @Override
+                public String errorId() { return errorId; }
+
+                @Override
+                public Object bodyToSerialize() { return originalException.message; }
             };
         }
     }

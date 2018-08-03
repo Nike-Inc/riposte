@@ -49,6 +49,7 @@ public class ServerConfigTest {
         assertThat(defaultImpl.maxRequestSizeInBytes(), is(0));
         assertThat(defaultImpl.responseCompressionThresholdBytes(), is(500));
         assertThat(defaultImpl.createSslContext(), notNullValue());
+        assertThat(defaultImpl.errorResponseBodySerializer(), nullValue());
         assertThat(defaultImpl.requestContentValidationService(), nullValue());
         assertThat(defaultImpl.isDebugActionsEnabled(), is(false));
         assertThat(defaultImpl.endpointsPort(), is(8080));
