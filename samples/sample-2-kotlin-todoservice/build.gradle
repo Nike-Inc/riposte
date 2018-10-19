@@ -1,8 +1,6 @@
 evaluationDependsOn(':')
 
 ext {
-    kotlinTestVersion = '2.0.5'
-    googleTruthVersion = '0.34'
 }
 
 buildscript {
@@ -42,9 +40,8 @@ dependencies {
     )
     testCompile (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
-            "io.rest-assured:rest-assured:$restAssuredVersion",
-            "io.kotlintest:kotlintest:$kotlinTestVersion",
-            "com.google.truth:truth:${googleTruthVersion}"
+            "junit:junit:$junitVersion",
+            "io.rest-assured:rest-assured:$restAssuredVersion"
     )
 }
 
