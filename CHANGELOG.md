@@ -8,12 +8,25 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.13.x` Releases - [0.13.0](#0130)
+- `0.13.x` Releases - [0.13.1](#0131), [0.13.0](#0130)
 - `0.12.x` Releases - [0.12.2](#0122), [0.12.1](#0121), [0.12.0](#0120) 
 - `0.11.x` Releases - [0.11.2](#0112), [0.11.1](#0111), [0.11.0](#0110)
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.13.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.13.1)
+
+Released on 2018-11-06.
+
+### Fixed
+
+- Fixed the default error response body serializer to not attempt to serialize bodies that are already raw 
+`CharSequence`s. This allows you to output HTML pages for error responses (for example), rather than being forced to 
+use an object that is serialized to JSON.
+    - Fixed by [Nathanial Myers][contrib_nmyers322] in pull request 
+    [#108](https://github.com/Nike-Inc/riposte/pull/108). 
+    For issue [#107](https://github.com/Nike-Inc/riposte/issues/107)
 
 ## [0.13.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.13.0)
 
@@ -410,3 +423,4 @@ Released on 2016-11-03.
 [contrib_cjha]: https://github.com/cjha
 [contrib_jcnorman48]: https://github.com/jcnorman48
 [contrib_scientificmethod]: https://github.com/ScientificMethod
+[contrib_nmyers322]: https://github.com/nmyers322
