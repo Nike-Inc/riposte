@@ -84,11 +84,11 @@ public class DTraceStartHandler extends BaseInboundHandlerWithTracingAndMdcSuppo
      */
     protected String getSpanName(HttpRequest request) {
         // Try the servlet path first, and fall back to the raw request URI.
-        String uri = request.getUri();
+        String uri = request.uri();
         String path = HttpUtils.extractPath(uri);
 
         // Include the HTTP method in the returned value to help delineate which endpoint this request represents.
-        return request.getMethod().name() + '_' + path;
+        return request.method().name() + '_' + path;
     }
 
 }

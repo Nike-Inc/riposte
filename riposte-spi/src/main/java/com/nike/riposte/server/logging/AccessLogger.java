@@ -268,8 +268,8 @@ public class AccessLogger {
                 userAgent = "-";
         }
         String httpStatusCode = "-";
-        if (finalResponseObject != null && finalResponseObject.getStatus() != null)
-            httpStatusCode = String.valueOf(finalResponseObject.getStatus().code());
+        if (finalResponseObject != null && finalResponseObject.status() != null)
+            httpStatusCode = String.valueOf(finalResponseObject.status().code());
         else if (responseInfo != null && responseInfo.getHttpStatusCode() != null)
             httpStatusCode = String.valueOf(responseInfo.getHttpStatusCode());
 
@@ -382,8 +382,8 @@ public class AccessLogger {
         String uncompressedRawContentLength = null;
         String finalContentLength = null;
 
-        if (finalResponseObject != null && finalResponseObject.getStatus() != null)
-            httpStatusCode = String.valueOf(finalResponseObject.getStatus().code());
+        if (finalResponseObject != null && finalResponseObject.status() != null)
+            httpStatusCode = String.valueOf(finalResponseObject.status().code());
         else if (responseInfo != null && responseInfo.getHttpStatusCode() != null)
             httpStatusCode = String.valueOf(responseInfo.getHttpStatusCode());
 

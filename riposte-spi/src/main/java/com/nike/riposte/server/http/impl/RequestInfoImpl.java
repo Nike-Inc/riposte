@@ -7,6 +7,7 @@ import com.nike.riposte.util.HttpUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.netty.handler.codec.http.HttpUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,9 +117,9 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
     }
 
     public RequestInfoImpl(HttpRequest request) {
-        this(request.getUri(), request.getMethod(), request.headers(),
+        this(request.uri(), request.method(), request.headers(),
              HttpUtils.extractTrailingHeadersIfPossible(request), null, HttpUtils.extractCookies(request), null,
-             HttpUtils.extractContentChunks(request), request.getProtocolVersion(), HttpHeaders.isKeepAlive(request),
+             HttpUtils.extractContentChunks(request), request.protocolVersion(), HttpUtil.isKeepAlive(request),
              (request instanceof FullHttpRequest),
              HttpPostRequestDecoder.isMultipart(request));
     }
