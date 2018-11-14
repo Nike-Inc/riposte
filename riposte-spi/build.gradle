@@ -10,8 +10,11 @@ dependencies {
             "org.slf4j:jcl-over-slf4j:$slf4jVersion",
             "org.slf4j:log4j-over-slf4j:$slf4jVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "org.assertj:assertj-core:$assertJVersion",
@@ -21,6 +24,7 @@ dependencies {
             "cglib:cglib:$cgLibVersion", //For Spock mocks
             "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
             "uk.org.lidalia:slf4j-test:$slf4jTestVersion",
-            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion"
+            "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+            "com.nike.wingtips:wingtips-core:$wingtipsVersion"
     )
 }

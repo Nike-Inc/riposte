@@ -1,6 +1,12 @@
 package com.nike.riposte.server.http;
 
+import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.wingtips.Span;
+
+import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Deque;
@@ -21,10 +27,12 @@ import io.netty.handler.codec.http.HttpResponse;
  */
 public class HttpProcessingState implements ProcessingState {
 
+    private static final Logger logger = LoggerFactory.getLogger(HttpProcessingState.class);
     private static final CompletableFuture<Void> COMPLETED_VOID_FUTURE = CompletableFuture.completedFuture(null);
 
     private RequestInfo<?> requestInfo;
     private ResponseInfo<?> responseInfo;
+    private Throwable errorThatTriggeredThisResponse;
     private HttpResponse actualResponseObject;
     private Endpoint<?> endpointForExecution;
     private String matchingPathTemplate;
@@ -38,7 +46,10 @@ public class HttpProcessingState implements ProcessingState {
     private boolean traceCompletedOrScheduled = false;
     private boolean accessLogCompletedOrScheduled = false;
     private boolean requestMetricsRecordedOrScheduled = false;
+    private boolean tracingResponseTaggingAndFinalSpanNameCompleted = false;
     private CompletableFuture<Void> preEndpointExecutionWorkChain = COMPLETED_VOID_FUTURE;
+
+    private DistributedTracingConfig<Span> distributedTracingConfig;
 
     public HttpProcessingState() {
         // Default constructor - do nothing
@@ -47,6 +58,7 @@ public class HttpProcessingState implements ProcessingState {
     public HttpProcessingState(HttpProcessingState copyMe) {
         this.requestInfo = copyMe.getRequestInfo();
         this.responseInfo = copyMe.getResponseInfo();
+        this.errorThatTriggeredThisResponse = copyMe.getErrorThatTriggeredThisResponse();
         this.actualResponseObject = copyMe.getActualResponseObject();
         this.endpointForExecution = copyMe.getEndpointForExecution();
         this.matchingPathTemplate = copyMe.getMatchingPathTemplate();
@@ -60,7 +72,9 @@ public class HttpProcessingState implements ProcessingState {
         this.traceCompletedOrScheduled = copyMe.isTraceCompletedOrScheduled();
         this.accessLogCompletedOrScheduled = copyMe.isAccessLogCompletedOrScheduled();
         this.requestMetricsRecordedOrScheduled = copyMe.isRequestMetricsRecordedOrScheduled();
+        this.tracingResponseTaggingAndFinalSpanNameCompleted = copyMe.isTracingResponseTaggingAndFinalSpanNameCompleted();
         this.preEndpointExecutionWorkChain = copyMe.preEndpointExecutionWorkChain;
+        this.distributedTracingConfig = copyMe.distributedTracingConfig;
     }
 
     public void cleanStateForNewRequest() {
@@ -69,6 +83,7 @@ public class HttpProcessingState implements ProcessingState {
 
         requestInfo = null;
         responseInfo = null;
+        errorThatTriggeredThisResponse = null;
         actualResponseObject = null;
         endpointForExecution = null;
         matchingPathTemplate = null;
@@ -82,7 +97,9 @@ public class HttpProcessingState implements ProcessingState {
         traceCompletedOrScheduled = false;
         accessLogCompletedOrScheduled = false;
         requestMetricsRecordedOrScheduled = false;
+        tracingResponseTaggingAndFinalSpanNameCompleted = false;
         preEndpointExecutionWorkChain = COMPLETED_VOID_FUTURE;
+        distributedTracingConfig = null;
     }
 
     public RequestInfo<?> getRequestInfo() {
@@ -114,8 +131,13 @@ public class HttpProcessingState implements ProcessingState {
         return responseInfo;
     }
 
-    public void setResponseInfo(ResponseInfo<?> responseInfo) {
+    public void setResponseInfo(ResponseInfo<?> responseInfo, Throwable errorThatTriggeredThisResponse) {
         this.responseInfo = responseInfo;
+        this.errorThatTriggeredThisResponse = errorThatTriggeredThisResponse;
+    }
+
+    public @Nullable Throwable getErrorThatTriggeredThisResponse() {
+        return errorThatTriggeredThisResponse;
     }
 
     public boolean isResponseSendingStarted() {
@@ -252,5 +274,60 @@ public class HttpProcessingState implements ProcessingState {
 
     public CompletableFuture<Void> getPreEndpointExecutionWorkChain() {
         return preEndpointExecutionWorkChain;
+    }
+
+    public boolean isTracingResponseTaggingAndFinalSpanNameCompleted() {
+        return tracingResponseTaggingAndFinalSpanNameCompleted;
+    }
+
+    /**
+     * DO NOT CALL THIS! It is here temporarily for internal use and will likely go away. You shouldn't be changing
+     * {@link DistributedTracingConfig} here anyway - use {@link ServerConfig#distributedTracingConfig()}.
+     *
+     * @deprecated Don't call this yourself - set your server's distributed tracing config via
+     * {@link ServerConfig#distributedTracingConfig()}
+     */
+    @Deprecated
+    public void setDistributedTracingConfig(
+        DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
+        this.distributedTracingConfig = distributedTracingConfig;
+    }
+
+    public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone() {
+        if (tracingResponseTaggingAndFinalSpanNameCompleted || distributedTracingConfig == null) {
+            return;
+        }
+
+        tracingResponseTaggingAndFinalSpanNameCompleted = true;
+
+        try {
+            Span overallRequestSpan = getOverallRequestSpan();
+            if (overallRequestSpan != null) {
+                distributedTracingConfig.getServerSpanNamingAndTaggingStrategy().handleResponseTaggingAndFinalSpanName(
+                    overallRequestSpan,
+                    getRequestInfo(),
+                    getResponseInfo(),
+                    getErrorThatTriggeredThisResponse()
+                );
+            }
+        }
+        catch (Throwable t) {
+            logger.error(
+                "Unexpected error occurred while trying to set final span name and response tagging. This "
+                + "exception will be ignored, but should be investigated - it should not happen.",
+                t
+            );
+        }
+    }
+
+    public @Nullable Span getOverallRequestSpan() {
+        Deque<Span> tracingStack = getDistributedTraceStack();
+        if (tracingStack == null) {
+            return null;
+        }
+
+        // Do a peekLast() to get the bottom Span, which is the overall-request span.
+        return tracingStack.peekLast();
     }
 }

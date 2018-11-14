@@ -4,8 +4,11 @@ import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes.ProcessingStateClassAndKeyPair;
 import com.nike.riposte.server.channelpipeline.HttpChannelInitializer;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProcessingState;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
+import com.nike.wingtips.Span;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,9 +41,16 @@ public class RequestStateCleanerHandler extends ChannelInboundHandlerAdapter {
     protected final MetricsListener metricsListener;
     protected final long incompleteHttpCallTimeoutMillis;
 
-    public RequestStateCleanerHandler(MetricsListener metricsListener, long incompleteHttpCallTimeoutMillis) {
+    protected final DistributedTracingConfig<Span> distributedTracingConfig;
+
+    public RequestStateCleanerHandler(
+        MetricsListener metricsListener,
+        long incompleteHttpCallTimeoutMillis,
+        DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
         this.metricsListener = metricsListener;
         this.incompleteHttpCallTimeoutMillis = incompleteHttpCallTimeoutMillis;
+        this.distributedTracingConfig = distributedTracingConfig;
     }
 
     @Override
@@ -65,10 +75,15 @@ public class RequestStateCleanerHandler extends ChannelInboundHandlerAdapter {
                 processingState.cleanStateForNewRequest();
             }
 
-            // send request received event
+            HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
+
+            // Set the DistributedTracingConfig on the HttpProcessingState.
+            //noinspection deprecation - This is the only place that should actually be calling this method.
+            httpProcessingState.setDistributedTracingConfig(distributedTracingConfig);
+
+            // Send a request received event to the metricsListener.
             if (metricsListener != null) {
-                metricsListener.onEvent(ServerMetricsEvent.REQUEST_RECEIVED,
-                                        ChannelAttributes.getHttpProcessingStateForChannel(ctx).get());
+                metricsListener.onEvent(ServerMetricsEvent.REQUEST_RECEIVED, httpProcessingState);
             }
 
             // Remove the idle channel timeout handler (if there is one) so that it doesn't kill this new request if the

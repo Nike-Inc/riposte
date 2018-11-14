@@ -5,6 +5,7 @@ import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.config.ServerConfig.HttpRequestDecoderConfig;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
@@ -40,9 +41,11 @@ import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.http.filter.RequestAndResponseFilter;
 import com.nike.riposte.server.logging.AccessLogger;
+import com.nike.wingtips.Span;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -232,6 +235,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final boolean debugChannelLifecycleLoggingEnabled;
     private final int responseCompressionThresholdBytes;
     private final HttpRequestDecoderConfig httpRequestDecoderConfig;
+    private final DistributedTracingConfig<Span> distributedTracingConfig;
 
     private final StreamingAsyncHttpClient streamingAsyncHttpClientForProxyRouterEndpoints;
 
@@ -338,7 +342,8 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
                                   boolean debugChannelLifecycleLoggingEnabled,
                                   List<String> userIdHeaderKeys,
                                   int responseCompressionThresholdBytes,
-                                  HttpRequestDecoderConfig httpRequestDecoderConfig) {
+                                  HttpRequestDecoderConfig httpRequestDecoderConfig,
+                                  @NotNull DistributedTracingConfig<Span> distributedTracingConfig) {
         if (endpoints == null || endpoints.isEmpty())
             throw new IllegalArgumentException("endpoints cannot be empty");
 
@@ -356,6 +361,11 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         if (httpRequestDecoderConfig == null) {
             httpRequestDecoderConfig = HttpRequestDecoderConfig.DEFAULT_IMPL;
+        }
+
+        //noinspection ConstantConditions
+        if (distributedTracingConfig == null) {
+            throw new IllegalArgumentException("distributedTracingConfig cannot be null");
         }
 
         this.sslCtx = sslCtx;
@@ -424,6 +434,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.userIdHeaderKeys = userIdHeaderKeys;
         this.responseCompressionThresholdBytes = responseCompressionThresholdBytes;
         this.httpRequestDecoderConfig = httpRequestDecoderConfig;
+        this.distributedTracingConfig = distributedTracingConfig;
     }
 
     @Override
@@ -461,10 +472,15 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         // INBOUND - Now that the message is translated into HttpObjects we can add RequestStateCleanerHandler to
         //           setup/clean state for the rest of the pipeline.
-        p.addLast(REQUEST_STATE_CLEANER_HANDLER_NAME, new RequestStateCleanerHandler(metricsListener,
-                                                                                     incompleteHttpCallTimeoutMillis));
+        p.addLast(REQUEST_STATE_CLEANER_HANDLER_NAME,
+                  new RequestStateCleanerHandler(
+                      metricsListener,
+                      incompleteHttpCallTimeoutMillis,
+                      distributedTracingConfig
+                  )
+        );
         // INBOUND - Add DTraceStartHandler to start the distributed tracing for this request
-        p.addLast(DTRACE_START_HANDLER_NAME, new DTraceStartHandler(userIdHeaderKeys));
+        p.addLast(DTRACE_START_HANDLER_NAME, new DTraceStartHandler(userIdHeaderKeys, distributedTracingConfig));
         // INBOUND - Access log start
         p.addLast(ACCESS_LOG_START_HANDLER_NAME, new AccessLogStartHandler());
 
@@ -516,9 +532,12 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
             p.addLast(REQUEST_CONTENT_VALIDATION_HANDLER_NAME, new RequestContentValidationHandler(validationService));
 
         // INBOUND - Add NonblockingEndpointExecutionHandler to perform execution of async/nonblocking endpoints
-        p.addLast(NONBLOCKING_ENDPOINT_EXECUTION_HANDLER_NAME,
-                  new NonblockingEndpointExecutionHandler(longRunningTaskExecutor,
-                                                          defaultCompletableFutureTimeoutMillis));
+        p.addLast(
+            NONBLOCKING_ENDPOINT_EXECUTION_HANDLER_NAME,
+            new NonblockingEndpointExecutionHandler(
+                longRunningTaskExecutor, defaultCompletableFutureTimeoutMillis, distributedTracingConfig
+            )
+        );
 
         // INBOUND - Add ProxyRouterEndpointExecutionHandler to perform execution of proxy routing endpoints
         p.addLast(PROXY_ROUTER_ENDPOINT_EXECUTION_HANDLER_NAME,
@@ -534,7 +553,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // INBOUND - Add ExceptionHandlingHandler to catch and deal with any exceptions or requests that fell through
         //           the cracks.
         ExceptionHandlingHandler exceptionHandlingHandler =
-            new ExceptionHandlingHandler(riposteErrorHandler, riposteUnhandledErrorHandler);
+            new ExceptionHandlingHandler(riposteErrorHandler, riposteUnhandledErrorHandler, distributedTracingConfig);
         p.addLast(EXCEPTION_HANDLING_HANDLER_NAME, exceptionHandlingHandler);
 
         // INBOUND - Add the ResponseFilterHandler (if we have any filters to apply).

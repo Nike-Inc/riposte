@@ -3,6 +3,7 @@ package com.nike.riposte.server.handler;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.channelpipeline.message.LastOutboundMessage;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ResponseInfo;
@@ -56,6 +57,7 @@ public class DTraceEndHandlerTest {
     private ChannelFuture lastChunkChannelFutureMock;
     private Span currentSpanWhenCompleteCurrentSpanWasCalled;
     private Span currentSpanAfterCompleteCurrentSpanWasCalled;
+    private DistributedTracingConfig<Span> distributedTracingConfigMock;
 
     private void resetTracingAndMdc() {
         MDC.clear();
@@ -74,9 +76,12 @@ public class DTraceEndHandlerTest {
         doReturn(state).when(stateAttributeMock).get();
         resetTracingAndMdc();
 
+        distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        state.setDistributedTracingConfig(distributedTracingConfigMock);
+
         responseInfoMock = mock(ResponseInfo.class);
         doReturn(true).when(responseInfoMock).isResponseSendingLastChunkSent();
-        state.setResponseInfo(responseInfoMock);
+        state.setResponseInfo(responseInfoMock, null);
 
         lastChunkChannelFutureMock = mock(ChannelFuture.class);
         state.setResponseWriterFinalChunkChannelFuture(lastChunkChannelFutureMock);
@@ -160,6 +165,7 @@ public class DTraceEndHandlerTest {
         assertThat(state.getDistributedTraceStack(), notNullValue());
         assertThat(state.getDistributedTraceStack(), is(expectedDtraceInfo.getLeft()));
         assertThat(state.getDistributedTraceStack().size(), is(1));
+        assertThat(state.isTracingResponseTaggingAndFinalSpanNameCompleted(), is(false));
         Span expectedSpan = expectedDtraceInfo.getLeft().peek();
 
         // when
@@ -169,6 +175,9 @@ public class DTraceEndHandlerTest {
         // completeCurrentSpan() not immediately called, but scheduled
         verify(handlerSpy, never()).completeCurrentSpan();
         assertThat(state.isTraceCompletedOrScheduled(), is(true));
+
+        // Response tagging was done.
+        assertThat(state.isTracingResponseTaggingAndFinalSpanNameCompleted(), is(true));
 
         // Extract the listener that was attached to the last chunk future.
         GenericFutureListener lastChunkListener = extractChannelFutureListenerAddedToLastChunkFuture();
@@ -199,6 +208,7 @@ public class DTraceEndHandlerTest {
         assertThat(state.getDistributedTraceStack(), notNullValue());
         assertThat(state.getDistributedTraceStack(), is(expectedDtraceInfo.getLeft()));
         assertThat(state.getDistributedTraceStack().size(), is(1));
+        assertThat(state.isTracingResponseTaggingAndFinalSpanNameCompleted(), is(false));
         Span expectedSpan = expectedDtraceInfo.getLeft().peek();
 
         // when
@@ -209,6 +219,7 @@ public class DTraceEndHandlerTest {
         assertThat(currentSpanWhenCompleteCurrentSpanWasCalled, is(expectedSpan));
         assertThat(currentSpanAfterCompleteCurrentSpanWasCalled, nullValue());
         assertThat(state.isTraceCompletedOrScheduled(), is(true));
+        assertThat(state.isTracingResponseTaggingAndFinalSpanNameCompleted(), is(true));
     }
 
     @Test

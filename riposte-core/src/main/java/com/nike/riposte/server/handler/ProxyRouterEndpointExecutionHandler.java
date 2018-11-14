@@ -100,13 +100,11 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         // This handler should only do something if the endpoint is a ProxyRouterEndpoint.
         //      Additionally, this handler should only pay attention to Netty HTTP messages. Other messages (e.g. user
         //      event messages) should be ignored.
-        return (msg instanceof HttpObject)
-               && (endpoint != null)
-               && (endpoint instanceof ProxyRouterEndpoint);
+        return (msg instanceof HttpObject) && (endpoint instanceof ProxyRouterEndpoint);
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
         Endpoint<?> endpoint = state.getEndpointForExecution();
 
@@ -680,7 +678,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                 proxyRouterProcessingState.cancelDownstreamRequest(requestAlreadyHandledException);
             }
             else {
-                state.setResponseInfo(responseInfo);
+                state.setResponseInfo(responseInfo, null);
                 // No need to retain the msg, we already grabbed everything we need from it and stuffed it into the
                 //      ResponseInfo. Just send the appropriate OutboundMessage.
                 firstChunkSent = true;

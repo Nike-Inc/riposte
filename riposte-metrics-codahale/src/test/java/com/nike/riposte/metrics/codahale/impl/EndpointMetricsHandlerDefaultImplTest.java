@@ -122,7 +122,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
         state = new HttpProcessingState();
 
         state.setRequestInfo(requestInfoMock);
-        state.setResponseInfo(responseInfoMock);
+        state.setResponseInfo(responseInfoMock, null);
         state.setRequestStartTime(Instant.now());
 
         instance.setupEndpointsMetrics(serverConfig, metricRegistryMock);

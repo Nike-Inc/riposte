@@ -145,7 +145,7 @@ public class CodahaleMetricsListenerTest {
         state = new HttpProcessingState();
 
         state.setRequestInfo(requestInfoMock);
-        state.setResponseInfo(responseInfoMock);
+        state.setResponseInfo(responseInfoMock, null);
         requestStartTimeNanos = System.nanoTime() - TimeUnit.MILLISECONDS.toNanos(42);
         state.setRequestStartTimeNanos(requestStartTimeNanos);
     }
@@ -685,7 +685,7 @@ public class CodahaleMetricsListenerTest {
     @Test
     public void onEvent_should_short_circuit_for_RESPONSE_SENT_if_response_info_is_null() {
         // given
-        state.setResponseInfo(null);
+        state.setResponseInfo(null, null);
 
         // when
         listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, state);

@@ -47,7 +47,7 @@ public class RequestHasBeenHandledVerificationHandlerTest {
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttributeMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(state).when(stateAttributeMock).get();
-        state.setResponseInfo(responseInfoMock);
+        state.setResponseInfo(responseInfoMock, null);
 
         handler = new RequestHasBeenHandledVerificationHandler();
         msg = mock(LastOutboundMessageSendFullResponseInfo.class);
@@ -104,7 +104,7 @@ public class RequestHasBeenHandledVerificationHandlerTest {
     @Test
     public void doChannelRead_throws_InvalidRipostePipelineException_when_responseInfo_is_null() {
         // given
-        state.setResponseInfo(null);
+        state.setResponseInfo(null, null);
 
         // when
         Throwable ex = catchThrowable(() -> handler.doChannelRead(ctxMock, msg));

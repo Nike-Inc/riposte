@@ -169,8 +169,8 @@ public class RequestFilterHandlerTest {
     @Test
     public void doChannelRead_HttpRequest_throws_exception_when_failed_decoder_result() {
         // given
-        DecoderResult decoderResult = mock(DecoderResult.class);
-        doReturn(true).when(decoderResult).isFailure();
+        Throwable decoderFailureCauseMock = mock(Throwable.class);
+        DecoderResult decoderResult = DecoderResult.failure(decoderFailureCauseMock);
         doReturn(decoderResult).when(firstChunkMsgMock).decoderResult();
         state.setRequestInfo(null);
 
@@ -179,6 +179,7 @@ public class RequestFilterHandlerTest {
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+        assertThat(thrownException.getCause()).isSameAs(decoderFailureCauseMock);
     }
 
     @DataProvider(value = {

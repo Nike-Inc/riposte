@@ -1,18 +1,15 @@
 package com.nike.riposte.server.http;
 
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.error.handler.ErrorResponseBodySerializer;
 import com.nike.riposte.server.http.impl.FullResponseInfo;
 import com.nike.riposte.server.testutils.TestUtil;
+import com.nike.wingtips.Span;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.DefaultHttpHeaders;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpResponse;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.cookie.Cookie;
-import io.netty.handler.codec.http.cookie.DefaultCookie;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -24,7 +21,18 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.cookie.Cookie;
+import io.netty.handler.codec.http.cookie.DefaultCookie;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -37,11 +45,13 @@ public class ResponseSenderTest {
     HttpResponse actualResponseObject;
     RequestInfo requestInfo;
     HttpHeaders httpHeaders;
+    DistributedTracingConfig<Span> distributedTracingConfigMock;
 
     @Before
     public void setup() {
         ctx = TestUtil.mockChannelHandlerContext().mockContext;
-        responseSender = new ResponseSender(null, null);
+        distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        responseSender = new ResponseSender(null, null, distributedTracingConfigMock);
 
         requestInfo = mock(RequestInfo.class);
         httpHeaders = new DefaultHttpHeaders();
@@ -51,6 +61,21 @@ public class ResponseSenderTest {
         responseInfo.setDesiredContentWriterMimeType("application/json");
 
         when(requestInfo.getHeaders()).thenReturn(httpHeaders);
+    }
+
+    @Test
+    public void constructor_throws_IllegalArgumentException_if_distributedTracingConfig_is_null() {
+        // when
+        Throwable ex = catchThrowable(
+            () -> new ResponseSender(
+                mock(ObjectMapper.class), mock(ErrorResponseBodySerializer.class), null
+            )
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("distributedTracingConfig cannot be null");
     }
 
     @DataProvider(value = {

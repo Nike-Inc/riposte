@@ -28,6 +28,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.CharsetUtil;
 
@@ -54,10 +55,10 @@ public class VerifyCornerCasesComponentTest {
     }
 
     @Test
-    public void invalid_http_call_should_result_in_expected_400_error() throws Exception {
+    public void invalid_http_call_that_causes_Netty_DecoderFailure_should_result_in_expected_400_error() throws Exception {
         // given
         // Normal request, but fiddle with the first chunk as it's going out to remove the HTTP version and make it an
-        //      invalid HTTP call.
+        //      invalid HTTP call. This will cause Netty to mark the HttpRequest with a DecoderFailure.
         NettyHttpClientRequestBuilder request = request()
             .withMethod(HttpMethod.GET)
             .withUri(BasicEndpoint.MATCHING_PATH)
@@ -74,6 +75,48 @@ public class VerifyCornerCasesComponentTest {
                     }
                 })
             );
+
+        // when
+        NettyHttpClientResponse response = request.execute(downstreamServerConfig.endpointsPort(), 3000);
+
+        // then
+        verifyErrorReceived(response.payload,
+                            response.statusCode,
+                            new ApiErrorWithMetadata(SampleCoreApiError.MALFORMED_REQUEST,
+                                                     Pair.of("cause", "Invalid HTTP request"))
+        );
+    }
+
+    @Test
+    public void invalid_http_call_with_invalid_URL_escaping_should_result_in_expected_400_error() throws Exception {
+        // given
+        // Incorrectly escaped URLs cause a blowup in RequestInfoImpl when it tries to decode the URL. We can trigger
+        //      this by putting a % character that is not followed by a proper escape sequence.
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.GET)
+            .withUri("%notAnEscapeSequence");
+
+        // when
+        NettyHttpClientResponse response = request.execute(downstreamServerConfig.endpointsPort(), 3000);
+
+        // then
+        verifyErrorReceived(response.payload,
+                            response.statusCode,
+                            new ApiErrorWithMetadata(SampleCoreApiError.MALFORMED_REQUEST,
+                                                     Pair.of("cause", "Invalid HTTP request"))
+        );
+    }
+
+    // NOTE: This is really more of a Netty bug - see https://github.com/netty/netty/issues/8554. Once that's fixed
+    //      then I'd expect this to stop failing. For now it exercises another codepath that causes RequestInfoImpl
+    //      construction to fail.
+    @Test
+    public void http_call_with_bad_content_type_header_should_result_in_expected_400_error() throws Exception {
+        // given
+        NettyHttpClientRequestBuilder request = request()
+            .withMethod(HttpMethod.GET)
+            .withUri(BasicEndpoint.MATCHING_PATH)
+            .withHeader(HttpHeaderNames.CONTENT_TYPE.toString(), ";");
 
         // when
         NettyHttpClientResponse response = request.execute(downstreamServerConfig.endpointsPort(), 3000);

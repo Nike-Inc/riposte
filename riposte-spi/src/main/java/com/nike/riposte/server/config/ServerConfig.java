@@ -8,6 +8,7 @@ import com.nike.backstopper.handler.ApiExceptionHandlerUtils;
 import com.nike.backstopper.handler.riposte.config.BackstopperRiposteConfigHelper;
 import com.nike.backstopper.service.riposte.BackstopperRiposteValidatorAdapter;
 import com.nike.riposte.metrics.MetricsListener;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.error.handler.ErrorResponseBodySerializer;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
@@ -537,6 +538,23 @@ public interface ServerConfig {
      * and 8192 max chunk size. See the javadocs for {@link HttpRequestDecoderConfig} and its methods for more details.
      */
     default HttpRequestDecoderConfig httpRequestDecoderConfig() {
+        return null;
+    }
+
+    /**
+     * @return The {@link DistributedTracingConfig} that should be used to control certain Riposte distributed tracing
+     * behaviors, or null if you want to use the default implementation ({@code
+     * com.nike.riposte.server.config.distributedtracing.DefaultRiposteDistributedTracingConfigImpl.getDefaultInstance()}
+     * from the {@code riposte-core} library).
+     *
+     * <p>NOTE: There may be a future version of Riposte that can support any underlying distributed tracing system,
+     * but for now Riposte is tied to Wingtips for distributed tracing. This means that the generic type of the
+     * returned {@link DistributedTracingConfig} must be {@code com.nike.wingtips.Span}, and {@link
+     * DistributedTracingConfig#getSpanClassType()} must return {@code com.nike.wingtips.Span.class}. Riposte will
+     * check for this and fail to startup otherwise. See the javadocs for {@link DistributedTracingConfig} for more
+     * details.
+     */
+    default DistributedTracingConfig<?> distributedTracingConfig() {
         return null;
     }
 

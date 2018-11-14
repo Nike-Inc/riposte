@@ -161,19 +161,19 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
             //      call, and one for downstream overall request. Completed in reverse order.
             waitUntilSpanRecorderHasExpectedNumSpans(3);
             assertThat(spanRecorder.completedSpans).hasSize(3);
-            assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET_" + DownstreamEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET " + DownstreamEndpoint.MATCHING_PATH);
             assertThat(spanRecorder.completedSpans.get(1).getSpanName())
                 .startsWith("async_downstream_call-GET_")
                 .endsWith(DownstreamEndpoint.MATCHING_PATH);
-            assertThat(spanRecorder.completedSpans.get(2).getSpanName()).isEqualTo("GET_" + RouterEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(2).getSpanName()).isEqualTo("GET " + RouterEndpoint.MATCHING_PATH);
         }
         else {
             // Should be 2 completed spans - one for proxy overall request, and one for downstream overall request.
             //      Completed in reverse order.
             waitUntilSpanRecorderHasExpectedNumSpans(2);
             assertThat(spanRecorder.completedSpans).hasSize(2);
-            assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET_" + DownstreamEndpoint.MATCHING_PATH);
-            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("GET_" + RouterEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET " + DownstreamEndpoint.MATCHING_PATH);
+            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("GET " + RouterEndpoint.MATCHING_PATH);
         }
 
         // In either case, the span for the downstream call lives in index 1.

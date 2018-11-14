@@ -65,6 +65,8 @@ public class ResponseFilterHandlerTest {
     private ChunkedResponseInfo chunkedResponseInfoMock;
     private FullResponseInfo<?> fullResponseInfoMock;
 
+    private Throwable origErrorForOrigResponseInfoMock;
+
     @Before
     public void beforeMethod() {
         channelMock = mock(Channel.class);
@@ -92,7 +94,9 @@ public class ResponseFilterHandlerTest {
         chunkedResponseInfoMock = mock(ChunkedResponseInfo.class);
         fullResponseInfoMock = mock(FullResponseInfo.class);
 
-        state.setResponseInfo(fullResponseInfoMock);
+        origErrorForOrigResponseInfoMock = mock(Throwable.class);
+
+        state.setResponseInfo(fullResponseInfoMock, origErrorForOrigResponseInfoMock);
         state.setRequestInfo(requestInfoMock);
     }
 
@@ -171,10 +175,10 @@ public class ResponseFilterHandlerTest {
         "false"
     }, splitBy = "\\|")
     @Test
-    public void executeResponseFilters_executes_all_filters_and_uses_original_response_if_filters_return_null(boolean useChunkedResponse) throws Exception {
+    public void executeResponseFilters_executes_all_filters_and_uses_original_response_and_orig_error_if_filters_return_null(boolean useChunkedResponse) throws Exception {
         // given
         ResponseInfo<?> responseInfoToUse = (useChunkedResponse) ? chunkedResponseInfoMock : fullResponseInfoMock;
-        state.setResponseInfo(responseInfoToUse);
+        state.setResponseInfo(responseInfoToUse, origErrorForOrigResponseInfoMock);
 
         // when
         handlerSpy.executeResponseFilters(ctxMock);
@@ -182,6 +186,7 @@ public class ResponseFilterHandlerTest {
         // then
         reversedFiltersList.forEach(filter -> verify(filter).filterResponse(responseInfoToUse, requestInfoMock, ctxMock));
         assertThat(state.getResponseInfo()).isSameAs(responseInfoToUse);
+        assertThat(state.getErrorThatTriggeredThisResponse()).isSameAs(origErrorForOrigResponseInfoMock);
     }
 
     @DataProvider(value = {
@@ -189,10 +194,10 @@ public class ResponseFilterHandlerTest {
         "false"
     }, splitBy = "\\|")
     @Test
-    public void executeResponseFilters_executes_all_filters_in_reverse_order_and_honors_result_if_filters_return_non_null_responseInfo(boolean useChunkedResponse) throws Exception {
+    public void executeResponseFilters_executes_all_filters_in_reverse_order_and_honors_result_and_orig_error_if_filters_return_non_null_responseInfo(boolean useChunkedResponse) throws Exception {
         // given
         ResponseInfo<?> origResponseInfo = (useChunkedResponse) ? chunkedResponseInfoMock : fullResponseInfoMock;
-        state.setResponseInfo(origResponseInfo);
+        state.setResponseInfo(origResponseInfo, origErrorForOrigResponseInfoMock);
 
         Class<? extends ResponseInfo> responseInfoClassToUse = (useChunkedResponse) ? ChunkedResponseInfo.class : FullResponseInfo.class;
         ResponseInfo<?> secondFilterResult = mock(responseInfoClassToUse);
@@ -208,8 +213,10 @@ public class ResponseFilterHandlerTest {
         // Verify reverse order execution - filter 2 should get the original responseInfo, and filter 1 should get filter 2's result.
         verify(filter2Mock).filterResponse(origResponseInfo, requestInfoMock, ctxMock);
         verify(filter1Mock).filterResponse(secondFilterResult, requestInfoMock, ctxMock);
-        // The final state should have filter 1's responseInfo since it executed last.
+        // The final state should have filter 1's responseInfo since it executed last, and the original error should
+        //      still be there.
         assertThat(state.getResponseInfo()).isSameAs(firstFilterResult);
+        assertThat(state.getErrorThatTriggeredThisResponse()).isSameAs(origErrorForOrigResponseInfoMock);
     }
 
     @DataProvider(value = {
@@ -220,7 +227,7 @@ public class ResponseFilterHandlerTest {
     public void executeResponseFilters_does_nothing_if_the_first_chunk_of_the_response_is_already_sent(boolean useChunkedResponse) throws Exception {
         // given
         ResponseInfo<?> responseInfoToUse = (useChunkedResponse) ? chunkedResponseInfoMock : fullResponseInfoMock;
-        state.setResponseInfo(responseInfoToUse);
+        state.setResponseInfo(responseInfoToUse, origErrorForOrigResponseInfoMock);
 
         doReturn(true).when(responseInfoToUse).isResponseSendingStarted();
 
@@ -239,7 +246,7 @@ public class ResponseFilterHandlerTest {
     public void executeResponseFilters_does_nothing_if_something_blows_up_before_filters_are_executed(boolean useChunkedResponse) throws Exception {
         // given
         ResponseInfo<?> responseInfoToUse = (useChunkedResponse) ? chunkedResponseInfoMock : fullResponseInfoMock;
-        state.setResponseInfo(responseInfoToUse);
+        state.setResponseInfo(responseInfoToUse, origErrorForOrigResponseInfoMock);
 
         doThrow(new RuntimeException("kaboom")).when(ctxMock).channel();
 
@@ -258,7 +265,7 @@ public class ResponseFilterHandlerTest {
     public void executeResponseFilters_gracefully_handles_a_filter_throwing_an_exception_and_continues_processing_other_filters(boolean useChunkedResponse) throws Exception {
         // given
         ResponseInfo<?> origResponseInfo = (useChunkedResponse) ? chunkedResponseInfoMock : fullResponseInfoMock;
-        state.setResponseInfo(origResponseInfo);
+        state.setResponseInfo(origResponseInfo, origErrorForOrigResponseInfoMock);
 
         Class<? extends ResponseInfo> responseInfoClassToUse = (useChunkedResponse) ? ChunkedResponseInfo.class : FullResponseInfo.class;
         ResponseInfo<?> firstFilterResult = mock(responseInfoClassToUse);
@@ -274,8 +281,10 @@ public class ResponseFilterHandlerTest {
         //      and both should be called with the orig response info (since filter2Mock didn't return a valid responseInfo).
         verify(filter2Mock).filterResponse(origResponseInfo, requestInfoMock, ctxMock);
         verify(filter1Mock).filterResponse(origResponseInfo, requestInfoMock, ctxMock);
-        // The final state should have filter 1's responseInfo since it executed last and executed successfully.
+        // The final state should have filter 1's responseInfo since it executed last and executed successfully, and
+        //      the original error should still be there.
         assertThat(state.getResponseInfo()).isSameAs(firstFilterResult);
+        assertThat(state.getErrorThatTriggeredThisResponse()).isSameAs(origErrorForOrigResponseInfoMock);
     }
 
     @DataProvider(value = {
@@ -286,7 +295,7 @@ public class ResponseFilterHandlerTest {
     public void executeResponseFilters_ignores_filter_responseInfo_if_its_class_is_not_the_same_as_the_previously_used_responseInfo(boolean useChunkedResponse) throws Exception {
         // given
         ResponseInfo<?> origResponseInfo = (useChunkedResponse) ? chunkedResponseInfoMock : fullResponseInfoMock;
-        state.setResponseInfo(origResponseInfo);
+        state.setResponseInfo(origResponseInfo, origErrorForOrigResponseInfoMock);
 
         Class<? extends ResponseInfo> badResponseInfoClassToUse = (useChunkedResponse) ? FullResponseInfo.class : ChunkedResponseInfo.class;
         ResponseInfo<?> secondFilterResult = mock(badResponseInfoClassToUse);
@@ -303,8 +312,10 @@ public class ResponseFilterHandlerTest {
         //      the original response info should be used each time.
         verify(filter2Mock).filterResponse(origResponseInfo, requestInfoMock, ctxMock);
         verify(filter1Mock).filterResponse(origResponseInfo, requestInfoMock, ctxMock);
-        // The final state should have the original response info since none of the filters returned a compatible ResponseInfo class.
+        // The final state should have the original response info since none of the filters returned a compatible
+        //      ResponseInfo class, and the original error should still be there.
         assertThat(state.getResponseInfo()).isSameAs(origResponseInfo);
+        assertThat(state.getErrorThatTriggeredThisResponse()).isSameAs(origErrorForOrigResponseInfoMock);
     }
 
 }

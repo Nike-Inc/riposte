@@ -74,7 +74,7 @@ ext {
     logbackVersion = '1.1.7'
     javaxInjectVersion = '1'
 
-    wingtipsVersion = '0.14.1'
+    wingtipsVersion = '0.18.1'
     backstopperVersion = '0.11.4'
     fastbreakVersion = '0.10.0'
     spockVersion = '0.7-groovy-2.0'
@@ -98,6 +98,8 @@ ext {
     slf4jTestVersion = '1.1.0'
     guiceVersion = '4.0'
 
+    jetbrainsAnnotationsVersion = '16.0.3'
+    
     groovyVersion = '2.4.6'
 
     restAssuredVersion = '3.0.2'

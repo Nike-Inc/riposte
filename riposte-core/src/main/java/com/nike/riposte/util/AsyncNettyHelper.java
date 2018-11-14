@@ -496,10 +496,14 @@ public class AsyncNettyHelper {
                 //      completed yet. If the state says the trace has already been completed we don't want to spit it
                 //      out a second time.
                 if (state == null || !state.isTraceCompletedOrScheduled()) {
-                    Tracer.getInstance().completeRequestSpan();
-                    // If we have a state then indicate that the span has already been completed.
-                    if (state != null)
+                    // If we have a state then indicate that the span has already been completed, and do the final
+                    //      span tagging and span name if it hasn't already been done.
+                    if (state != null) {
                         state.setTraceCompletedOrScheduled(true);
+                        state.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+                    }
+                    
+                    Tracer.getInstance().completeRequestSpan();
                 }
 
                 return false;

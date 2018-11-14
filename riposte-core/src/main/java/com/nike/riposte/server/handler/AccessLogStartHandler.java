@@ -37,6 +37,8 @@ public class AccessLogStartHandler extends BaseInboundHandlerWithTracingAndMdcSu
     public static final String REQUEST_PAYLOAD_TRANSFER_TIME_NANOS_REQUEST_ATTR_KEY =
         AccessLogStartHandler.class.getName() + "-RequestPayloadTransferTimeNanos";
 
+    protected final RiposteHandlerInternalUtil handlerUtils = RiposteHandlerInternalUtil.DEFAULT_IMPL;
+
     @Override
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
@@ -61,7 +63,17 @@ public class AccessLogStartHandler extends BaseInboundHandlerWithTracingAndMdcSu
                 httpProcessingState.setRequestLastChunkArrivedTimeNanos(lastChunkArrivedTimeNanos);
 
                 // Calculate and set a request attribute for the payload transfer time from the caller.
-                RequestInfo<?> requestInfo = httpProcessingState.getRequestInfo();
+                //      Note that this might be both a HttpRequest and LastHttpContent (e.g. in the case of
+                //      a FullHttpRequest). If it's an HttpRequest then the RequestInfo might not have been
+                //      set on the HttpProcessingState yet, so we'll call RiposteHandlerInternalUtil to create
+                //      a RequestInfo and set it on the HttpProcessingState if necessary.
+                RequestInfo<?> requestInfo =
+                    (msg instanceof HttpRequest)
+                    ? handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
+                        (HttpRequest) msg, httpProcessingState
+                    )
+                    : httpProcessingState.getRequestInfo();
+
                 if (requestInfo != null) {
                     Long reqStartTimeNanos = httpProcessingState.getRequestStartTimeNanos();
                     if (reqStartTimeNanos != null) {

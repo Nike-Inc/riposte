@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.UUID;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -40,6 +41,7 @@ import io.netty.util.Attribute;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -106,7 +108,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         doReturn(requestInfoMock).when(exceptionHandlingHandlerMock).getRequestInfo(any(HttpProcessingState.class), any(Object.class));
         doReturn(true).when(responseInfoMock).isResponseSendingStarted();
         doReturn(true).when(responseInfoMock).isResponseSendingLastChunkSent();
-        state.setResponseInfo(responseInfoMock);
+        state.setResponseInfo(responseInfoMock, null);
         state.setRequestInfo(requestInfoMock);
 
         if (Tracer.getInstance().getCurrentSpan() != null)
@@ -496,7 +498,7 @@ public class ChannelPipelineFinalizerHandlerTest {
             state.setRequestInfo(null);
 
         if (responseInfoIsNull)
-            state.setResponseInfo(null);
+            state.setResponseInfo(null, null);
 
         // when
         PipelineContinuationBehavior result = handler.doChannelInactive(ctxMock);
@@ -636,6 +638,185 @@ public class ChannelPipelineFinalizerHandlerTest {
         // then
         verifyZeroInteractions(accessLoggerMock);
         Assertions.assertThat(state.isAccessLogCompletedOrScheduled()).isEqualTo(accessLoggingAlreadyScheduled);
+    }
+
+    @Test
+    public void handleMetricsForCompletedRequestIfNotAlreadyDone_does_not_propagate_unexpected_exceptions() {
+        // given
+        HttpProcessingState stateMock = mock(HttpProcessingState.class);
+        doThrow(new RuntimeException("intentional exception")).when(stateMock).isRequestMetricsRecordedOrScheduled();
+
+        // when
+        Throwable ex = catchThrowable(() -> handler.handleMetricsForCompletedRequestIfNotAlreadyDone(stateMock));
+        
+        // then
+        Assertions.assertThat(ex).isNull();
+        verify(stateMock).isRequestMetricsRecordedOrScheduled();
+    }
+
+    @Test
+    public void doChannelInactive_does_not_propagate_unexpected_exception_while_handling_tracing_completion(
+    ) throws Exception {
+        // given
+        HttpProcessingState stateSpy = spy(state);
+
+        doReturn(stateSpy).when(stateAttributeMock).get();
+
+        doThrow(new RuntimeException("intentional exception"))
+            .when(stateSpy).handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isFalse();
+        verify(requestInfoMock, never()).releaseAllResources();
+        verify(proxyRouterStateMock, never()).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock, never()).cancelDownstreamRequest(any());
+
+        // when
+        PipelineContinuationBehavior result = handler.doChannelInactive(ctxMock);
+
+        // then
+        // Verify that the exception was thrown.
+        verify(stateSpy).handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+
+        // Verify that no other finalization logic was impacted.
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isTrue();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isTrue();
+        verify(requestInfoMock).releaseAllResources();
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
+        Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @Test
+    public void doChannelInactive_does_not_propagate_unexpected_exception_while_handling_access_logging(
+    ) throws Exception {
+        // given
+        HttpProcessingState stateSpy = spy(state);
+
+        doReturn(stateSpy).when(stateAttributeMock).get();
+
+        doThrow(new RuntimeException("intentional exception"))
+            .when(accessLoggerMock).log(any(), any(), any(), any());
+
+        Assertions.assertThat(stateSpy.isTraceCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isFalse();
+        verify(requestInfoMock, never()).releaseAllResources();
+        verify(proxyRouterStateMock, never()).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock, never()).cancelDownstreamRequest(any());
+
+        // when
+        PipelineContinuationBehavior result = handler.doChannelInactive(ctxMock);
+
+        // then
+        // Verify that the exception was thrown.
+        verify(accessLoggerMock).log(any(), any(), any(), any());
+
+        // Verify that no other finalization logic was impacted.
+        Assertions.assertThat(stateSpy.isTraceCompletedOrScheduled()).isTrue();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isTrue();
+        verify(requestInfoMock).releaseAllResources();
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
+        Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @Test
+    public void doChannelInactive_does_not_propagate_unexpected_exception_while_releasing_request_resources(
+    ) throws Exception {
+        // given
+        HttpProcessingState stateSpy = spy(state);
+
+        doReturn(stateSpy).when(stateAttributeMock).get();
+
+        doThrow(new RuntimeException("intentional exception"))
+            .when(requestInfoMock).releaseAllResources();
+
+        Assertions.assertThat(stateSpy.isTraceCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isFalse();
+        verify(requestInfoMock, never()).releaseAllResources();
+        verify(proxyRouterStateMock, never()).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock, never()).cancelDownstreamRequest(any());
+
+        // when
+        PipelineContinuationBehavior result = handler.doChannelInactive(ctxMock);
+
+        // then
+        // Verify that the exception was thrown.
+        verify(requestInfoMock).releaseAllResources();
+
+        // Verify that no other finalization logic was impacted.
+        Assertions.assertThat(stateSpy.isTraceCompletedOrScheduled()).isTrue();
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isTrue();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isTrue();
+        verify(requestInfoMock).releaseAllResources();
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
+        Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @Test
+    public void doChannelInactive_does_not_propagate_unexpected_exception_while_releasing_proxy_router_state_resources(
+    ) throws Exception {
+        // given
+        HttpProcessingState stateSpy = spy(state);
+
+        doReturn(stateSpy).when(stateAttributeMock).get();
+
+        doThrow(new RuntimeException("intentional exception"))
+            .when(proxyRouterStateMock).cancelDownstreamRequest(any());
+
+        Assertions.assertThat(stateSpy.isTraceCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isFalse();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isFalse();
+        verify(requestInfoMock, never()).releaseAllResources();
+        verify(proxyRouterStateMock, never()).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock, never()).cancelDownstreamRequest(any());
+
+        // when
+        PipelineContinuationBehavior result = handler.doChannelInactive(ctxMock);
+
+        // then
+        // Verify that the exception was thrown.
+        verify(requestInfoMock).releaseAllResources();
+
+        // Verify that no other finalization logic was impacted.
+        Assertions.assertThat(stateSpy.isTraceCompletedOrScheduled()).isTrue();
+        Assertions.assertThat(stateSpy.isAccessLogCompletedOrScheduled()).isTrue();
+        Assertions.assertThat(stateSpy.isRequestMetricsRecordedOrScheduled()).isTrue();
+        verify(requestInfoMock).releaseAllResources();
+        verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
+        verify(proxyRouterStateMock).cancelDownstreamRequest(any());
+        Assertions.assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    @Test
+    public void logErrorWithTracing_using_HttpProcessingState_gracefully_handles_when_state_is_null() {
+        // given
+        String msg = UUID.randomUUID().toString();
+        Throwable exMock = mock(Throwable.class);
+        ChannelPipelineFinalizerHandler handlerSpy = spy(handler);
+
+        // when
+        handlerSpy.logErrorWithTracing(msg, exMock, (HttpProcessingState)null);
+
+        // then
+        verify(handlerSpy).logErrorWithTracing(msg, exMock, null, null);
+    }
+
+    @Test
+    public void logErrorWithTracing_using_ChannelHandlerContext_gracefully_handles_when_ctx_is_null() {
+        // given
+        String msg = UUID.randomUUID().toString();
+        Throwable exMock = mock(Throwable.class);
+        ChannelPipelineFinalizerHandler handlerSpy = spy(handler);
+
+        // when
+        handlerSpy.logErrorWithTracing(msg, exMock, (ChannelHandlerContext)null);
+
+        // then
+        verify(handlerSpy).logErrorWithTracing(msg, exMock, null, null);
     }
 
     @Test

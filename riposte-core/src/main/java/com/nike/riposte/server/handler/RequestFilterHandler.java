@@ -84,7 +84,7 @@ public class RequestFilterHandler extends BaseInboundHandlerWithTracingAndMdcSup
                             }
 
                             state.setRequestInfo(currentReqInfo);
-                            state.setResponseInfo(responseInfo);
+                            state.setResponseInfo(responseInfo, null);
 
                             // Fire the short-circuit event that will get the desired response info sent to the caller.
                             ctx.fireChannelRead(LastOutboundMessageSendFullResponseInfo.INSTANCE);
@@ -116,7 +116,7 @@ public class RequestFilterHandler extends BaseInboundHandlerWithTracingAndMdcSup
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
             HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
@@ -124,6 +124,10 @@ public class RequestFilterHandler extends BaseInboundHandlerWithTracingAndMdcSup
                 state
             );
 
+            // If the Netty HttpRequest is invalid, we shouldn't process any of the filters.
+            handlerUtils.throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
+
+            // The HttpRequest is valid, so process the filters.
             BiFunction<RequestAndResponseFilter, RequestInfo, RequestInfo> normalFilterCall =
                 (filter, request) -> filter.filterRequestFirstChunkNoPayload(request, ctx);
 

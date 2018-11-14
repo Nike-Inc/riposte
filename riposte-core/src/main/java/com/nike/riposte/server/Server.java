@@ -2,11 +2,15 @@ package com.nike.riposte.server;
 
 import com.nike.riposte.server.channelpipeline.HttpChannelInitializer;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.distributedtracing.DefaultRiposteDistributedTracingConfigImpl;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.hooks.PostServerStartupHook;
 import com.nike.riposte.server.hooks.PreServerStartupHook;
 import com.nike.riposte.server.hooks.ServerShutdownHook;
 import com.nike.riposte.server.http.ResponseSender;
+import com.nike.wingtips.Span;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,6 +121,10 @@ public class Server {
         // Figure out which channel initializer should set up the channel pipelines for new channels.
         ChannelInitializer<SocketChannel> channelInitializer = serverConfig.customChannelInitializer();
         if (channelInitializer == null) {
+
+            DistributedTracingConfig<Span> wingtipsDistributedTracingConfig =
+                getOrGenerateWingtipsDistributedTracingConfig(serverConfig);
+
             // No custom channel initializer, so use the default
             channelInitializer = new HttpChannelInitializer(
                 sslCtx, serverConfig.maxRequestSizeInBytes(), serverConfig.appEndpoints(),
@@ -125,7 +133,8 @@ public class Server {
                 serverConfig.riposteUnhandledErrorHandler(),
                 serverConfig.requestContentValidationService(), serverConfig.defaultRequestContentDeserializer(),
                 new ResponseSender(
-                    serverConfig.defaultResponseContentSerializer(), serverConfig.errorResponseBodySerializer()
+                    serverConfig.defaultResponseContentSerializer(), serverConfig.errorResponseBodySerializer(),
+                    wingtipsDistributedTracingConfig
                 ),
                 serverConfig.metricsListener(),
                 serverConfig.defaultCompletableFutureTimeoutInMillisForNonblockingEndpoints(),
@@ -134,7 +143,7 @@ public class Server {
                 serverConfig.proxyRouterConnectTimeoutMillis(), serverConfig.incompleteHttpCallTimeoutMillis(),
                 serverConfig.maxOpenIncomingServerChannels(), serverConfig.isDebugChannelLifecycleLoggingEnabled(),
                 serverConfig.userIdHeaderKeys(), serverConfig.responseCompressionThresholdBytes(),
-                serverConfig.httpRequestDecoderConfig()
+                serverConfig.httpRequestDecoderConfig(), wingtipsDistributedTracingConfig
             );
         }
 
@@ -184,6 +193,25 @@ public class Server {
                 }
             }
         });
+    }
+
+    protected @NotNull DistributedTracingConfig<Span> getOrGenerateWingtipsDistributedTracingConfig(
+        @NotNull ServerConfig serverConfig
+    ) {
+        DistributedTracingConfig<?> distributedTracingConfigRaw = serverConfig.distributedTracingConfig();
+        if (distributedTracingConfigRaw == null) {
+            distributedTracingConfigRaw = DefaultRiposteDistributedTracingConfigImpl.getDefaultInstance();
+        }
+
+        if (!Span.class.equals(distributedTracingConfigRaw.getSpanClassType())) {
+            throw new IllegalArgumentException(
+                "Your ServerConfig.distributedTracingConfig() does not support Wingtips Spans. Riposte currently "
+                + "requires a DistributedTracingConfig that handles Wingtips Spans."
+            );
+        }
+
+        //noinspection unchecked - we manually verified (above) that it handles Wingtips Spans.
+        return (DistributedTracingConfig<Span>) distributedTracingConfigRaw;
     }
 
     public void shutdown() throws InterruptedException {

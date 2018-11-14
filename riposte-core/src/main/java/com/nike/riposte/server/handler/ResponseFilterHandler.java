@@ -93,7 +93,11 @@ public class ResponseFilterHandler extends BaseInboundHandlerWithTracingAndMdcSu
                         + "should never throw errors). filter_class={}", filter.getClass().getName(), ex);
                 }
             }
-            state.setResponseInfo(currentResponseInfo);
+
+            // Set the ResponseInfo on our HttpPrcessingState, but propagate any error already set on the state -
+            //      we don't want to override the originating error simply because the filter wants to adjust the
+            //      response.
+            state.setResponseInfo(currentResponseInfo, state.getErrorThatTriggeredThisResponse());
         }
         catch (Throwable ex) {
             logger.error(
@@ -104,15 +108,16 @@ public class ResponseFilterHandler extends BaseInboundHandlerWithTracingAndMdcSu
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (shouldHandleDoChannelReadMessage(msg))
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
+        if (shouldHandleDoChannelReadMessage(msg)) {
             executeResponseFilters(ctx);
+        }
 
         return PipelineContinuationBehavior.CONTINUE;
     }
 
     @Override
-    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // Exceptions should always execute filters.
         executeResponseFilters(ctx);
 

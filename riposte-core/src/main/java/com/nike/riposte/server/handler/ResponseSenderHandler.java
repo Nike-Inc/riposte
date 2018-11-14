@@ -49,6 +49,7 @@ public class ResponseSenderHandler extends BaseInboundHandlerWithTracingAndMdcSu
 
     protected void sendResponse(ChannelHandlerContext ctx, Object msg) throws JsonProcessingException {
         try {
+            // The HttpProcessingState will never be null thanks to ExceptionHandlingHandler
             HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             if (state.isResponseSendingLastChunkSent()) {
                 if (logger.isDebugEnabled()) {
@@ -70,7 +71,7 @@ public class ResponseSenderHandler extends BaseInboundHandlerWithTracingAndMdcSu
                                             ? null
                                             : endpointExecuted.customResponseContentSerializer(requestInfo);
 
-            if (msg != null && msg instanceof ChunkedOutboundMessage) {
+            if (msg instanceof ChunkedOutboundMessage) {
                 // Chunked message. Stream it out.
                 responseSender.sendResponseChunk(ctx, requestInfo, responseInfo, (ChunkedOutboundMessage) msg);
             }
