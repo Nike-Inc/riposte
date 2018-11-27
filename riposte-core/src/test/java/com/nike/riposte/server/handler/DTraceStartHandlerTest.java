@@ -1,6 +1,7 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.DefaultRiposteServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfigImpl;
@@ -86,9 +87,9 @@ public class DTraceStartHandlerTest {
     private AtomicBoolean strategyInitialSpanNameMethodCalled;
     private AtomicBoolean strategyRequestTaggingMethodCalled;
     private AtomicBoolean strategyResponseTaggingAndFinalSpanNameMethodCalled;
-    private AtomicReference<InitialSpanNameArgs> strategyInitialSpanNameArgs;
-    private AtomicReference<RequestTaggingArgs> strategyRequestTaggingArgs;
-    private AtomicReference<ResponseTaggingArgs> strategyResponseTaggingArgs;
+    private AtomicReference<InitialSpanNameArgs<RequestInfo<?>>> strategyInitialSpanNameArgs;
+    private AtomicReference<RequestTaggingArgs<RequestInfo<?>>> strategyRequestTaggingArgs;
+    private AtomicReference<ResponseTaggingArgs<RequestInfo<?>, ResponseInfo<?>>> strategyResponseTaggingArgs;
 
     private boolean shouldAddWireReceiveStartAnnotation = true;
     private boolean shouldAddWireReceiveFinishAnnotation = true;
@@ -123,7 +124,7 @@ public class DTraceStartHandlerTest {
         strategyInitialSpanNameArgs = new AtomicReference<>(null);
         strategyRequestTaggingArgs = new AtomicReference<>(null);
         strategyResponseTaggingArgs = new AtomicReference<>(null);
-        tagAndNamingStrategy = new ArgCapturingHttpTagAndSpanNamingStrategy(
+        tagAndNamingStrategy = new ArgCapturingHttpTagAndSpanNamingStrategy<>(
             initialSpanNameFromStrategy, strategyInitialSpanNameMethodCalled, strategyRequestTaggingMethodCalled,
             strategyResponseTaggingAndFinalSpanNameMethodCalled, strategyInitialSpanNameArgs,
             strategyRequestTaggingArgs, strategyResponseTaggingArgs
@@ -142,6 +143,7 @@ public class DTraceStartHandlerTest {
                     return shouldAddWireReceiveFinishAnnotation;
                 }
             },
+            DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy.getDefaultInstance(),
             Span.class
         );
 

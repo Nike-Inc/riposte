@@ -162,7 +162,7 @@ public class DTraceStartHandler extends BaseInboundHandlerWithTracingAndMdcSuppo
 
     /**
      * Returns the name that should be used for the span surrounding the request. Defaults to whatever {@link
-     * ServerSpanNamingAndTaggingStrategy#getInitialSpanName(RequestInfo)} returns, with a fallback
+     * ServerSpanNamingAndTaggingStrategy#getInitialSpanName(Object)} returns, with a fallback
      * of {@link HttpRequestTracingUtils#getFallbackSpanNameForHttpRequest(String, String)} if the naming strategy
      * returned null or blank string.
      *

@@ -4,6 +4,7 @@ import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.config.distributedtracing.DefaultRiposteDistributedTracingConfigImpl;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfigImpl;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.wingtips.Span;
 
@@ -39,7 +40,11 @@ public class ServerTest {
         DistributedTracingConfig<Span> dtConfig =
             (nullDtConfig)
             ? null
-            : new DistributedTracingConfigImpl<>(mock(ServerSpanNamingAndTaggingStrategy.class), Span.class);
+            : new DistributedTracingConfigImpl<>(
+                mock(ServerSpanNamingAndTaggingStrategy.class),
+                mock(ProxyRouterSpanNamingAndTaggingStrategy.class),
+                Span.class
+            );
         DistributedTracingConfig<Span> expectedResult =
             (dtConfig == null)
             ? DefaultRiposteDistributedTracingConfigImpl.getDefaultInstance()

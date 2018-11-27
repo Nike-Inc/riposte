@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 public class DistributedTracingConfigImpl<S> implements DistributedTracingConfig<S> {
 
     protected final @NotNull ServerSpanNamingAndTaggingStrategy<S> serverSpanNamingAndTaggingStrategy;
+    protected final @NotNull ProxyRouterSpanNamingAndTaggingStrategy<S> proxyRouterSpanNamingAndTaggingStrategy;
     protected final @NotNull Class<S> spanClassType;
 
     /**
@@ -23,15 +24,22 @@ public class DistributedTracingConfigImpl<S> implements DistributedTracingConfig
      *
      * @param serverSpanNamingAndTaggingStrategy The object that should be returned when
      * {@link #getServerSpanNamingAndTaggingStrategy()} is called.
+     * @param proxyRouterSpanNamingAndTaggingStrategy The object that should be returned when
+     * {@link #getProxyRouterSpanNamingAndTaggingStrategy()} is called.
      * @param spanClassType The object that should be returned when {@link #getSpanClassType()} is called.
      */
     @SuppressWarnings("ConstantConditions")
     public DistributedTracingConfigImpl(
         @NotNull ServerSpanNamingAndTaggingStrategy<S> serverSpanNamingAndTaggingStrategy,
+        @NotNull ProxyRouterSpanNamingAndTaggingStrategy<S> proxyRouterSpanNamingAndTaggingStrategy,
         @NotNull Class<S> spanClassType
     ) {
         if (serverSpanNamingAndTaggingStrategy == null) {
             throw new IllegalArgumentException("serverSpanNamingAndTaggingStrategy cannot be null");
+        }
+
+        if (proxyRouterSpanNamingAndTaggingStrategy == null) {
+            throw new IllegalArgumentException("proxyRouterSpanNamingAndTaggingStrategy cannot be null");
         }
 
         if (spanClassType == null) {
@@ -43,12 +51,18 @@ public class DistributedTracingConfigImpl<S> implements DistributedTracingConfig
         }
 
         this.serverSpanNamingAndTaggingStrategy = serverSpanNamingAndTaggingStrategy;
+        this.proxyRouterSpanNamingAndTaggingStrategy = proxyRouterSpanNamingAndTaggingStrategy;
         this.spanClassType = spanClassType;
     }
 
     @Override
     public @NotNull ServerSpanNamingAndTaggingStrategy<S> getServerSpanNamingAndTaggingStrategy() {
         return serverSpanNamingAndTaggingStrategy;
+    }
+
+    @Override
+    public @NotNull ProxyRouterSpanNamingAndTaggingStrategy<S> getProxyRouterSpanNamingAndTaggingStrategy() {
+        return proxyRouterSpanNamingAndTaggingStrategy;
     }
 
     @Override

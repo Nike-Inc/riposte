@@ -1,12 +1,10 @@
 package com.nike.riposte.server.config.distributedtracing;
 
-import com.nike.riposte.server.http.RequestInfo;
-import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.InitialSpanNameArgs;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.RequestTaggingArgs;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.ResponseTaggingArgs;
-import com.nike.trace.netty.RiposteWingtipsServerTagAdapter;
+import com.nike.trace.netty.RiposteWingtipsNettyClientTagAdapter;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
@@ -23,34 +21,37 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.mock;
 
 /**
- * Tests the functionality of {@link DefaultRiposteServerSpanNamingAndTaggingStrategy}.
+ * Tests the functionality of {@link DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy}.
  *
  * @author Nic Munroe
  */
 @RunWith(DataProviderRunner.class)
-public class DefaultRiposteServerSpanNamingAndTaggingStrategyTest {
+public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategyTest {
 
-    private DefaultRiposteServerSpanNamingAndTaggingStrategy impl;
+    private DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy impl;
 
     private Span spanMock;
-    private RequestInfo<?> requestMock;
-    private ResponseInfo<?> responseMock;
+    private HttpRequest requestMock;
+    private HttpResponse responseMock;
     private Throwable errorMock;
 
-    private HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> wingtipsStrategy;
-    private HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> wingtipsAdapterMock;
+    private HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> wingtipsStrategy;
+    private HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> wingtipsAdapterMock;
     private AtomicReference<String> initialSpanNameFromStrategy;
     private AtomicBoolean strategyInitialSpanNameMethodCalled;
     private AtomicBoolean strategyRequestTaggingMethodCalled;
     private AtomicBoolean strategyResponseTaggingAndFinalSpanNameMethodCalled;
-    private AtomicReference<InitialSpanNameArgs<RequestInfo<?>>> strategyInitialSpanNameArgs;
-    private AtomicReference<RequestTaggingArgs<RequestInfo<?>>> strategyRequestTaggingArgs;
-    private AtomicReference<ResponseTaggingArgs<RequestInfo<?>, ResponseInfo<?>>> strategyResponseTaggingArgs;
+    private AtomicReference<InitialSpanNameArgs<HttpRequest>> strategyInitialSpanNameArgs;
+    private AtomicReference<RequestTaggingArgs<HttpRequest>> strategyRequestTaggingArgs;
+    private AtomicReference<ResponseTaggingArgs<HttpRequest, HttpResponse>> strategyResponseTaggingArgs;
 
     @Before
     public void beforeMethod() {
@@ -68,10 +69,10 @@ public class DefaultRiposteServerSpanNamingAndTaggingStrategyTest {
         );
         wingtipsAdapterMock = mock(HttpTagAndSpanNamingAdapter.class);
 
-        impl = new DefaultRiposteServerSpanNamingAndTaggingStrategy(wingtipsStrategy, wingtipsAdapterMock);
+        impl = new DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy(wingtipsStrategy, wingtipsAdapterMock);
 
-        requestMock = mock(RequestInfo.class);
-        responseMock = mock(ResponseInfo.class);
+        requestMock = mock(HttpRequest.class);
+        responseMock = mock(HttpResponse.class);
         errorMock = mock(Throwable.class);
         spanMock = mock(Span.class);
     }
@@ -79,38 +80,38 @@ public class DefaultRiposteServerSpanNamingAndTaggingStrategyTest {
     @Test
     public void getDefaultInstance_returns_DEFAULT_INSTANCE() {
         // when
-        DefaultRiposteServerSpanNamingAndTaggingStrategy instance =
-            DefaultRiposteServerSpanNamingAndTaggingStrategy.getDefaultInstance();
+        DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy instance =
+            DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy.getDefaultInstance();
 
         // then
         assertThat(instance)
-            .isSameAs(DefaultRiposteServerSpanNamingAndTaggingStrategy.DEFAULT_INSTANCE);
+            .isSameAs(DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy.DEFAULT_INSTANCE);
         assertThat(instance.tagAndNamingStrategy).isSameAs(ZipkinHttpTagStrategy.getDefaultInstance());
-        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsServerTagAdapter.getDefaultInstance());
+        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsNettyClientTagAdapter.getDefaultInstance());
     }
 
     @Test
-    public void default_constructor_creates_instance_using_default_ZipkinHttpTagStrategy_and_RiposteWingtipsServerTagAdapter() {
+    public void default_constructor_creates_instance_using_default_ZipkinHttpTagStrategy_and_RiposteWingtipsNettyClientTagAdapter() {
         // when
-        DefaultRiposteServerSpanNamingAndTaggingStrategy instance =
-            new DefaultRiposteServerSpanNamingAndTaggingStrategy();
+        DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy instance =
+            new DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy();
 
         // then
         assertThat(instance.tagAndNamingStrategy).isSameAs(ZipkinHttpTagStrategy.getDefaultInstance());
-        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsServerTagAdapter.getDefaultInstance());
+        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsNettyClientTagAdapter.getDefaultInstance());
     }
 
     @Test
     public void alternate_constructor_creates_instance_using_specified_wingtips_strategy_and_adapter() {
         // given
-        HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> wingtipsStrategyMock =
+        HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> wingtipsStrategyMock =
             mock(HttpTagAndSpanNamingStrategy.class);
-        HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> wingtipsAdapterMock =
+        HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> wingtipsAdapterMock =
             mock(HttpTagAndSpanNamingAdapter.class);
 
         // when
-        DefaultRiposteServerSpanNamingAndTaggingStrategy instance =
-            new DefaultRiposteServerSpanNamingAndTaggingStrategy(wingtipsStrategyMock, wingtipsAdapterMock);
+        DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy instance =
+            new DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy(wingtipsStrategyMock, wingtipsAdapterMock);
 
         // then
         assertThat(instance.tagAndNamingStrategy).isSameAs(wingtipsStrategyMock);
@@ -129,13 +130,13 @@ public class DefaultRiposteServerSpanNamingAndTaggingStrategyTest {
             "tagAndNamingAdapter cannot be null - if you really want no adapter, use NoOpHttpTagAdapter"
         );
 
-        public final HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> wingtipsStrategy;
-        public final HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> wingtipsAdapter;
+        public final HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> wingtipsStrategy;
+        public final HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> wingtipsAdapter;
         public final String expectedExceptionMessage;
 
         NullArgsScenario(
-            HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> wingtipsStrategy,
-            HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> wingtipsAdapter,
+            HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> wingtipsStrategy,
+            HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> wingtipsAdapter,
             String expectedExceptionMessage
         ) {
             this.wingtipsStrategy = wingtipsStrategy;
@@ -150,11 +151,11 @@ public class DefaultRiposteServerSpanNamingAndTaggingStrategyTest {
     })
     @Test
     public void alternate_constructor_throws_IllegalArgumentException_if_passed_null_args(
-        NullArgsScenario scenario
+        DefaultRiposteProxyRouterSpanNamingAndTaggingStrategyTest.NullArgsScenario scenario
     ) {
         // when
         Throwable ex = catchThrowable(
-            () -> new DefaultRiposteServerSpanNamingAndTaggingStrategy(
+            () -> new DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy(
                 scenario.wingtipsStrategy, scenario.wingtipsAdapter
             )
         );

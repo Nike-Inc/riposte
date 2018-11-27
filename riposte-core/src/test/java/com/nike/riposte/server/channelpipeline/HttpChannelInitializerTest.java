@@ -5,6 +5,7 @@ import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.config.ServerConfig.HttpRequestDecoderConfig;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
@@ -160,6 +161,10 @@ public class HttpChannelInitializerTest {
         int responseCompressionThresholdBytes = 5678;
         HttpRequestDecoderConfig httpRequestDecoderConfig = new HttpRequestDecoderConfig() {};
         DistributedTracingConfig<Span> distributedTracingConfig = mock(DistributedTracingConfig.class);
+        ProxyRouterSpanNamingAndTaggingStrategy<Span> proxySpanTaggingStrategyMock =
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class);
+        doReturn(proxySpanTaggingStrategyMock).when(distributedTracingConfig)
+                                              .getProxyRouterSpanNamingAndTaggingStrategy();
 
         // when
         HttpChannelInitializer hci = new HttpChannelInitializer(
@@ -197,6 +202,7 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(sahc, "idleChannelTimeoutMillis"), is(workerChannelIdleTimeoutMillis));
         assertThat(extractField(sahc, "downstreamConnectionTimeoutMillis"), is((int)proxyRouterConnectTimeoutMillis));
         assertThat(extractField(sahc, "debugChannelLifecycleLoggingEnabled"), is(debugChannelLifecycleLoggingEnabled));
+        assertThat(extractField(sahc, "proxySpanTaggingStrategy"), is(proxySpanTaggingStrategyMock));
 
         RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
         assertThat(extractField(beforeSecReqFH, "filters"), is(Collections.singletonList(beforeSecurityRequestFilter)));

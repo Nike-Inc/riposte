@@ -4,16 +4,15 @@ import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.ObjectHo
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingCallback;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingChannel;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.wingtips.Span;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpVersion;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,10 +24,14 @@ import java.util.Map;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.channel.pool.ChannelPool;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.concurrent.Future;
@@ -67,6 +70,8 @@ public class StreamingAsyncHttpClientTest {
     private StreamingChannel streamingChannelSpy;
     private HttpContent contentChunkMock;
     private ChannelFuture writeAndFlushChannelFutureMock;
+    private Span spanForDownstreamCallMock;
+    private ProxyRouterSpanNamingAndTaggingStrategy<Span> proxySpanTaggingStrategyMock;
 
     private Attribute<Boolean> channelIsBrokenAttrMock;
 
@@ -88,8 +93,13 @@ public class StreamingAsyncHttpClientTest {
         downstreamLastChunkSentHolder = new ObjectHolder<>();
         downstreamLastChunkSentHolder.heldObject = false;
 
-        streamingChannelSpy = spy(new StreamingChannel(channelMock, channelPoolMock, callActiveHolder,
-                downstreamLastChunkSentHolder, null, null));
+        spanForDownstreamCallMock = mock(Span.class);
+        proxySpanTaggingStrategyMock = mock(ProxyRouterSpanNamingAndTaggingStrategy.class);
+
+        streamingChannelSpy = spy(new StreamingChannel(
+            channelMock, channelPoolMock, callActiveHolder, downstreamLastChunkSentHolder, null, null,
+            spanForDownstreamCallMock, proxySpanTaggingStrategyMock
+        ));
 
         writeAndFlushChannelFutureMock = mock(ChannelFuture.class);
 
@@ -108,14 +118,15 @@ public class StreamingAsyncHttpClientTest {
     }
 
     @Test
-    public void constructor_sets_fields_as_expected() {
+    public void StreamingChannel_constructor_sets_fields_as_expected() {
         // given
         Deque<Span> spanStackMock = mock(Deque.class);
         Map<String, String> mdcInfoMock = mock(Map.class);
 
         // when
         StreamingChannel sc = new StreamingChannel(
-                channelMock, channelPoolMock, callActiveHolder, downstreamLastChunkSentHolder, spanStackMock, mdcInfoMock
+            channelMock, channelPoolMock, callActiveHolder, downstreamLastChunkSentHolder, spanStackMock, mdcInfoMock,
+            spanForDownstreamCallMock, proxySpanTaggingStrategyMock
         );
 
         // then
@@ -126,6 +137,8 @@ public class StreamingAsyncHttpClientTest {
         assertThat(sc.downstreamLastChunkSentHolder).isSameAs(downstreamLastChunkSentHolder);
         assertThat(sc.distributedTracingSpanStack).isSameAs(spanStackMock);
         assertThat(sc.distributedTracingMdcInfo).isSameAs(mdcInfoMock);
+        assertThat(sc.spanForDownstreamCall).isSameAs(spanForDownstreamCallMock);
+        assertThat(sc.proxySpanTaggingStrategy).isSameAs(proxySpanTaggingStrategyMock);
     }
 
     @Test
@@ -436,8 +449,11 @@ public class StreamingAsyncHttpClientTest {
         StreamingCallback streamingCallback = mock(StreamingCallback.class);
 
         // when
-        new StreamingAsyncHttpClient(200, 200, true)
-                .streamDownstreamCall(downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, true, true, ctx);
+        new StreamingAsyncHttpClient(
+            200, 200, true, mock(DistributedTracingConfig.class)
+        ).streamDownstreamCall(
+            downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, true, true, ctx
+        );
 
         // then
         assertThat(request.headers().get(HOST)).isEqualTo(expectedHostHeader);
@@ -447,9 +463,12 @@ public class StreamingAsyncHttpClientTest {
         ChannelHandlerContext mockContext = mock(ChannelHandlerContext.class);
         when(mockContext.channel()).thenReturn(mock(Channel.class));
         @SuppressWarnings("unchecked")
-        Attribute<HttpProcessingState> mockAttribute = mock(Attribute.class);
-        when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY)).thenReturn(mockAttribute);
+        Attribute<HttpProcessingState> mockHttpProcessingStateAttribute = mock(Attribute.class);
+        Attribute<ProxyRouterProcessingState> mockProxyStateAttribute = mock(Attribute.class);
+        when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY)).thenReturn(mockHttpProcessingStateAttribute);
         when(mockContext.channel().attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY).get()).thenReturn(mock(HttpProcessingState.class));
+        when(mockContext.channel().attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY)).thenReturn(mockProxyStateAttribute);
+        when(mockContext.channel().attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY).get()).thenReturn(mock(ProxyRouterProcessingState.class));
         return mockContext;
     }
 

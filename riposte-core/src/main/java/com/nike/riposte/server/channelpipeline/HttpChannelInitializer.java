@@ -406,7 +406,10 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.debugChannelLifecycleLoggingEnabled = debugChannelLifecycleLoggingEnabled;
 
         this.streamingAsyncHttpClientForProxyRouterEndpoints = new StreamingAsyncHttpClient(
-            workerChannelIdleTimeoutMillis, proxyRouterConnectTimeoutMillis, debugChannelLifecycleLoggingEnabled
+            workerChannelIdleTimeoutMillis,
+            proxyRouterConnectTimeoutMillis,
+            debugChannelLifecycleLoggingEnabled,
+            distributedTracingConfig
         );
 
         boolean hasReqResFilters = requestAndResponseFilters != null && !requestAndResponseFilters.isEmpty();
@@ -543,7 +546,9 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(PROXY_ROUTER_ENDPOINT_EXECUTION_HANDLER_NAME,
                   new ProxyRouterEndpointExecutionHandler(longRunningTaskExecutor,
                                                           streamingAsyncHttpClientForProxyRouterEndpoints,
-                                                          defaultCompletableFutureTimeoutMillis));
+                                                          defaultCompletableFutureTimeoutMillis,
+                                                          distributedTracingConfig
+                  ));
 
         // INBOUND - Add RequestHasBeenHandledVerificationHandler to verify that one of the endpoint handlers took care
         //           of the request. This makes sure that the messages coming into channelRead are correctly typed for

@@ -29,38 +29,61 @@ public class DistributedTracingConfigImplTest {
     @Test
     public void constructor_sets_fields_as_expected() {
         // given
-        ServerSpanNamingAndTaggingStrategy<Span> strategyMock = mock(ServerSpanNamingAndTaggingStrategy.class);
+        ServerSpanNamingAndTaggingStrategy<Span> serverStrategyMock = mock(ServerSpanNamingAndTaggingStrategy.class);
+        ProxyRouterSpanNamingAndTaggingStrategy<Span> proxyStrategyMock =
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class);
         Class<Span> spanClassType = Span.class;
 
         // when
         DistributedTracingConfigImpl<Span> instance = new DistributedTracingConfigImpl<>(
-            strategyMock, spanClassType
+            serverStrategyMock, proxyStrategyMock, spanClassType
         );
 
         // then
-        assertThat(instance.serverSpanNamingAndTaggingStrategy).isSameAs(strategyMock);
+        assertThat(instance.serverSpanNamingAndTaggingStrategy).isSameAs(serverStrategyMock);
+        assertThat(instance.proxyRouterSpanNamingAndTaggingStrategy).isSameAs(proxyStrategyMock);
         assertThat(instance.spanClassType).isSameAs(spanClassType);
     }
 
     private enum InvalidConstructorArgsScenario {
-        NULL_STRATEGY(null, Span.class, "serverSpanNamingAndTaggingStrategy cannot be null"),
-        NULL_SPAN_CLASS_TYPE(mock(ServerSpanNamingAndTaggingStrategy.class), null, "spanClassType cannot be null"),
+        NULL_SERVER_STRATEGY(
+            null,
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class),
+            Span.class,
+            "serverSpanNamingAndTaggingStrategy cannot be null"
+        ),
+        NULL_PROXY_STRATEGY(
+            mock(ServerSpanNamingAndTaggingStrategy.class),
+            null,
+            Span.class,
+            "proxyRouterSpanNamingAndTaggingStrategy cannot be null"
+        ),
+        NULL_SPAN_CLASS_TYPE(
+            mock(ServerSpanNamingAndTaggingStrategy.class),
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class),
+            null,
+            "spanClassType cannot be null"
+        ),
         NON_WINGTIPS_SPAN_CLASS_TYPE(
             mock(ServerSpanNamingAndTaggingStrategy.class),
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class),
             Object.class,
             "Riposte currently only supports Wingtips Spans"
         );
 
-        public final ServerSpanNamingAndTaggingStrategy<?> strategy;
+        public final ServerSpanNamingAndTaggingStrategy<?> serverStrategy;
+        public final ProxyRouterSpanNamingAndTaggingStrategy<?> proxyStrategy;
         public final Class<?> spanClassType;
         public final String expectedExceptionMessage;
 
         InvalidConstructorArgsScenario(
-            ServerSpanNamingAndTaggingStrategy<?> strategy,
+            ServerSpanNamingAndTaggingStrategy<?> serverStrategy,
+            ProxyRouterSpanNamingAndTaggingStrategy<?> proxyStrategy,
             Class<?> spanClassType,
             String expectedExceptionMessage
         ) {
-            this.strategy = strategy;
+            this.serverStrategy = serverStrategy;
+            this.proxyStrategy = proxyStrategy;
             this.spanClassType = spanClassType;
             this.expectedExceptionMessage = expectedExceptionMessage;
         }
@@ -81,7 +104,9 @@ public class DistributedTracingConfigImplTest {
         // when
         @SuppressWarnings("unchecked")
         Throwable ex = catchThrowable(
-            () -> new DistributedTracingConfigImpl(scenario.strategy, scenario.spanClassType)
+            () -> new DistributedTracingConfigImpl(
+                scenario.serverStrategy, scenario.proxyStrategy, scenario.spanClassType
+            )
         );
 
         // then
@@ -93,16 +118,21 @@ public class DistributedTracingConfigImplTest {
     @Test
     public void getter_methods_return_field_values() {
         // given
-        ServerSpanNamingAndTaggingStrategy<Span> strategyMock = mock(ServerSpanNamingAndTaggingStrategy.class);
+        ServerSpanNamingAndTaggingStrategy<Span> serverStrategyMock = mock(ServerSpanNamingAndTaggingStrategy.class);
+        ProxyRouterSpanNamingAndTaggingStrategy<Span> proxyStrategyMock =
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class);
         Class<Span> spanClassType = Span.class;
         DistributedTracingConfigImpl<Span> instance = new DistributedTracingConfigImpl<>(
-            strategyMock, spanClassType
+            serverStrategyMock, proxyStrategyMock, spanClassType
         );
 
         // expect
         assertThat(instance.getServerSpanNamingAndTaggingStrategy())
             .isSameAs(instance.serverSpanNamingAndTaggingStrategy)
-            .isSameAs(strategyMock);
+            .isSameAs(serverStrategyMock);
+        assertThat(instance.getProxyRouterSpanNamingAndTaggingStrategy())
+            .isSameAs(instance.proxyRouterSpanNamingAndTaggingStrategy)
+            .isSameAs(proxyStrategyMock);
         assertThat(instance.getSpanClassType())
             .isSameAs(instance.spanClassType)
             .isSameAs(spanClassType);

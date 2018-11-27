@@ -7,6 +7,7 @@ import com.nike.riposte.server.channelpipeline.HttpChannelInitializer;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 import com.nike.wingtips.Span;
 
@@ -116,6 +117,13 @@ public class RequestStateCleanerHandler extends ChannelInboundHandlerAdapter {
                     pipeline.replace(existingHandler, INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME, newHandler);
                 }
             }
+
+            ProxyRouterProcessingState proxyRouterProcessingState =
+                ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
+
+            // Set the DistributedTracingConfig on the ProxyRouterProcessingState.
+            //noinspection deprecation - This is the only place that should actually be calling this method.
+            proxyRouterProcessingState.setDistributedTracingConfig(distributedTracingConfig);
         }
         else if (msg instanceof LastHttpContent) {
             // The HTTP call is complete, so we can remove the IncompleteHttpCallTimeoutHandler.

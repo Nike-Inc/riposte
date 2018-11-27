@@ -1,7 +1,5 @@
 package com.nike.riposte.server.testutils;
 
-import com.nike.riposte.server.http.RequestInfo;
-import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
@@ -21,25 +19,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nic Munroe
  */
-public class ArgCapturingHttpTagAndSpanNamingStrategy
-    extends HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> {
+public class ArgCapturingHttpTagAndSpanNamingStrategy<REQ, RES>
+    extends HttpTagAndSpanNamingStrategy<REQ, RES> {
 
     private final AtomicReference<String> initialSpanName;
     private final AtomicBoolean initialSpanNameMethodCalled;
     private final AtomicBoolean requestTaggingMethodCalled;
     private final AtomicBoolean responseTaggingAndFinalSpanNameMethodCalled;
-    private final AtomicReference<InitialSpanNameArgs> initialSpanNameArgs;
-    private final AtomicReference<RequestTaggingArgs> requestTaggingArgs;
-    private final AtomicReference<ResponseTaggingArgs> responseTaggingArgs;
+    private final AtomicReference<InitialSpanNameArgs<REQ>> initialSpanNameArgs;
+    private final AtomicReference<RequestTaggingArgs<REQ>> requestTaggingArgs;
+    private final AtomicReference<ResponseTaggingArgs<REQ, RES>> responseTaggingArgs;
 
     public ArgCapturingHttpTagAndSpanNamingStrategy(
         AtomicReference<String> initialSpanName,
         AtomicBoolean initialSpanNameMethodCalled,
         AtomicBoolean requestTaggingMethodCalled,
         AtomicBoolean responseTaggingAndFinalSpanNameMethodCalled,
-        AtomicReference<InitialSpanNameArgs> initialSpanNameArgs,
-        AtomicReference<RequestTaggingArgs> requestTaggingArgs,
-        AtomicReference<ResponseTaggingArgs> responseTaggingArgs
+        AtomicReference<InitialSpanNameArgs<REQ>> initialSpanNameArgs,
+        AtomicReference<RequestTaggingArgs<REQ>> requestTaggingArgs,
+        AtomicReference<ResponseTaggingArgs<REQ, RES>> responseTaggingArgs
     ) {
         this.initialSpanName = initialSpanName;
         this.initialSpanNameMethodCalled = initialSpanNameMethodCalled;
@@ -52,7 +50,7 @@ public class ArgCapturingHttpTagAndSpanNamingStrategy
 
     @Override
     protected @Nullable String doGetInitialSpanName(
-        @NotNull RequestInfo<?> request, @NotNull HttpTagAndSpanNamingAdapter<RequestInfo<?>, ?> adapter
+        @NotNull REQ request, @NotNull HttpTagAndSpanNamingAdapter<REQ, ?> adapter
     ) {
         initialSpanNameMethodCalled.set(true);
         initialSpanNameArgs.set(new InitialSpanNameArgs(request, adapter));
@@ -62,10 +60,10 @@ public class ArgCapturingHttpTagAndSpanNamingStrategy
     @Override
     protected void doHandleResponseAndErrorTagging(
         @NotNull Span span,
-        @Nullable RequestInfo<?> request,
-        @Nullable ResponseInfo<?> response,
+        @Nullable REQ request,
+        @Nullable RES response,
         @Nullable Throwable error,
-        @NotNull HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> adapter
+        @NotNull HttpTagAndSpanNamingAdapter<REQ, RES> adapter
     ) {
         responseTaggingAndFinalSpanNameMethodCalled.set(true);
         responseTaggingArgs.set(
@@ -76,39 +74,39 @@ public class ArgCapturingHttpTagAndSpanNamingStrategy
     @Override
     protected void doHandleRequestTagging(
         @NotNull Span span,
-        @NotNull RequestInfo<?> request,
-        @NotNull HttpTagAndSpanNamingAdapter<RequestInfo<?>, ?> adapter
+        @NotNull REQ request,
+        @NotNull HttpTagAndSpanNamingAdapter<REQ, ?> adapter
     ) {
         requestTaggingMethodCalled.set(true);
         requestTaggingArgs.set(new RequestTaggingArgs(span, request, adapter));
     }
 
-    public static class InitialSpanNameArgs {
+    public static class InitialSpanNameArgs<REQ> {
 
-        public final RequestInfo<?> request;
+        public final REQ request;
         public final HttpTagAndSpanNamingAdapter adapter;
 
         private InitialSpanNameArgs(
-            RequestInfo<?> request, HttpTagAndSpanNamingAdapter adapter
+            REQ request, HttpTagAndSpanNamingAdapter adapter
         ) {
             this.request = request;
             this.adapter = adapter;
         }
 
-        public void verifyArgs(RequestInfo<?> expectedRequest, HttpTagAndSpanNamingAdapter expectedAdapter) {
+        public void verifyArgs(REQ expectedRequest, HttpTagAndSpanNamingAdapter expectedAdapter) {
             assertThat(request).isSameAs(expectedRequest);
             assertThat(adapter).isSameAs(expectedAdapter);
         }
     }
 
-    public static class RequestTaggingArgs {
+    public static class RequestTaggingArgs<REQ> {
 
         public final Span span;
-        public final RequestInfo<?> request;
+        public final REQ request;
         public final HttpTagAndSpanNamingAdapter adapter;
 
         private RequestTaggingArgs(
-            Span span, RequestInfo<?> request, HttpTagAndSpanNamingAdapter adapter
+            Span span, REQ request, HttpTagAndSpanNamingAdapter adapter
         ) {
             this.span = span;
             this.request = request;
@@ -116,7 +114,7 @@ public class ArgCapturingHttpTagAndSpanNamingStrategy
         }
 
         public void verifyArgs(
-            Span expectedSpan, RequestInfo<?> expectedRequest, HttpTagAndSpanNamingAdapter expectedAdapter
+            Span expectedSpan, REQ expectedRequest, HttpTagAndSpanNamingAdapter expectedAdapter
         ) {
             assertThat(span).isSameAs(expectedSpan);
             assertThat(request).isSameAs(expectedRequest);
@@ -124,16 +122,16 @@ public class ArgCapturingHttpTagAndSpanNamingStrategy
         }
     }
 
-    public static class ResponseTaggingArgs {
+    public static class ResponseTaggingArgs<REQ, RES> {
 
         public final Span span;
-        public final RequestInfo<?> request;
-        public final ResponseInfo<?> response;
+        public final REQ request;
+        public final RES response;
         public final Throwable error;
         public final HttpTagAndSpanNamingAdapter adapter;
 
         private ResponseTaggingArgs(
-            Span span, RequestInfo<?> request, ResponseInfo<?> response, Throwable error,
+            Span span, REQ request, RES response, Throwable error,
             HttpTagAndSpanNamingAdapter adapter
         ) {
             this.span = span;
@@ -144,7 +142,7 @@ public class ArgCapturingHttpTagAndSpanNamingStrategy
         }
 
         public void verifyArgs(
-            Span expectedSpan, RequestInfo<?> expectedRequest, ResponseInfo<?> expectedResponse,
+            Span expectedSpan, REQ expectedRequest, RES expectedResponse,
             Throwable expectedError, HttpTagAndSpanNamingAdapter expectedAdapter
         ) {
             assertThat(span).isSameAs(expectedSpan);

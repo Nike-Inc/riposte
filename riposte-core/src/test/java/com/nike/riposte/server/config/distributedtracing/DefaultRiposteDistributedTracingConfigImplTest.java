@@ -31,7 +31,7 @@ public class DefaultRiposteDistributedTracingConfigImplTest {
     }
 
     @Test
-    public void default_constructor_creates_instance_that_uses_default_DefaultRiposteServerSpanNamingAndTaggingStrategy() {
+    public void default_constructor_creates_instance_that_uses_default_strategies() {
         // when
         DefaultRiposteDistributedTracingConfigImpl instance = new DefaultRiposteDistributedTracingConfigImpl();
 
@@ -39,36 +39,62 @@ public class DefaultRiposteDistributedTracingConfigImplTest {
         assertThat(instance.serverSpanNamingAndTaggingStrategy)
             .isSameAs(DefaultRiposteServerSpanNamingAndTaggingStrategy.getDefaultInstance())
             .isSameAs(instance.getServerSpanNamingAndTaggingStrategy());
+        assertThat(instance.proxyRouterSpanNamingAndTaggingStrategy)
+            .isSameAs(DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy.getDefaultInstance())
+            .isSameAs(instance.getProxyRouterSpanNamingAndTaggingStrategy());
         assertThat(instance.getSpanClassType()).isEqualTo(Span.class);
     }
 
     @Test
-    public void alternate_constructor_creates_instance_with_specified_ServerSpanNamingAndTaggingStrategy() {
+    public void alternate_constructor_creates_instance_with_specified_strategies() {
         // given
-        ServerSpanNamingAndTaggingStrategy<Span> strategyMock = mock(ServerSpanNamingAndTaggingStrategy.class);
+        ServerSpanNamingAndTaggingStrategy<Span> serverStrategyMock = mock(ServerSpanNamingAndTaggingStrategy.class);
+        ProxyRouterSpanNamingAndTaggingStrategy<Span> proxyStrategyMock =
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class);
+
         // when
         DefaultRiposteDistributedTracingConfigImpl instance = new DefaultRiposteDistributedTracingConfigImpl(
-            strategyMock
+            serverStrategyMock, proxyStrategyMock
         );
 
         // then
         assertThat(instance.serverSpanNamingAndTaggingStrategy)
-            .isSameAs(strategyMock)
+            .isSameAs(serverStrategyMock)
             .isSameAs(instance.getServerSpanNamingAndTaggingStrategy());
+        assertThat(instance.proxyRouterSpanNamingAndTaggingStrategy)
+            .isSameAs(proxyStrategyMock)
+            .isSameAs(instance.getProxyRouterSpanNamingAndTaggingStrategy());
         assertThat(instance.getSpanClassType()).isEqualTo(Span.class);
     }
 
     @Test
-    public void alternate_constructor_throws_IllegalArgumentException_if_passed_null_strategy() {
+    public void alternate_constructor_throws_IllegalArgumentException_if_passed_null_server_strategy() {
         // when
         Throwable ex = catchThrowable(
-            () -> new DefaultRiposteDistributedTracingConfigImpl(null)
+            () -> new DefaultRiposteDistributedTracingConfigImpl(
+                null, mock(ProxyRouterSpanNamingAndTaggingStrategy.class)
+            )
         );
 
         // then
         assertThat(ex)
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("serverSpanNamingAndTaggingStrategy cannot be null");
+    }
+
+    @Test
+    public void alternate_constructor_throws_IllegalArgumentException_if_passed_null_proxy_strategy() {
+        // when
+        Throwable ex = catchThrowable(
+            () -> new DefaultRiposteDistributedTracingConfigImpl(
+                mock(ServerSpanNamingAndTaggingStrategy.class), null
+            )
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("proxyRouterSpanNamingAndTaggingStrategy cannot be null");
     }
 
 }

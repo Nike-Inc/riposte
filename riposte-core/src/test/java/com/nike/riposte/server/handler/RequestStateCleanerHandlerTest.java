@@ -52,6 +52,7 @@ public class RequestStateCleanerHandlerTest {
 
     private RequestStateCleanerHandler handler;
     private HttpProcessingState stateMock;
+    private ProxyRouterProcessingState proxyRouterProcessingStateMock;
     private ChannelHandlerContext ctxMock;
     private Channel channelMock;
     private ChannelPipeline pipelineMock;
@@ -68,6 +69,7 @@ public class RequestStateCleanerHandlerTest {
     @Before
     public void beforeMethod() {
         stateMock = mock(HttpProcessingState.class);
+        proxyRouterProcessingStateMock = mock(ProxyRouterProcessingState.class);
         ctxMock = mock(ChannelHandlerContext.class);
         channelMock = mock(Channel.class);
         pipelineMock = mock(ChannelPipeline.class);
@@ -86,6 +88,7 @@ public class RequestStateCleanerHandlerTest {
         doReturn(stateAttrMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(stateMock).when(stateAttrMock).get();
         doReturn(proxyRouterProcessingStateAttrMock).when(channelMock).attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY);
+        doReturn(proxyRouterProcessingStateMock).when(proxyRouterProcessingStateAttrMock).get();
 
         handler = new RequestStateCleanerHandler(
             metricsListenerMock, incompleteHttpCallTimeoutMillis, distributedTracingConfigMock
@@ -133,33 +136,49 @@ public class RequestStateCleanerHandlerTest {
     @Test
     public void channelRead_creates_new_state_if_one_does_not_already_exist() throws Exception {
         // given
-        AtomicReference<HttpProcessingState> stateRef = new AtomicReference<>(null);
-        doAnswer(invocation -> stateRef.get()).when(stateAttrMock).get();
+        AtomicReference<HttpProcessingState> httpStateRef = new AtomicReference<>(null);
+        doAnswer(invocation -> httpStateRef.get()).when(stateAttrMock).get();
         doAnswer(
             invocation -> {
-                stateRef.set(invocation.getArgumentAt(0, HttpProcessingState.class));
+                httpStateRef.set(invocation.getArgumentAt(0, HttpProcessingState.class));
                 return null;
             }
         ).when(stateAttrMock).set(any(HttpProcessingState.class));
+
+        AtomicReference<ProxyRouterProcessingState> proxyStateRef = new AtomicReference<>(null);
+        doAnswer(invocation -> proxyStateRef.get()).when(proxyRouterProcessingStateAttrMock).get();
+        doAnswer(
+            invocation -> {
+                proxyStateRef.set(invocation.getArgumentAt(0, ProxyRouterProcessingState.class));
+                return null;
+            }
+        ).when(proxyRouterProcessingStateAttrMock).set(any(ProxyRouterProcessingState.class));
 
         // when
         handler.channelRead(ctxMock, msgMockFirstChunkOnly);
 
         // then
         // Verify a real HttpProcessingState was created and set on the stateAttrMock.
-        HttpProcessingState actualState = stateRef.get();
-        assertThat(actualState).isNotNull();
-        verify(stateAttrMock).set(actualState);
+        HttpProcessingState actualHttpState = httpStateRef.get();
+        assertThat(actualHttpState).isNotNull();
+        verify(stateAttrMock).set(actualHttpState);
 
-        // Verify the expected DistributedTracingConfig was set on the new state.
-        assertThat(Whitebox.getInternalState(actualState, "distributedTracingConfig"))
+        // Verify the expected DistributedTracingConfig was set on the new HTTP state.
+        assertThat(Whitebox.getInternalState(actualHttpState, "distributedTracingConfig"))
+            .isSameAs(distributedTracingConfigMock);
+
+        // Do the same verifications for ProxyRouterProcessingState.
+        ProxyRouterProcessingState actualProxyState = proxyStateRef.get();
+        assertThat(actualProxyState).isNotNull();
+        verify(proxyRouterProcessingStateAttrMock).set(actualProxyState);
+        assertThat(Whitebox.getInternalState(actualProxyState, "distributedTracingConfig"))
             .isSameAs(distributedTracingConfigMock);
 
         // Verify metrics listener was called for a request received event using the new state.
-        verify(metricsListenerMock).onEvent(eq(ServerMetricsEvent.REQUEST_RECEIVED), eq(actualState));
+        verify(metricsListenerMock).onEvent(eq(ServerMetricsEvent.REQUEST_RECEIVED), eq(actualHttpState));
 
-        // sanity check - we should have rewired stateAttrMock to not do anything with stateMock.
-        verifyZeroInteractions(stateMock);
+        // sanity check - we should have rewired attr mocks to not do anything with the state mocks.
+        verifyZeroInteractions(stateMock, proxyRouterProcessingStateMock);
     }
 
     @Test

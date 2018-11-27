@@ -506,6 +506,10 @@ public class AsyncNettyHelper {
                     Tracer.getInstance().completeRequestSpan();
                 }
 
+                // TODO: What about finishing metrics? Is there a chance metrics aren't being completed?
+                //      We might need to make the change to *not* clear and reuse HttpProcessingState on subsequent
+                //      requests before tackling this.
+
                 return false;
             }
             finally {

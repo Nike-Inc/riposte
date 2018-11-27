@@ -8,8 +8,9 @@ import org.jetbrains.annotations.NotNull;
  * An extension of {@link DistributedTracingConfigImpl} that expects Wingtips {@link Span} for the span type.
  * By default (default constructor, or {@link #getDefaultInstance()}), you'll get {@link
  * DefaultRiposteServerSpanNamingAndTaggingStrategy#getDefaultInstance()} for the server span naming and tagging
- * strategy. You can also use the alternate constructor to specify a custom {@link ServerSpanNamingAndTaggingStrategy}
- * if needed.
+ * strategy, and {@link DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy#getDefaultInstance()} for the
+ * proxy/router span naming and tagging strategy. You can also use the alternate constructor to specify a custom
+ * {@link ServerSpanNamingAndTaggingStrategy} and {@link ProxyRouterSpanNamingAndTaggingStrategy} if needed.
  *
  * @author Nic Munroe
  */
@@ -30,22 +31,31 @@ public class DefaultRiposteDistributedTracingConfigImpl extends DistributedTraci
 
     /**
      * Creates a new instance that uses {@link DefaultRiposteServerSpanNamingAndTaggingStrategy#getDefaultInstance()}
-     * for the {@link #getServerSpanNamingAndTaggingStrategy()}.
+     * for the {@link #getServerSpanNamingAndTaggingStrategy()}, and {@link
+     * DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy#getDefaultInstance()} for the {@link
+     * #getProxyRouterSpanNamingAndTaggingStrategy()}.
      */
     public DefaultRiposteDistributedTracingConfigImpl() {
-        this(DefaultRiposteServerSpanNamingAndTaggingStrategy.getDefaultInstance());
+        this(
+            DefaultRiposteServerSpanNamingAndTaggingStrategy.getDefaultInstance(),
+            DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy.getDefaultInstance()
+        );
     }
 
     /**
      * Creates a new instance that uses the given {@link ServerSpanNamingAndTaggingStrategy} for the
-     * {@link #getServerSpanNamingAndTaggingStrategy()}.
+     * {@link #getServerSpanNamingAndTaggingStrategy()}, and the given {@link ProxyRouterSpanNamingAndTaggingStrategy}
+     * for the {@link #getProxyRouterSpanNamingAndTaggingStrategy()}.
      *
      * @param serverSpanNamingAndTaggingStrategy The {@link ServerSpanNamingAndTaggingStrategy} to use when
      * {@link #getServerSpanNamingAndTaggingStrategy()} is called.
+     * @param proxyRouterSpanNamingAndTaggingStrategy The object that should be returned when
+     * {@link #getProxyRouterSpanNamingAndTaggingStrategy()} is called.
      */
     public DefaultRiposteDistributedTracingConfigImpl(
-        @NotNull ServerSpanNamingAndTaggingStrategy<Span> serverSpanNamingAndTaggingStrategy
+        @NotNull ServerSpanNamingAndTaggingStrategy<Span> serverSpanNamingAndTaggingStrategy,
+        @NotNull ProxyRouterSpanNamingAndTaggingStrategy<Span> proxyRouterSpanNamingAndTaggingStrategy
     ) {
-        super(serverSpanNamingAndTaggingStrategy, Span.class);
+        super(serverSpanNamingAndTaggingStrategy, proxyRouterSpanNamingAndTaggingStrategy, Span.class);
     }
 }

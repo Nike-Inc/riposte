@@ -1,8 +1,6 @@
 package com.nike.riposte.server.config.distributedtracing;
 
-import com.nike.riposte.server.http.RequestInfo;
-import com.nike.riposte.server.http.ResponseInfo;
-import com.nike.trace.netty.RiposteWingtipsServerTagAdapter;
+import com.nike.trace.netty.RiposteWingtipsNettyClientTagAdapter;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.SpanMutator;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
@@ -12,45 +10,49 @@ import com.nike.wingtips.tags.ZipkinHttpTagStrategy;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
+
 /**
- * A concrete implementation of {@link ServerSpanNamingAndTaggingStrategy} that works with Wingtips {@link Span}s,
+ * A concrete implementation of {@link ProxyRouterSpanNamingAndTaggingStrategy} that works with Wingtips {@link Span}s,
  * and delegates the work to the Wingtips {@link HttpTagAndSpanNamingStrategy} and {@link HttpTagAndSpanNamingAdapter}
  * classes.
  *
  * <p>By default (default constructor, or {@link #getDefaultInstance()}) you'll get {@link
  * ZipkinHttpTagStrategy#getDefaultInstance()} for the Wingtips strategy and {@link
- * RiposteWingtipsServerTagAdapter#getDefaultInstance()} for the adapter.
+ * RiposteWingtipsNettyClientTagAdapter#getDefaultInstance()} for the adapter.
  *
  * <p>You can use the alternate constructor if you want different implementations, e.g. you could pass a custom {@link
- * RiposteWingtipsServerTagAdapter} that overrides {@link RiposteWingtipsServerTagAdapter#getInitialSpanName(Object)}
- * and/or {@link RiposteWingtipsServerTagAdapter#getFinalSpanName(Object, Object)} if you want to adjust the span
- * names that are generated.
+ * RiposteWingtipsNettyClientTagAdapter} that overrides {@link
+ * RiposteWingtipsNettyClientTagAdapter#getInitialSpanName(Object)} and/or {@link
+ * RiposteWingtipsNettyClientTagAdapter#getFinalSpanName(Object, Object)} if you want to adjust the span names that
+ * are generated.
  *
  * @author Nic Munroe
  */
-@SuppressWarnings("WeakerAccess")
-public class DefaultRiposteServerSpanNamingAndTaggingStrategy extends ServerSpanNamingAndTaggingStrategy<Span> {
+public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy
+    extends ProxyRouterSpanNamingAndTaggingStrategy<Span> {
 
-    protected final @NotNull HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> tagAndNamingStrategy;
-    protected final @NotNull HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> tagAndNamingAdapter;
-
-    protected static final DefaultRiposteServerSpanNamingAndTaggingStrategy DEFAULT_INSTANCE =
-        new DefaultRiposteServerSpanNamingAndTaggingStrategy();
+    protected final @NotNull HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> tagAndNamingStrategy;
+    protected final @NotNull HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> tagAndNamingAdapter;
+    
+    protected static final DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy DEFAULT_INSTANCE =
+        new DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy();
 
     /**
      * @return A reusable, thread-safe, singleton instance of this class that can be used by anybody who wants to use
      * this class and does not need any customization.
      */
-    public static DefaultRiposteServerSpanNamingAndTaggingStrategy getDefaultInstance() {
+    public static DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy getDefaultInstance() {
         return DEFAULT_INSTANCE;
     }
 
     /**
      * Creates a new instance that uses {@link ZipkinHttpTagStrategy#getDefaultInstance()} and {@link
-     * RiposteWingtipsServerTagAdapter#getDefaultInstance()} to do the work of span naming and tagging.
+     * RiposteWingtipsNettyClientTagAdapter#getDefaultInstance()} to do the work of span naming and tagging.
      */
-    public DefaultRiposteServerSpanNamingAndTaggingStrategy() {
-        this(ZipkinHttpTagStrategy.getDefaultInstance(), RiposteWingtipsServerTagAdapter.getDefaultInstance());
+    public DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy() {
+        this(ZipkinHttpTagStrategy.getDefaultInstance(), RiposteWingtipsNettyClientTagAdapter.getDefaultInstance());
     }
 
     /**
@@ -60,9 +62,9 @@ public class DefaultRiposteServerSpanNamingAndTaggingStrategy extends ServerSpan
      * @param tagAndNamingAdapter The {@link HttpTagAndSpanNamingAdapter} to use.
      */
     @SuppressWarnings("ConstantConditions")
-    public DefaultRiposteServerSpanNamingAndTaggingStrategy(
-        @NotNull HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> tagAndNamingStrategy,
-        @NotNull HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> tagAndNamingAdapter
+    public DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy(
+        @NotNull HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> tagAndNamingStrategy,
+        @NotNull HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> tagAndNamingAdapter
     ) {
         if (tagAndNamingStrategy == null) {
             throw new IllegalArgumentException(
@@ -81,30 +83,23 @@ public class DefaultRiposteServerSpanNamingAndTaggingStrategy extends ServerSpan
     }
 
     @Override
-    public @Nullable String doGetInitialSpanName(
-        @NotNull RequestInfo<?> request
-    ) {
+    protected @Nullable String doGetInitialSpanName(@NotNull HttpRequest request) {
         return tagAndNamingStrategy.getInitialSpanName(request, tagAndNamingAdapter);
     }
 
     @Override
-    public void doChangeSpanName(@NotNull Span span, @NotNull String newName) {
+    protected void doChangeSpanName(@NotNull Span span, @NotNull String newName) {
         SpanMutator.changeSpanName(span, newName);
     }
 
     @Override
-    public void doHandleRequestTagging(
-        @NotNull Span span, @NotNull RequestInfo<?> request
-    ) {
+    protected void doHandleRequestTagging(@NotNull Span span, @NotNull HttpRequest request) {
         tagAndNamingStrategy.handleRequestTagging(span, request, tagAndNamingAdapter);
     }
 
     @Override
-    public void doHandleResponseTaggingAndFinalSpanName(
-        @NotNull Span span,
-        @Nullable RequestInfo<?> request,
-        @Nullable ResponseInfo<?> response,
-        @Nullable Throwable error
+    protected void doHandleResponseTaggingAndFinalSpanName(
+        @NotNull Span span, @Nullable HttpRequest request, @Nullable HttpResponse response, @Nullable Throwable error
     ) {
         tagAndNamingStrategy.handleResponseTaggingAndFinalSpanName(
             span, request, response, error, tagAndNamingAdapter

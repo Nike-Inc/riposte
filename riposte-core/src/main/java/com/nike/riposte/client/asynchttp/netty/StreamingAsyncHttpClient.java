@@ -2,18 +2,26 @@ package com.nike.riposte.client.asynchttp.netty;
 
 import com.nike.backstopper.exception.WrapperException;
 import com.nike.internal.util.Pair;
+import com.nike.internal.util.StringUtils;
 import com.nike.riposte.client.asynchttp.netty.downstreampipeline.DownstreamIdleChannelTimeoutHandler;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.wingtips.Span;
+import com.nike.wingtips.Span.TimestampedAnnotation;
 import com.nike.wingtips.Tracer;
 import com.nike.wingtips.http.HttpRequestTracingUtils;
+import com.nike.wingtips.tags.KnownZipkinTags;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -68,6 +76,7 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpObjectDecoder;
 import io.netty.handler.codec.http.HttpObjectEncoder;
@@ -128,13 +137,20 @@ public class StreamingAsyncHttpClient {
             System.getProperty(SHOULD_LOG_BAD_MESSAGES_AFTER_REQUEST_FINISHES_SYSTEM_PROP_KEY, "false").trim()
     );
 
+    private final @NotNull ProxyRouterSpanNamingAndTaggingStrategy<Span> proxySpanTaggingStrategy;
+
     private final Random randomGenerator = new Random();
 
-    public StreamingAsyncHttpClient(long idleChannelTimeoutMillis, long downstreamConnectionTimeoutMillis,
-                                    boolean debugChannelLifecycleLoggingEnabled) {
+    public StreamingAsyncHttpClient(
+        long idleChannelTimeoutMillis,
+        long downstreamConnectionTimeoutMillis,
+        boolean debugChannelLifecycleLoggingEnabled,
+        @NotNull DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
         this.idleChannelTimeoutMillis = idleChannelTimeoutMillis;
         this.downstreamConnectionTimeoutMillis = Math.toIntExact(downstreamConnectionTimeoutMillis);
         this.debugChannelLifecycleLoggingEnabled = debugChannelLifecycleLoggingEnabled;
+        this.proxySpanTaggingStrategy = distributedTracingConfig.getProxyRouterSpanNamingAndTaggingStrategy();
     }
 
     public static class StreamingChannel {
@@ -145,21 +161,30 @@ public class StreamingAsyncHttpClient {
         protected final ObjectHolder<Boolean> downstreamLastChunkSentHolder;
         protected final Deque<Span> distributedTracingSpanStack;
         protected final Map<String, String> distributedTracingMdcInfo;
+        protected final Span spanForDownstreamCall;
+        protected final ProxyRouterSpanNamingAndTaggingStrategy<Span> proxySpanTaggingStrategy;
         protected boolean channelClosedDueToUnrecoverableError = false;
         private boolean alreadyLoggedMessageAboutIgnoringCloseDueToError = false;
+        private boolean alreadyHandledWireSendFinishAnnotation = false;
 
-        StreamingChannel(Channel channel,
-                         ChannelPool pool,
-                         ObjectHolder<Boolean> callActiveHolder,
-                         ObjectHolder<Boolean> downstreamLastChunkSentHolder,
-                         Deque<Span> distributedTracingSpanStack,
-                         Map<String, String> distributedTracingMdcInfo) {
+        StreamingChannel(
+            Channel channel,
+            ChannelPool pool,
+            ObjectHolder<Boolean> callActiveHolder,
+            ObjectHolder<Boolean> downstreamLastChunkSentHolder,
+            Deque<Span> distributedTracingSpanStack,
+            Map<String, String> distributedTracingMdcInfo,
+            Span spanForDownstreamCall,
+            ProxyRouterSpanNamingAndTaggingStrategy<Span> proxySpanTaggingStrategy
+        ) {
             this.channel = channel;
             this.pool = pool;
             this.callActiveHolder = callActiveHolder;
             this.downstreamLastChunkSentHolder = downstreamLastChunkSentHolder;
             this.distributedTracingSpanStack = distributedTracingSpanStack;
             this.distributedTracingMdcInfo = distributedTracingMdcInfo;
+            this.spanForDownstreamCall = spanForDownstreamCall;
+            this.proxySpanTaggingStrategy = proxySpanTaggingStrategy;
         }
 
         /**
@@ -224,14 +249,18 @@ public class StreamingAsyncHttpClient {
             // We are in the channel's event loop. Do some final checks to make sure it's still ok to write and flush
             //      the message, then do it (or handle the special cases appropriately).
             try {
-                if (downstreamLastChunkSentHolder.heldObject
-                    && (chunkToWrite instanceof LastHttpContent)
+                boolean chunkIsLastHttpContent = (chunkToWrite instanceof LastHttpContent);
+
+                if (
+                    downstreamLastChunkSentHolder.heldObject
+                    && chunkIsLastHttpContent
                     && chunkToWrite.content().readableBytes() == 0
-                    ) {
+                ) {
                     // A LastHttpContent has already been written downstream. This is valid/legal when the downstream call
                     //      has a content-length header, and the downstream pipeline encoder realizes there's no more
                     //      content to write and generates a synthetic empty LastHttpContent rather than waiting for this
-                    //      one to arrive. Therefore there's nothing to do but release the content chunk and return an
+                    //      one to arrive. Therefore there's nothing to do but handle the wire-send-finish annotation
+                    //      (if not already done), release the content chunk, and return an
                     //      already-successfully-completed future.
                     if (logger.isDebugEnabled()) {
                         runnableWithTracingAndMdc(
@@ -240,6 +269,7 @@ public class StreamingAsyncHttpClient {
                             distributedTracingSpanStack, distributedTracingMdcInfo
                         ).run();
                     }
+                    handleWireSendFinishAnnotationIfNecessary();
                     chunkToWrite.release();
                     return channel.newSucceededFuture();
                 }
@@ -259,6 +289,11 @@ public class StreamingAsyncHttpClient {
                     );
                 }
 
+                // Handle the wire-send-finish annotation if this is the last chunk.
+                if (chunkIsLastHttpContent) {
+                    handleWireSendFinishAnnotationIfNecessary();
+                }
+
                 return channel.writeAndFlush(chunkToWrite);
             }
             catch(Throwable t) {
@@ -272,6 +307,21 @@ public class StreamingAsyncHttpClient {
 
                 logger.error(errorMsg, exceptionToPass);
                 return channel.newFailedFuture(exceptionToPass);
+            }
+        }
+
+        protected void handleWireSendFinishAnnotationIfNecessary() {
+            if (alreadyHandledWireSendFinishAnnotation) {
+                return;
+            }
+
+            alreadyHandledWireSendFinishAnnotation = true;
+
+            // Add the wire-send-finish annotation if we have a span and the annotation is desired.
+            if ((spanForDownstreamCall != null) && proxySpanTaggingStrategy.shouldAddWireSendFinishAnnotation()) {
+                spanForDownstreamCall.addTimestampedAnnotationForCurrentTime(
+                    proxySpanTaggingStrategy.wireSendFinishAnnotationName()
+                );
             }
         }
 
@@ -516,7 +566,7 @@ public class StreamingAsyncHttpClient {
 
     protected static class ChannelPoolHandlerImpl extends AbstractChannelPoolHandler {
         @Override
-        public void channelCreated(Channel ch) throws Exception {
+        public void channelCreated(Channel ch) {
             // NOOP
         }
     }
@@ -589,6 +639,9 @@ public class StreamingAsyncHttpClient {
         boolean performSubSpanAroundDownstreamCalls, boolean addTracingHeadersToDownstreamCall,
         ChannelHandlerContext ctx
     ) {
+        ProxyRouterProcessingState proxyRouterProcessingState =
+            ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
+
         CompletableFuture<StreamingChannel> streamingChannel = new CompletableFuture<>();
 
         // set host header. include port in value when it is a non-default port
@@ -650,27 +703,71 @@ public class StreamingAsyncHttpClient {
                 // Do a subspan around the downstream call if desired.
                 //noinspection ConstantConditions
                 if (performSubSpanAroundDownstreamCalls) {
+                    // TODO: The subspan start stuff should probably be moved to the beginning of
+                    //      streamDownstreamCall(), so that we pick up connection setup time (and can annotate conn
+                    //      start/finish). For now, we'll fake it by annotating conn start/finish time on the subspan
+                    //      at a negative time offset. So they'll be "in the past" from the perspective of the subspan.
+
                     // Add the subspan.
                     String spanName = getSubspanSpanName(
-                        initialRequestChunk.method().name(),
-                        downstreamHost + ":" + downstreamPort + initialRequestChunk.uri()
+                        initialRequestChunk,
+                        proxySpanTaggingStrategy
                     );
-                    if (Tracer.getInstance().getCurrentSpan() == null) {
-                        // There is no parent span to start a subspan from, so we have to start a new span for this call
-                        //      rather than a subspan.
-                        // TODO: Set this to CLIENT once we have that ability in the wingtips API for request root spans
-                        Tracer.getInstance().startRequestWithRootSpan(spanName);
+
+                    // Start a new child/subspan for this call if possible, falling back to a new request span (rather
+                    //      than child/subspan) if there's no current span on the thread. The
+                    //      startSpanInCurrentContext() method will do the right thing here in either case.
+                    Span subspan = Tracer.getInstance().startSpanInCurrentContext(spanName, Span.SpanPurpose.CLIENT);
+
+                    // Do the auto-tagging based on the request.
+                    proxySpanTaggingStrategy.handleRequestTagging(subspan, initialRequestChunk);
+
+                    // Manually add downstream host and port tags since they aren't done by the auto-tagging, and
+                    //      this is something we definitely want for proxy/router requests.
+                    try {
+                        subspan.putTag(KnownZipkinTags.HTTP_HOST, downstreamHost + ":" + downstreamPort);
                     }
-                    else {
-                        // There was at least one span on the stack, so we can start a subspan for this call.
-                        Tracer.getInstance().startSubSpan(spanName, Span.SpanPurpose.CLIENT);
+                    catch (Throwable t) {
+                        logger.error(
+                            "An unexpected error occurred while adding downstream host and port tags. The error will "
+                            + "be swallowed to avoid doing any damage, but your span may be missing some expected "
+                            + "tags. This error should be fixed.",
+                            t
+                        );
+                    }
+
+                    // Add the initial HttpRequest to our ProxyRouterProcessingState so it's available for final
+                    //      response tagging and span naming at the end.
+                    if (proxyRouterProcessingState != null) {
+                        proxyRouterProcessingState.setProxyHttpRequest(initialRequestChunk);
+                    }
+
+                    // Add the connection start/finish annotations if desired. These will show up before the subspan
+                    //      start timestamp because the span is currently starting after the connection is established,
+                    //      which is wrong. But it's something we'll have to fix later. For now, at least the conn
+                    //      start/finish will be available (and correct), even if they show up oddly before the subspan
+                    //      start time.
+                    if (proxySpanTaggingStrategy.shouldAddConnStartAnnotation()) {
+                        subspan.addTimestampedAnnotation(TimestampedAnnotation.forEpochMicrosWithNanoOffset(
+                            subspan.getSpanStartTimeEpochMicros(),
+                            -connectionSetupTimeNanos,
+                            proxySpanTaggingStrategy.connStartAnnotationName()
+                        ));
+                    }
+
+                    if (proxySpanTaggingStrategy.shouldAddConnFinishAnnotation()) {
+                        subspan.addTimestampedAnnotation(TimestampedAnnotation.forEpochMicros(
+                            subspan.getSpanStartTimeEpochMicros(),
+                            proxySpanTaggingStrategy.connFinishAnnotationName()
+                        ));
                     }
                 }
 
                 Deque<Span> distributedSpanStackToUse = Tracer.getInstance().getCurrentSpanStackCopy();
                 Map<String, String> mdcContextToUse = MDC.getCopyOfContextMap();
 
-                Span spanForDownstreamCall = (distributedSpanStackToUse == null)
+                @Nullable
+                final Span spanForDownstreamCall = (distributedSpanStackToUse == null)
                                              ? null
                                              : distributedSpanStackToUse.peek();
 
@@ -715,12 +812,22 @@ public class StreamingAsyncHttpClient {
                         prepChannelForDownstreamCall(
                             pool, ch, callback, distributedSpanStackToUse, mdcContextToUse, isSecureHttpsCall,
                             relaxedHttpsValidation, performSubSpanAroundDownstreamCalls, downstreamCallTimeoutMillis,
-                            callActiveHolder, lastChunkSentDownstreamHolder
+                            callActiveHolder, lastChunkSentDownstreamHolder, proxyRouterProcessingState,
+                            spanForDownstreamCall
                         );
 
                         logInitialRequestChunk(initialRequestChunk, downstreamHost, downstreamPort);
 
-                        // Send the HTTP request.
+                        // Send the HTTP request, and do a wire-send start annotation on the subspan if desired.
+                        if (
+                            spanForDownstreamCall != null
+                            && proxySpanTaggingStrategy.shouldAddWireSendStartAnnotation()
+                        ) {
+                            spanForDownstreamCall.addTimestampedAnnotationForCurrentTime(
+                                proxySpanTaggingStrategy.wireSendStartAnnotationName()
+                            );
+                        }
+
                         ChannelFuture writeFuture = ch.writeAndFlush(initialRequestChunk);
 
                         // After the initial chunk has been sent we'll open the floodgates
@@ -729,7 +836,8 @@ public class StreamingAsyncHttpClient {
                             if (completedWriteFuture.isSuccess())
                                 streamingChannel.complete(new StreamingChannel(
                                     ch, pool, callActiveHolder, lastChunkSentDownstreamHolder,
-                                    distributedSpanStackToUse, mdcContextToUse
+                                    distributedSpanStackToUse, mdcContextToUse, spanForDownstreamCall,
+                                    proxySpanTaggingStrategy
                                 ));
                             else {
                                 prepChannelErrorHandler.accept(
@@ -787,12 +895,13 @@ public class StreamingAsyncHttpClient {
         ChannelPool pool, Channel ch, StreamingCallback callback, Deque<Span> distributedSpanStackToUse,
         Map<String, String> mdcContextToUse, boolean isSecureHttpsCall, boolean relaxedHttpsValidation,
         boolean performSubSpanAroundDownstreamCalls, long downstreamCallTimeoutMillis,
-        ObjectHolder<Boolean> callActiveHolder, ObjectHolder<Boolean> lastChunkSentDownstreamHolder
+        ObjectHolder<Boolean> callActiveHolder, ObjectHolder<Boolean> lastChunkSentDownstreamHolder,
+        ProxyRouterProcessingState proxyRouterProcessingState, @Nullable Span spanForDownstreamCall
     ) throws SSLException, NoSuchAlgorithmException, KeyStoreException {
 
         ChannelHandler chunkSenderHandler = new SimpleChannelInboundHandler<HttpObject>() {
             @Override
-            protected void channelRead0(ChannelHandlerContext downstreamCallCtx, HttpObject msg) throws Exception {
+            protected void channelRead0(ChannelHandlerContext downstreamCallCtx, HttpObject msg) {
                 try {
                     // Only do the distributed trace and callback work if the call is active. Messages that pop up after
                     //      the call is fully processed should not trigger the behavior a second time.
@@ -804,6 +913,19 @@ public class StreamingAsyncHttpClient {
                                 // Complete the subspan.
                                 runnableWithTracingAndMdc(
                                     () -> {
+                                        Span currentSpan = Tracer.getInstance().getCurrentSpan();
+                                        if (proxyRouterProcessingState != null) {
+                                            proxyRouterProcessingState.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(
+                                                currentSpan
+                                            );
+                                        }
+
+                                        if (proxySpanTaggingStrategy.shouldAddWireReceiveFinishAnnotation()) {
+                                            currentSpan.addTimestampedAnnotationForCurrentTime(
+                                                proxySpanTaggingStrategy.wireReceiveFinishAnnotationName()
+                                            );
+                                        }
+
                                         if (distributedSpanStackToUse == null || distributedSpanStackToUse.size() < 2)
                                             Tracer.getInstance().completeRequestSpan();
                                         else
@@ -833,6 +955,19 @@ public class StreamingAsyncHttpClient {
                                                                                   origHttpResponse.status());
                             httpResponse.headers().add(origHttpResponse.headers());
                             msgToPass = httpResponse;
+
+                            if (proxyRouterProcessingState != null) {
+                                proxyRouterProcessingState.setProxyHttpResponse(httpResponse);
+                            }
+
+                            if (
+                                spanForDownstreamCall != null
+                                && proxySpanTaggingStrategy.shouldAddWireReceiveStartAnnotation()
+                            ) {
+                                spanForDownstreamCall.addTimestampedAnnotationForCurrentTime(
+                                    proxySpanTaggingStrategy.wireReceiveStartAnnotationName()
+                                );
+                            }
                         }
 
                         callback.messageReceived(msgToPass);
@@ -865,7 +1000,32 @@ public class StreamingAsyncHttpClient {
                 // Only do the distributed trace and callback work if the call is active. Errors that pop up after the
                 //      call is fully processed should not trigger the behavior a second time.
                 if (callActiveHolder.heldObject) {
+                    if (proxyRouterProcessingState != null) {
+                        proxyRouterProcessingState.setProxyError(cause);
+                    }
+
                     if (performSubSpanAroundDownstreamCalls) {
+                        Span currentSpan = Tracer.getInstance().getCurrentSpan();
+
+                        HttpResponse proxyHttpResponseObj = (proxyRouterProcessingState == null)
+                                                            ? null
+                                                            : proxyRouterProcessingState.getProxyHttpResponse();
+                        if (
+                            currentSpan != null
+                            && proxySpanTaggingStrategy.shouldAddErrorAnnotationForCaughtException(proxyHttpResponseObj,
+                                                                                                   cause)
+                        ) {
+                            currentSpan.addTimestampedAnnotationForCurrentTime(
+                                proxySpanTaggingStrategy.errorAnnotationName(proxyHttpResponseObj, cause)
+                            );
+                        }
+
+                        if (proxyRouterProcessingState != null) {
+                            proxyRouterProcessingState.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(
+                                currentSpan
+                            );
+                        }
+
                         if (distributedSpanStackToUse == null || distributedSpanStackToUse.size() < 2)
                             Tracer.getInstance().completeRequestSpan();
                         else
@@ -924,7 +1084,7 @@ public class StreamingAsyncHttpClient {
 
         ChannelHandler errorHandler = new ChannelInboundHandlerAdapter() {
             @Override
-            public void exceptionCaught(ChannelHandlerContext downstreamCallCtx, Throwable cause) throws Exception {
+            public void exceptionCaught(ChannelHandlerContext downstreamCallCtx, Throwable cause) {
                 doErrorHandlingConsumer.accept(cause);
             }
 
@@ -1176,10 +1336,43 @@ public class StreamingAsyncHttpClient {
     }
 
     /**
-     * @return The span name that should be used for the downstream call's subspan.
+     * Returns the name that should be used for the span surrounding the downstream call. Defaults to whatever {@link
+     * ProxyRouterSpanNamingAndTaggingStrategy#getInitialSpanName(Object)} returns, with a fallback
+     * of {@link HttpRequestTracingUtils#getFallbackSpanNameForHttpRequest(String, String)} if the naming strategy
+     * returned null or blank string.
+     *
+     * @param downstreamRequest The Netty {@link HttpRequest} for the downstream call.
+     * @param namingStrategy The {@link ProxyRouterSpanNamingAndTaggingStrategy} being used.
+     * @return The name that should be used for the span surrounding the downstream call.
      */
-    protected String getSubspanSpanName(String httpMethod, String url) {
-        return "async_downstream_call-" + httpMethod + "_" + url;
+    protected @NotNull String getSubspanSpanName(
+        @NotNull HttpRequest downstreamRequest,
+        @NotNull ProxyRouterSpanNamingAndTaggingStrategy<Span> namingStrategy
+    ) {
+        String spanNameFromStrategy = namingStrategy.getInitialSpanName(downstreamRequest);
+
+        if (StringUtils.isNotBlank(spanNameFromStrategy)) {
+            return spanNameFromStrategy;
+        }
+
+        // The naming strategy didn't have anything for us. Fall back to something reasonable.
+        return getFallbackSpanName(downstreamRequest);
+    }
+
+    protected @NotNull String getFallbackSpanName(@NotNull HttpRequest downstreamRequest) {
+        try {
+            HttpMethod method = downstreamRequest.method();
+            String methodName = (method == null) ? null : method.name();
+            return HttpRequestTracingUtils.getFallbackSpanNameForHttpRequest("async_downstream_call", methodName);
+        }
+        catch (Throwable t) {
+            logger.error(
+                "An unexpected error occurred while trying to extract fallback span name from Netty HttpRequest. "
+                + "A hardcoded fallback name will be used as a last resort, however this error should be investigated "
+                + "as it shouldn't be possible.", t
+            );
+            return "async_downstream_call-UNKNOWN_HTTP_METHOD";
+        }
     }
 
     protected static class ObjectHolder<T> {

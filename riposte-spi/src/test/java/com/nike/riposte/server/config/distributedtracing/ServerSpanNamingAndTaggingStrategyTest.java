@@ -19,43 +19,37 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 public class ServerSpanNamingAndTaggingStrategyTest {
 
     @Test
-    public void default_method_implementations_return_expected_values() {
+    public void default_annotation_method_implementations_return_expected_values() {
         // given
         ServerSpanNamingAndTaggingStrategy<?> defaultImpl = new DefaultServerSpanNamingAndTaggingStrategy();
         ResponseInfo<?> responseMock = mock(ResponseInfo.class);
         Throwable errorMock = mock(Throwable.class);
 
         // expect
-        assertThat(defaultImpl.shouldAddWireReceiveStartAnnotation()).isTrue();
-        assertThat(defaultImpl.wireReceiveStartAnnotationName()).isEqualTo("wr.start");
-        assertThat(defaultImpl.shouldAddWireReceiveFinishAnnotation()).isTrue();
-        assertThat(defaultImpl.wireReceiveFinishAnnotationName()).isEqualTo("wr.finish");
-        assertThat(defaultImpl.shouldAddWireSendStartAnnotation()).isTrue();
-        assertThat(defaultImpl.wireSendStartAnnotationName()).isEqualTo("ws.start");
-        assertThat(defaultImpl.shouldAddWireSendFinishAnnotation()).isTrue();
-        assertThat(defaultImpl.wireSendFinishAnnotationName()).isEqualTo("ws.finish");
-        assertThat(defaultImpl.shouldAddErrorAnnotationForCaughtException(responseMock, errorMock)).isTrue();
-        assertThat(defaultImpl.errorAnnotationName(responseMock, errorMock)).isEqualTo("error");
+        assertThat(defaultImpl.shouldAddEndpointStartAnnotation()).isTrue();
+        assertThat(defaultImpl.endpointStartAnnotationName()).isEqualTo("endpoint.start");
+        assertThat(defaultImpl.shouldAddEndpointFinishAnnotation()).isTrue();
+        assertThat(defaultImpl.endpointFinishAnnotationName()).isEqualTo("endpoint.finish");
 
         verifyZeroInteractions(responseMock, errorMock);
     }
 
-    private static class DefaultServerSpanNamingAndTaggingStrategy<S> implements ServerSpanNamingAndTaggingStrategy<S> {
+    private static class DefaultServerSpanNamingAndTaggingStrategy<S> extends ServerSpanNamingAndTaggingStrategy<S> {
 
         @Override
-        public @Nullable String getInitialSpanName(@NotNull RequestInfo<?> request) { return null; }
+        public @Nullable String doGetInitialSpanName(@NotNull RequestInfo<?> request) { return null; }
 
         @Override
-        public void changeSpanName(@NotNull S span, @NotNull String newName) { }
+        public void doChangeSpanName(@NotNull S span, @NotNull String newName) { }
 
         @Override
-        public void handleResponseTaggingAndFinalSpanName(
+        public void doHandleResponseTaggingAndFinalSpanName(
             @NotNull S span, @Nullable RequestInfo<?> request, @Nullable ResponseInfo<?> response,
             @Nullable Throwable error
         ) { }
 
         @Override
-        public void handleRequestTagging(@NotNull S span, @NotNull RequestInfo<?> request) { }
+        public void doHandleRequestTagging(@NotNull S span, @NotNull RequestInfo<?> request) { }
     }
 
 }

@@ -1,8 +1,8 @@
 package com.nike.riposte.server.http;
 
-import com.nike.riposte.server.config.distributedtracing.DefaultRiposteServerSpanNamingAndTaggingStrategy;
+import com.nike.riposte.server.config.distributedtracing.DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
-import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.InitialSpanNameArgs;
 import com.nike.riposte.server.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.RequestTaggingArgs;
@@ -11,18 +11,18 @@ import com.nike.wingtips.Span;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
 
-import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -33,36 +33,36 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 /**
- * Tests the functionality of {@link HttpProcessingState}.
+ * Tests the functionality of {@link ProxyRouterProcessingState}.
  *
  * @author Nic Munroe
  */
 @RunWith(DataProviderRunner.class)
-public class HttpProcessingStateTest {
+public class ProxyRouterProcessingStateTest {
 
-    private HttpProcessingState stateSpy;
+    private ProxyRouterProcessingState stateSpy;
 
-    private HttpTagAndSpanNamingStrategy<RequestInfo<?>, ResponseInfo<?>> wingtipsStrategy;
-    private HttpTagAndSpanNamingAdapter<RequestInfo<?>, ResponseInfo<?>> wingtipsAdapterMock;
+    private HttpTagAndSpanNamingStrategy<HttpRequest, HttpResponse> wingtipsStrategy;
+    private HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> wingtipsAdapterMock;
     private AtomicReference<String> initialSpanNameFromStrategy;
     private AtomicBoolean strategyInitialSpanNameMethodCalled;
     private AtomicBoolean strategyRequestTaggingMethodCalled;
     private AtomicBoolean strategyResponseTaggingAndFinalSpanNameMethodCalled;
-    private AtomicReference<InitialSpanNameArgs<RequestInfo<?>>> strategyInitialSpanNameArgs;
-    private AtomicReference<RequestTaggingArgs<RequestInfo<?>>> strategyRequestTaggingArgs;
-    private AtomicReference<ResponseTaggingArgs<RequestInfo<?>, ResponseInfo<?>>> strategyResponseTaggingArgs;
+    private AtomicReference<InitialSpanNameArgs<HttpRequest>> strategyInitialSpanNameArgs;
+    private AtomicReference<RequestTaggingArgs<HttpRequest>> strategyRequestTaggingArgs;
+    private AtomicReference<ResponseTaggingArgs<HttpRequest, HttpResponse>> strategyResponseTaggingArgs;
 
     private DistributedTracingConfig<Span> distributedTracingConfigMock;
-    private ServerSpanNamingAndTaggingStrategy<Span> serverTaggingStrategy;
+    private ProxyRouterSpanNamingAndTaggingStrategy<Span> proxyTaggingStrategy;
 
     private Span spanMock;
-    private RequestInfo<?> requestMock;
-    private ResponseInfo<?> responseMock;
+    private HttpRequest requestMock;
+    private HttpResponse responseMock;
     private Throwable errorMock;
 
     @Before
     public void beforeMethod() {
-        stateSpy = spy(new HttpProcessingState());
+        stateSpy = spy(new ProxyRouterProcessingState());
 
         initialSpanNameFromStrategy = new AtomicReference<>("span-name-from-strategy-" + UUID.randomUUID().toString());
         strategyInitialSpanNameMethodCalled = new AtomicBoolean(false);
@@ -78,48 +78,15 @@ public class HttpProcessingStateTest {
         );
         wingtipsAdapterMock = mock(HttpTagAndSpanNamingAdapter.class);
 
-        serverTaggingStrategy = new DefaultRiposteServerSpanNamingAndTaggingStrategy(wingtipsStrategy, wingtipsAdapterMock);
+        proxyTaggingStrategy = new DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy(wingtipsStrategy, wingtipsAdapterMock);
 
-        requestMock = mock(RequestInfo.class);
-        responseMock = mock(ResponseInfo.class);
+        requestMock = mock(HttpRequest.class);
+        responseMock = mock(HttpResponse.class);
         errorMock = mock(Throwable.class);
         spanMock = mock(Span.class);
 
         distributedTracingConfigMock = mock(DistributedTracingConfig.class);
-        doReturn(serverTaggingStrategy).when(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
-    }
-
-    @DataProvider(value = {
-        "true",
-        "false"
-    })
-    @Test
-    public void getOverallRequestSpan_works_as_expected(boolean tracingStackIsNull) {
-        // given
-        Span firstSpanMock = mock(Span.class);
-        Span secondSpanMock = mock(Span.class);
-        Deque<Span> tracingStack =
-            (tracingStackIsNull)
-            ? null
-            : new ArrayDeque<>();
-
-        if (!tracingStackIsNull) {
-            tracingStack.push(firstSpanMock);
-            tracingStack.push(secondSpanMock);
-        }
-
-        stateSpy.setDistributedTraceStack(tracingStack);
-
-        // when
-        Span result = stateSpy.getOverallRequestSpan();
-
-        // then
-        if (tracingStackIsNull) {
-            assertThat(result).isNull();
-        }
-        else {
-            assertThat(result).isSameAs(firstSpanMock);
-        }
+        doReturn(proxyTaggingStrategy).when(distributedTracingConfigMock).getProxyRouterSpanNamingAndTaggingStrategy();
     }
 
     @Test
@@ -127,50 +94,48 @@ public class HttpProcessingStateTest {
         // given
         stateSpy.setDistributedTracingConfig(distributedTracingConfigMock);
 
-        Span overallRequestSpanMock = mock(Span.class);
-        doReturn(overallRequestSpanMock).when(stateSpy).getOverallRequestSpan();
+        Span downstreamReqSpanMock = mock(Span.class);
 
-        stateSpy.setRequestInfo(requestMock);
-        stateSpy.setResponseInfo(responseMock, errorMock);
+        stateSpy.setProxyHttpRequest(requestMock);
+        stateSpy.setProxyHttpResponse(responseMock);
+        stateSpy.setProxyError(errorMock);
 
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
 
         // when
-        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(downstreamReqSpanMock);
 
         // then
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isTrue();
 
         strategyResponseTaggingArgs.get().verifyArgs(
-            overallRequestSpanMock, requestMock, responseMock, errorMock, wingtipsAdapterMock
+            downstreamReqSpanMock, requestMock, responseMock, errorMock, wingtipsAdapterMock
         );
 
         // and when
         // Verify it only works once.
         strategyResponseTaggingArgs.set(null);
-        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(downstreamReqSpanMock);
 
         // then
         assertThat(strategyResponseTaggingArgs.get()).isNull();
     }
 
     @Test
-    public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone_does_nothing_if_overall_request_span_is_null() {
+    public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone_does_nothing_if_spanAroundProxyCall_is_null() {
         // given
-        doReturn(null).when(stateSpy).getOverallRequestSpan();
-        
         stateSpy.setDistributedTracingConfig(distributedTracingConfigMock);
 
-        stateSpy.setRequestInfo(requestMock);
-        stateSpy.setResponseInfo(responseMock, errorMock);
+        stateSpy.setProxyHttpRequest(requestMock);
+        stateSpy.setProxyHttpResponse(responseMock);
 
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
 
         // when
-        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(null);
 
         // then
-        assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isTrue();
+        assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
 
         assertThat(strategyResponseTaggingArgs.get()).isNull();
     }
@@ -182,7 +147,7 @@ public class HttpProcessingStateTest {
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
 
         // when
-        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+        stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(mock(Span.class));
 
         // then
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
@@ -192,23 +157,22 @@ public class HttpProcessingStateTest {
     public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone_does_not_propagate_unexpected_exception() {
         // given
         doThrow(new RuntimeException("intentional exception")).when(distributedTracingConfigMock)
-                                                              .getServerSpanNamingAndTaggingStrategy();
+                                                              .getProxyRouterSpanNamingAndTaggingStrategy();
         stateSpy.setDistributedTracingConfig(distributedTracingConfigMock);
 
-        Span overallRequestSpanMock = mock(Span.class);
-        doReturn(overallRequestSpanMock).when(stateSpy).getOverallRequestSpan();
-
-        stateSpy.setRequestInfo(requestMock);
-        stateSpy.setResponseInfo(responseMock, errorMock);
+        stateSpy.setProxyHttpRequest(requestMock);
+        stateSpy.setProxyHttpResponse(responseMock);
 
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
 
         // when
-        Throwable ex = catchThrowable(() -> stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone());
+        Throwable ex = catchThrowable(() -> stateSpy.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(
+            mock(Span.class)
+        ));
 
         // then
         assertThat(ex).isNull();
-        verify(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
+        verify(distributedTracingConfigMock).getProxyRouterSpanNamingAndTaggingStrategy();
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isTrue();
     }
 }

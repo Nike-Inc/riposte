@@ -2,6 +2,7 @@ package com.nike.riposte.server.componenttest;
 
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.distributedtracing.DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.DefaultRiposteServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfigImpl;
@@ -24,6 +25,7 @@ import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -47,6 +49,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpResponse;
 import io.restassured.response.ExtractableResponse;
 
 import static io.restassured.RestAssured.given;
@@ -67,8 +70,11 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
     private SpanRecorder spanRecorder;
     private DtConfigAdjustments dtConfigAdjustments;
 
-    private static final AdjustableServerSpanNamingAndTaggingStrategy adjustableTaggingStrategy =
+    private static final AdjustableServerSpanNamingAndTaggingStrategy adjustableServerTaggingStrategy =
         new AdjustableServerSpanNamingAndTaggingStrategy();
+
+    private static final AdjustableProxyRouterSpanNamingAndTaggingStrategy adjustableProxyTaggingStrategy =
+        new AdjustableProxyRouterSpanNamingAndTaggingStrategy();
 
     @BeforeClass
     public static void setUpClass() throws Exception {
@@ -94,7 +100,8 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         Tracer.getInstance().addSpanLifecycleListener(spanRecorder);
 
         dtConfigAdjustments = new DtConfigAdjustments();
-        adjustableTaggingStrategy.config = dtConfigAdjustments;
+        adjustableServerTaggingStrategy.config = dtConfigAdjustments;
+        adjustableProxyTaggingStrategy.config = dtConfigAdjustments;
     }
 
     @After
@@ -131,6 +138,14 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         ERROR_ANNOTATION_ONLY(dtAdjust -> {
             disableAllAnnotations(dtAdjust);
             dtAdjust.shouldAddErrorAnnotationForCaughtException = true;
+        }),
+        CONN_START_ONLY(dtAdjust -> {
+            disableAllAnnotations(dtAdjust);
+            dtAdjust.shouldAddConnStartAnnotation = true;
+        }),
+        CONN_FINISH_ONLY(dtAdjust -> {
+            disableAllAnnotations(dtAdjust);
+            dtAdjust.shouldAddConnFinishAnnotation = true;
         });
 
         public final Consumer<DtConfigAdjustments> scenarioSetup;
@@ -149,6 +164,8 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
             dtConfig.shouldAddWireSendStartAnnotation = false;
             dtConfig.shouldAddWireSendFinishAnnotation = false;
             dtConfig.shouldAddErrorAnnotationForCaughtException = false;
+            dtConfig.shouldAddConnStartAnnotation = false;
+            dtConfig.shouldAddConnFinishAnnotation = false;
         }
     }
 
@@ -213,47 +230,65 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         waitUntilSpanRecorderHasExpectedNumSpans(3);
         assertThat(spanRecorder.completedSpans).hasSize(3);
 
-        Span proxyServerOverallSpan = findServerOverallSpan("GET " + RouterEndpoint.MATCHING_PATH);
-        Span downstreamServerOverallSpan = findServerOverallSpan("GET " + DownstreamEndpoint.MATCHING_PATH);
-
         boolean downstreamErrorOccurred = (expectedStatusCode == 500);
         String expectedStatusCodeStr = String.valueOf(expectedStatusCode);
-
         String proxyPath = RouterEndpoint.MATCHING_PATH_BASE + "/" + pathParam;
-        String expectedProxyErrorTag = (downstreamErrorOccurred) ? expectedStatusCodeStr : null;
-        verifyServerOverallSpanAnnotations(
-            dtConfig, proxyServerOverallSpan, true, false
-        );
-        verifyServerOverallSpanTags(
-            dtConfig, proxyServerOverallSpan, "GET", proxyPath, proxyPath + queryString,
-            RouterEndpoint.MATCHING_PATH, expectedStatusCodeStr, "riposte.server", expectedProxyErrorTag
-        );
-
         String downstreamPath = DownstreamEndpoint.MATCHING_PATH_BASE + "/" + pathParam;
+        String expectedProxyErrorTag = (downstreamErrorOccurred) ? expectedStatusCodeStr : null;
         String expectedDownstreamErrorTag = (downstreamErrorOccurred)
                                             ? "java.lang.RuntimeException: intentional downstream exception"
                                             : null;
-        verifyServerOverallSpanAnnotations(
-            dtConfig, downstreamServerOverallSpan, false, downstreamErrorOccurred
-        );
-        verifyServerOverallSpanTags(
-            dtConfig, downstreamServerOverallSpan, "GET", downstreamPath,
-            downstreamPath + queryString, DownstreamEndpoint.MATCHING_PATH, expectedStatusCodeStr,
-            "riposte.server", expectedDownstreamErrorTag
-        );
+
+        // Verify the proxy server overall span's annotations and tags.
+        {
+            Span proxyServerOverallSpan = findCompletedSpan("GET " + RouterEndpoint.MATCHING_PATH, "riposte.server");
+            verifyServerOverallSpanAnnotations(
+                dtConfig, proxyServerOverallSpan, true, false
+            );
+            verifySpanTags(
+                dtConfig, proxyServerOverallSpan, "GET", proxyPath, proxyPath + queryString,
+                RouterEndpoint.MATCHING_PATH, expectedStatusCodeStr, "riposte.server", expectedProxyErrorTag,
+                null
+            );
+        }
+
+        // Verify the proxy server downstream child span's annotations and tags.
+        {
+            Span proxyDownstreamChildSpan = findCompletedSpan("GET", "netty.httpclient");
+            verifyProxyChildSpanAnnotations(dtConfig, proxyDownstreamChildSpan);
+            verifySpanTags(
+                dtConfig, proxyDownstreamChildSpan, "GET", downstreamPath,
+                downstreamPath + queryString, null, expectedStatusCodeStr,
+                "netty.httpclient", expectedProxyErrorTag, "127.0.0.1:" + downstreamServerConfig.endpointsPort()
+            );
+        }
+
+        // Verify the downstream server overall span's annotations and tags.
+        {
+            Span downstreamServerOverallSpan = findCompletedSpan("GET " + DownstreamEndpoint.MATCHING_PATH, "riposte.server");
+            verifyServerOverallSpanAnnotations(
+                dtConfig, downstreamServerOverallSpan, false, downstreamErrorOccurred
+            );
+            verifySpanTags(
+                dtConfig, downstreamServerOverallSpan, "GET", downstreamPath,
+                downstreamPath + queryString, DownstreamEndpoint.MATCHING_PATH, expectedStatusCodeStr,
+                "riposte.server", expectedDownstreamErrorTag, null
+            );
+        }
     }
 
-    private Span findServerOverallSpan(String expectedSpanName) {
+    private Span findCompletedSpan(String expectedSpanName, String expectedSpanHandler) {
         return spanRecorder.completedSpans
             .stream()
             .filter(
                 s -> s.getSpanName().equals(expectedSpanName)
-                     && "riposte.server".equals(s.getTags().get(WingtipsTags.SPAN_HANDLER))
+                     && expectedSpanHandler.equals(s.getTags().get(WingtipsTags.SPAN_HANDLER))
             )
             .findFirst()
             .orElseThrow(
                 () -> new RuntimeException(
-                    "Unable to find server overall request span with expected span name: " + expectedSpanName
+                    "Unable to find span with expected span name: " + expectedSpanName + " and span handler: "
+                    + expectedSpanHandler
                 )
             );
     }
@@ -262,7 +297,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         DtConfigAdjustments dtConfig,
         Span span,
         boolean endpointAnnotationsAlwaysMissing,
-        boolean downstreamErrorOccurred
+        boolean isDownstreamServerAndErrorOccurred
     ) {
         AtomicInteger expectedTotalNumAnnotations = new AtomicInteger(0);
         AtomicLong minAnnotationTimestamp = new AtomicLong(span.getSpanStartTimeEpochMicros());
@@ -303,7 +338,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
             minAnnotationTimestamp
         );
 
-        boolean expectErrorAnnotation = downstreamErrorOccurred && dtConfig.shouldAddErrorAnnotationForCaughtException;
+        boolean expectErrorAnnotation = isDownstreamServerAndErrorOccurred && dtConfig.shouldAddErrorAnnotationForCaughtException;
 
         verifySpanAnnotation(
             span,
@@ -325,6 +360,113 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
             span,
             dtConfig.wireSendFinishAnnotationName,
             dtConfig.shouldAddWireSendFinishAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        // Connection start/finish annotations shouldn't exist for server overall spans.
+        verifySpanAnnotation(
+            span,
+            dtConfig.connStartAnnotationName,
+            false,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.connFinishAnnotationName,
+            false,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        assertThat(span.getTimestampedAnnotations()).hasSize(expectedTotalNumAnnotations.get());
+    }
+
+    private void verifyProxyChildSpanAnnotations(
+        DtConfigAdjustments dtConfig,
+        Span span
+    ) {
+        AtomicInteger expectedTotalNumAnnotations = new AtomicInteger(0);
+        AtomicLong minAnnotationTimestamp = new AtomicLong(0);
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.connStartAnnotationName,
+            dtConfig.shouldAddConnStartAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.connFinishAnnotationName,
+            dtConfig.shouldAddConnFinishAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        if (dtConfig.shouldAddConnFinishAnnotation) {
+            assertThat(minAnnotationTimestamp.get()).isEqualTo(span.getSpanStartTimeEpochMicros());
+        }
+
+        minAnnotationTimestamp = new AtomicLong(span.getSpanStartTimeEpochMicros());
+
+        verifySpanAnnotation(
+            span,
+            dtConfigAdjustments.wireSendStartAnnotationName,
+            dtConfigAdjustments.shouldAddWireSendStartAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.wireSendFinishAnnotationName,
+            dtConfig.shouldAddWireSendFinishAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.wireReceiveStartAnnotationName,
+            dtConfig.shouldAddWireReceiveStartAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.wireReceiveFinishAnnotationName,
+            dtConfig.shouldAddWireReceiveFinishAnnotation,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        // Endpoint start/finish annotations shouldn't exist for the proxy downstream call child span.
+        verifySpanAnnotation(
+            span,
+            dtConfig.endpointStartAnnotationName,
+            false,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        verifySpanAnnotation(
+            span,
+            dtConfig.endpointFinishAnnotationName,
+            false,
+            expectedTotalNumAnnotations,
+            minAnnotationTimestamp
+        );
+
+        // No error annotation. TODO: Create a test that exercises the downstream call child span error annotation.
+        verifySpanAnnotation(
+            span,
+            dtConfig.errorAnnotationName,
+            false,
             expectedTotalNumAnnotations,
             minAnnotationTimestamp
         );
@@ -355,7 +497,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
                    .orElse(null);
     }
 
-    private void verifyServerOverallSpanTags(
+    private void verifySpanTags(
         DtConfigAdjustments dtConfig,
         Span span,
         String expectedHttpMethod,
@@ -364,21 +506,35 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         String expectedRoute,
         String expectedStatusCode,
         String expectedSpanHandler,
-        String expectedErrorTag
+        String expectedErrorTag,
+        String expectedHost
     ) {
+        // Tags that should *always* be there, regardless of server vs. client.
         assertThat(span.getTags().get(KnownZipkinTags.HTTP_METHOD)).isEqualTo(expectedHttpMethod);
         assertThat(span.getTags().get(KnownZipkinTags.HTTP_PATH)).isEqualTo(expectedPath);
         assertThat(span.getTags().get(KnownZipkinTags.HTTP_URL)).isEqualTo(expectedUrl);
-        assertThat(span.getTags().get(KnownZipkinTags.HTTP_ROUTE)).isEqualTo(expectedRoute);
         assertThat(span.getTags().get(KnownZipkinTags.HTTP_STATUS_CODE)).isEqualTo(expectedStatusCode);
-        assertThat(span.getTags().get(KnownZipkinTags.ERROR)).isEqualTo(expectedErrorTag);
         assertThat(span.getTags().get(WingtipsTags.SPAN_HANDLER)).isEqualTo(expectedSpanHandler);
 
-        int expectedTotalNumTags = (expectedErrorTag == null) ? 6 : 7;
+        // Tags that *might* be there, depending on server vs. client and whether or not an error occurred.
+        assertThat(span.getTags().get(KnownZipkinTags.HTTP_ROUTE)).isEqualTo(expectedRoute);
+        assertThat(span.getTags().get(KnownZipkinTags.HTTP_HOST)).isEqualTo(expectedHost);
+        assertThat(span.getTags().get(KnownZipkinTags.ERROR)).isEqualTo(expectedErrorTag);
+
+        int expectedTotalNumTags = 5;
+        if (expectedRoute != null) {
+            expectedTotalNumTags++;
+        }
+        if (expectedHost != null) {
+            expectedTotalNumTags++;
+        }
+        if (expectedErrorTag != null) {
+            expectedTotalNumTags++;
+        }
         assertThat(span.getTags()).hasSize(expectedTotalNumTags);
     }
 
-    static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
+    private static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
 
         public static final String MATCHING_PATH_BASE = "/downstreamEndpoint";
         public static final String MATCHING_PATH = MATCHING_PATH_BASE + "/{fooPathParam}";
@@ -404,7 +560,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
     }
 
-    public static class RouterEndpoint extends ProxyRouterEndpoint {
+    private static class RouterEndpoint extends ProxyRouterEndpoint {
 
         public static final String MATCHING_PATH_BASE = "/proxyEndpoint";
         public static final String MATCHING_PATH = MATCHING_PATH_BASE + "/{fooPathParam}";
@@ -437,11 +593,11 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
     }
 
-    public static class DownstreamServerTestConfig implements ServerConfig {
+    private static class DownstreamServerTestConfig implements ServerConfig {
         private final int port;
         private final Collection<Endpoint<?>> endpoints;
         private final DistributedTracingConfig<Span> dtConfig = new DistributedTracingConfigImpl<>(
-            adjustableTaggingStrategy, Span.class
+            adjustableServerTaggingStrategy, adjustableProxyTaggingStrategy, Span.class
         );
 
         public DownstreamServerTestConfig() {
@@ -470,11 +626,11 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
     }
 
-    public static class ProxyTestingTestConfig implements ServerConfig {
+    private static class ProxyTestingTestConfig implements ServerConfig {
         private final int port;
         private final Collection<Endpoint<?>> endpoints;
         private final DistributedTracingConfig<Span> dtConfig = new DistributedTracingConfigImpl<>(
-            adjustableTaggingStrategy, Span.class
+            adjustableServerTaggingStrategy, adjustableProxyTaggingStrategy, Span.class
         );
 
         public ProxyTestingTestConfig() {
@@ -584,6 +740,12 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
 
         public boolean shouldAddErrorAnnotationForCaughtException = true;
         public String errorAnnotationName = "error." + UUID.randomUUID().toString();
+
+        public boolean shouldAddConnStartAnnotation = true;
+        public String connStartAnnotationName = "conn.start." + UUID.randomUUID().toString();
+
+        public boolean shouldAddConnFinishAnnotation = true;
+        public String connFinishAnnotationName = "conn.finish." + UUID.randomUUID().toString();
     }
 
     private static class AdjustableServerSpanNamingAndTaggingStrategy
@@ -629,12 +791,64 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
 
         @Override
         public boolean shouldAddErrorAnnotationForCaughtException(
-            @NotNull ResponseInfo<?> responseInfo, @NotNull Throwable error
+            @Nullable ResponseInfo<?> response, @NotNull Throwable error
         ) { return config.shouldAddErrorAnnotationForCaughtException; }
 
         @Override
         public @NotNull String errorAnnotationName(
-            @NotNull ResponseInfo<?> responseInfo, @NotNull Throwable error
+            @Nullable ResponseInfo<?> response, @NotNull Throwable error
+        ) { return config.errorAnnotationName; }
+    }
+
+    private static class AdjustableProxyRouterSpanNamingAndTaggingStrategy
+        extends DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy {
+
+        public DtConfigAdjustments config = new DtConfigAdjustments();
+
+        @Override
+        public boolean shouldAddWireReceiveStartAnnotation() { return config.shouldAddWireReceiveStartAnnotation; }
+
+        @Override
+        public @NotNull String wireReceiveStartAnnotationName() { return config.wireReceiveStartAnnotationName; }
+
+        @Override
+        public boolean shouldAddWireReceiveFinishAnnotation() { return config.shouldAddWireReceiveFinishAnnotation; }
+
+        @Override
+        public @NotNull String wireReceiveFinishAnnotationName() { return config.wireReceiveFinishAnnotationName; }
+
+        @Override
+        public boolean shouldAddWireSendStartAnnotation() { return config.shouldAddWireSendStartAnnotation; }
+
+        @Override
+        public @NotNull String wireSendStartAnnotationName() { return config.wireSendStartAnnotationName; }
+
+        @Override
+        public boolean shouldAddWireSendFinishAnnotation() { return config.shouldAddWireSendFinishAnnotation; }
+
+        @Override
+        public @NotNull String wireSendFinishAnnotationName() { return config.wireSendFinishAnnotationName; }
+
+        @Override
+        public boolean shouldAddConnStartAnnotation() { return config.shouldAddConnStartAnnotation; }
+
+        @Override
+        public @NotNull String connStartAnnotationName() { return config.connStartAnnotationName; }
+
+        @Override
+        public boolean shouldAddConnFinishAnnotation() { return config.shouldAddConnFinishAnnotation; }
+
+        @Override
+        public @NotNull String connFinishAnnotationName() { return config.connFinishAnnotationName; }
+
+        @Override
+        public boolean shouldAddErrorAnnotationForCaughtException(
+            @Nullable HttpResponse response, @NotNull Throwable error
+        ) { return config.shouldAddErrorAnnotationForCaughtException; }
+
+        @Override
+        public @NotNull String errorAnnotationName(
+            @Nullable HttpResponse response, @NotNull Throwable error
         ) { return config.errorAnnotationName; }
     }
 }
