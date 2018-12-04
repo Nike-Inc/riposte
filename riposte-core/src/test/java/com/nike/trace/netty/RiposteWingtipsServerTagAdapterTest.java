@@ -147,7 +147,6 @@ public class RiposteWingtipsServerTagAdapterTest {
 
     @Test
     public void getRequestUriPathTemplate_returns_null_when_passed_null_request() {
-        // given
         // when
         String result = adapterSpy.getRequestUriPathTemplate(null, responseMock);
 
