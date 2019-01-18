@@ -12,6 +12,7 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.channelpipeline.message.LastOutboundMessageSendLastContentChunk;
 import com.nike.riposte.server.channelpipeline.message.OutboundMessageSendContentChunk;
 import com.nike.riposte.server.channelpipeline.message.OutboundMessageSendHeadersChunkFromResponseInfo;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport;
 import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
@@ -69,18 +70,23 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
     private final Executor longRunningTaskExecutor;
     private final StreamingAsyncHttpClient streamingAsyncHttpClient;
     private final long defaultCompletableFutureTimeoutMillis;
+    private final DistributedTracingConfig<Span> distributedTracingConfig;
 
     public static final String DOWNSTREAM_CALL_TIME_NANOS_REQUEST_ATTR_KEY = "proxyRouterDownstreamCallTimeNanos";
     public static final String DOWNSTREAM_CALL_PATH_REQUEST_ATTR_KEY = "proxyRouterDownstreamCallPath";
     public static final String DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY =
         ProxyRouterEndpointExecutionHandler.class + "-ProxyRouterDownstreamConnectionSetupTimeNanos";
 
-    public ProxyRouterEndpointExecutionHandler(Executor longRunningTaskExecutor,
-                                               StreamingAsyncHttpClient streamingAsyncHttpClient,
-                                               long defaultCompletableFutureTimeoutMillis) {
+    public ProxyRouterEndpointExecutionHandler(
+        Executor longRunningTaskExecutor,
+        StreamingAsyncHttpClient streamingAsyncHttpClient,
+        long defaultCompletableFutureTimeoutMillis,
+        DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
         this.longRunningTaskExecutor = longRunningTaskExecutor;
         this.streamingAsyncHttpClient = streamingAsyncHttpClient;
         this.defaultCompletableFutureTimeoutMillis = defaultCompletableFutureTimeoutMillis;
+        this.distributedTracingConfig = distributedTracingConfig;
     }
 
     protected ProxyRouterProcessingState getOrCreateProxyRouterProcessingState(ChannelHandlerContext ctx) {
@@ -91,6 +97,8 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         if (proxyRouterState == null) {
             proxyRouterState = new ProxyRouterProcessingState();
             proxyRouterStateAttribute.set(proxyRouterState);
+            //noinspection deprecation
+            proxyRouterState.setDistributedTracingConfig(distributedTracingConfig);
         }
 
         return proxyRouterState;
@@ -100,13 +108,11 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
         // This handler should only do something if the endpoint is a ProxyRouterEndpoint.
         //      Additionally, this handler should only pay attention to Netty HTTP messages. Other messages (e.g. user
         //      event messages) should be ignored.
-        return (msg instanceof HttpObject)
-               && (endpoint != null)
-               && (endpoint instanceof ProxyRouterEndpoint);
+        return (msg instanceof HttpObject) && (endpoint instanceof ProxyRouterEndpoint);
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
         Endpoint<?> endpoint = state.getEndpointForExecution();
 
@@ -680,7 +686,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                 proxyRouterProcessingState.cancelDownstreamRequest(requestAlreadyHandledException);
             }
             else {
-                state.setResponseInfo(responseInfo);
+                state.setResponseInfo(responseInfo, null);
                 // No need to retain the msg, we already grabbed everything we need from it and stuffed it into the
                 //      ResponseInfo. Just send the appropriate OutboundMessage.
                 firstChunkSent = true;

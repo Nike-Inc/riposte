@@ -317,8 +317,8 @@ public class RoutingHandlerTest {
     public void doChannelRead_HttpRequest_throws_exception_when_failed_decoder_result() {
         // given
         HttpRequest msgMock = mock(HttpRequest.class);
-        DecoderResult decoderResult = mock(DecoderResult.class);
-        doReturn(true).when(decoderResult).isFailure();
+        Throwable decoderFailureCauseMock = mock(Throwable.class);
+        DecoderResult decoderResult = DecoderResult.failure(decoderFailureCauseMock);
         doReturn(decoderResult).when(msgMock).decoderResult();
         doReturn(null).when(stateMock).getRequestInfo();
 
@@ -327,6 +327,7 @@ public class RoutingHandlerTest {
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+        assertThat(thrownException.getCause()).isSameAs(decoderFailureCauseMock);
     }
 
     @DataProvider(value = {

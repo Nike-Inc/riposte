@@ -3,6 +3,8 @@ package com.nike.riposte.server.http;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.StreamingChannel;
+import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.wingtips.Span;
 
 import org.slf4j.Logger;
@@ -14,6 +16,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 
 import static com.nike.riposte.util.AsyncNettyHelper.extractTracingAndMdcInfoFromChannelHandlerContext;
 import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
@@ -38,6 +42,13 @@ public class ProxyRouterProcessingState implements ProcessingState {
     private boolean requestStreamingCompletedSuccessfully;
     private boolean requestStreamingCancelled;
 
+    private HttpRequest proxyHttpRequest;
+    private HttpResponse proxyHttpResponse;
+    private Throwable proxyError;
+
+    private DistributedTracingConfig<Span> distributedTracingConfig;
+    private boolean tracingResponseTaggingAndFinalSpanNameCompleted = false;
+
     public ProxyRouterProcessingState() {
         // Default constructor - do nothing
     }
@@ -50,6 +61,11 @@ public class ProxyRouterProcessingState implements ProcessingState {
         streamingStartTimeNanos = 0;
         requestStreamingCompletedSuccessfully = false;
         requestStreamingCancelled = false;
+        proxyHttpRequest = null;
+        proxyHttpResponse = null;
+        proxyError = null;
+        distributedTracingConfig = null;
+        tracingResponseTaggingAndFinalSpanNameCompleted = false;
     }
 
     public CompletableFuture<StreamingChannel> getStreamingChannelCompletableFuture() {
@@ -159,5 +175,77 @@ public class ProxyRouterProcessingState implements ProcessingState {
                     sc.closeChannelDueToUnrecoverableError(reason);
             }
         });
+    }
+
+    public HttpRequest getProxyHttpRequest() {
+        return proxyHttpRequest;
+    }
+
+    public void setProxyHttpRequest(HttpRequest proxyHttpRequest) {
+        this.proxyHttpRequest = proxyHttpRequest;
+    }
+
+    public HttpResponse getProxyHttpResponse() {
+        return proxyHttpResponse;
+    }
+
+    public void setProxyHttpResponse(HttpResponse proxyHttpResponse) {
+        this.proxyHttpResponse = proxyHttpResponse;
+    }
+
+    public Throwable getProxyError() {
+        return proxyError;
+    }
+
+    public void setProxyError(Throwable proxyError) {
+        this.proxyError = proxyError;
+    }
+
+    public boolean isTracingResponseTaggingAndFinalSpanNameCompleted() {
+        return tracingResponseTaggingAndFinalSpanNameCompleted;
+    }
+    
+    /**
+     * DO NOT CALL THIS! It is here temporarily for internal use and will likely go away. You shouldn't be changing
+     * {@link DistributedTracingConfig} here anyway - use {@link ServerConfig#distributedTracingConfig()}.
+     *
+     * @deprecated Don't call this yourself - set your server's distributed tracing config via
+     * {@link ServerConfig#distributedTracingConfig()}
+     */
+    @Deprecated
+    public void setDistributedTracingConfig(
+        DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
+        this.distributedTracingConfig = distributedTracingConfig;
+    }
+
+    public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone(Span spanAroundProxyCall) {
+        if (
+            tracingResponseTaggingAndFinalSpanNameCompleted
+            || (distributedTracingConfig == null)
+            || (spanAroundProxyCall == null)
+        ) {
+            return;
+        }
+
+        tracingResponseTaggingAndFinalSpanNameCompleted = true;
+
+        try {
+            distributedTracingConfig
+                .getProxyRouterSpanNamingAndTaggingStrategy()
+                .handleResponseTaggingAndFinalSpanName(
+                    spanAroundProxyCall,
+                    getProxyHttpRequest(),
+                    getProxyHttpResponse(),
+                    getProxyError()
+                );
+        }
+        catch (Throwable t) {
+            logger.error(
+                "Unexpected error occurred while trying to set final span name and proxy response tagging. This "
+                + "exception will be ignored, but should be investigated - it should not happen.",
+                t
+            );
+        }
     }
 }

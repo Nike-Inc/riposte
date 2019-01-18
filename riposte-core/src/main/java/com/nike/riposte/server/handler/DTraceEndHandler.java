@@ -43,7 +43,11 @@ public class DTraceEndHandler extends BaseInboundHandlerWithTracingAndMdcSupport
         else if (!httpProcessingState.isTraceCompletedOrScheduled()) {
             // We have a state and the trace has not been completed yet. If there was no response sent then complete the
             //      trace now (should only happen under rare error conditions), otherwise complete it when the response
-            //      finishes.
+            //      finishes. In either case we perform response tagging and final span name if it hasn't already
+            //      been done (which it should be, but just in case...)
+            httpProcessingState.setTraceCompletedOrScheduled(true);
+            httpProcessingState.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+
             if (!httpProcessingState.isResponseSendingLastChunkSent()) {
                 runnableWithTracingAndMdc(
                     this::completeCurrentSpan,
@@ -54,7 +58,6 @@ public class DTraceEndHandler extends BaseInboundHandlerWithTracingAndMdcSupport
                 httpProcessingState.getResponseWriterFinalChunkChannelFuture().addListener(
                     new ChannelFutureListenerWithTracingAndMdc(postResponseSentOperation, ctx));
             }
-            httpProcessingState.setTraceCompletedOrScheduled(true);
         }
     }
 
@@ -63,7 +66,7 @@ public class DTraceEndHandler extends BaseInboundHandlerWithTracingAndMdcSupport
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (shouldHandleDoChannelReadMessage(msg))
             endDtrace(ctx);
 
@@ -71,7 +74,7 @@ public class DTraceEndHandler extends BaseInboundHandlerWithTracingAndMdcSupport
     }
 
     @Override
-    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         endDtrace(ctx);
 
         return PipelineContinuationBehavior.CONTINUE;

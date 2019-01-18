@@ -9,10 +9,7 @@ import java.util.Collection;
 
 import javax.net.ssl.SSLException;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests the default functionality of {@link com.nike.riposte.server.config.ServerConfig}
@@ -22,6 +19,7 @@ public class ServerConfigTest {
     @Test
     public void default_method_implementations_return_expected_values() throws CertificateException, SSLException {
         // given
+        @SuppressWarnings("Convert2Lambda") 
         ServerConfig defaultImpl = new ServerConfig() {
             @Override
             public Collection<Endpoint<?>> appEndpoints() {
@@ -30,40 +28,41 @@ public class ServerConfigTest {
         };
 
         // expect
-        assertThat(defaultImpl.requestAndResponseFilters(), nullValue());
-        assertThat(defaultImpl.bossThreadFactory(), nullValue());
-        assertThat(defaultImpl.workerThreadFactory(), nullValue());
-        assertThat(defaultImpl.defaultCompletableFutureTimeoutInMillisForNonblockingEndpoints(), is(58L * 1000L));
-        assertThat(defaultImpl.defaultRequestContentDeserializer(), nullValue());
-        assertThat(defaultImpl.defaultResponseContentSerializer(), nullValue());
-        assertThat(defaultImpl.longRunningTaskExecutor(), nullValue());
-        assertThat(defaultImpl.metricsListener(), nullValue());
-        assertThat(defaultImpl.accessLogger(), nullValue());
-        assertThat(defaultImpl.postServerStartupHooks(), nullValue());
-        assertThat(defaultImpl.preServerStartupHooks(), nullValue());
-        assertThat(defaultImpl.serverShutdownHooks(), nullValue());
-        assertThat(defaultImpl.riposteErrorHandler(), notNullValue());
-        assertThat(defaultImpl.riposteUnhandledErrorHandler(), notNullValue());
-        assertThat(defaultImpl.numBossThreads(), is(1));
-        assertThat(defaultImpl.numWorkerThreads(), is(0));
-        assertThat(defaultImpl.maxRequestSizeInBytes(), is(0));
-        assertThat(defaultImpl.responseCompressionThresholdBytes(), is(500));
-        assertThat(defaultImpl.createSslContext(), notNullValue());
-        assertThat(defaultImpl.errorResponseBodySerializer(), nullValue());
-        assertThat(defaultImpl.requestContentValidationService(), nullValue());
-        assertThat(defaultImpl.isDebugActionsEnabled(), is(false));
-        assertThat(defaultImpl.endpointsPort(), is(8080));
-        assertThat(defaultImpl.endpointsSslPort(), is(8443));
-        assertThat(defaultImpl.isEndpointsUseSsl(), is(false));
-        assertThat(defaultImpl.appInfo(), nullValue());
-        assertThat(defaultImpl.isDebugChannelLifecycleLoggingEnabled(), is(false));
-        assertThat(defaultImpl.workerChannelIdleTimeoutMillis(), is(5000L));
-        assertThat(defaultImpl.proxyRouterConnectTimeoutMillis(), is(10000L));
-        assertThat(defaultImpl.incompleteHttpCallTimeoutMillis(), is(5000L));
-        assertThat(defaultImpl.maxOpenIncomingServerChannels(), is(20000));
-        assertThat(defaultImpl.pipelineCreateHooks(), nullValue());
-        assertThat(defaultImpl.customChannelInitializer(), nullValue());
-        assertThat(defaultImpl.requestSecurityValidator(), is(nullValue()));
+        assertThat(defaultImpl.requestAndResponseFilters()).isNull();
+        assertThat(defaultImpl.bossThreadFactory()).isNull();
+        assertThat(defaultImpl.workerThreadFactory()).isNull();
+        assertThat(defaultImpl.defaultCompletableFutureTimeoutInMillisForNonblockingEndpoints()).isEqualTo((58L * 1000L));
+        assertThat(defaultImpl.defaultRequestContentDeserializer()).isNull();
+        assertThat(defaultImpl.defaultResponseContentSerializer()).isNull();
+        assertThat(defaultImpl.longRunningTaskExecutor()).isNull();
+        assertThat(defaultImpl.metricsListener()).isNull();
+        assertThat(defaultImpl.accessLogger()).isNull();
+        assertThat(defaultImpl.postServerStartupHooks()).isNull();
+        assertThat(defaultImpl.preServerStartupHooks()).isNull();
+        assertThat(defaultImpl.serverShutdownHooks()).isNull();
+        assertThat(defaultImpl.riposteErrorHandler()).isNotNull();
+        assertThat(defaultImpl.riposteUnhandledErrorHandler()).isNotNull();
+        assertThat(defaultImpl.numBossThreads()).isEqualTo((1));
+        assertThat(defaultImpl.numWorkerThreads()).isEqualTo((0));
+        assertThat(defaultImpl.maxRequestSizeInBytes()).isEqualTo((0));
+        assertThat(defaultImpl.responseCompressionThresholdBytes()).isEqualTo((500));
+        assertThat(defaultImpl.createSslContext()).isNotNull();
+        assertThat(defaultImpl.errorResponseBodySerializer()).isNull();
+        assertThat(defaultImpl.requestContentValidationService()).isNull();
+        assertThat(defaultImpl.isDebugActionsEnabled()).isEqualTo((false));
+        assertThat(defaultImpl.endpointsPort()).isEqualTo((8080));
+        assertThat(defaultImpl.endpointsSslPort()).isEqualTo((8443));
+        assertThat(defaultImpl.isEndpointsUseSsl()).isEqualTo((false));
+        assertThat(defaultImpl.appInfo()).isNull();
+        assertThat(defaultImpl.isDebugChannelLifecycleLoggingEnabled()).isEqualTo((false));
+        assertThat(defaultImpl.workerChannelIdleTimeoutMillis()).isEqualTo((5000L));
+        assertThat(defaultImpl.proxyRouterConnectTimeoutMillis()).isEqualTo((10000L));
+        assertThat(defaultImpl.incompleteHttpCallTimeoutMillis()).isEqualTo((5000L));
+        assertThat(defaultImpl.maxOpenIncomingServerChannels()).isEqualTo((20000));
+        assertThat(defaultImpl.pipelineCreateHooks()).isNull();
+        assertThat(defaultImpl.customChannelInitializer()).isNull();
+        assertThat(defaultImpl.requestSecurityValidator()).isNull();
+        assertThat(defaultImpl.distributedTracingConfig()).isNull();
     }
 
 }

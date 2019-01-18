@@ -1,5 +1,6 @@
 package com.nike.riposte.server.handler;
 
+import com.nike.internal.util.Pair;
 import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.channelpipeline.message.LastOutboundMessage;
@@ -14,6 +15,7 @@ import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
 import com.nike.riposte.server.logging.AccessLogger;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
+import com.nike.riposte.util.AsyncNettyHelper;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
 
@@ -21,6 +23,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Deque;
+import java.util.Map;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFutureListener;
@@ -122,7 +127,9 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
         if (state == null) {
             // The error must have occurred before RequestStateCleanerHandler could even execute. Create a new state and
-            //      put it into the channel so that we can process without worrying about null states.
+            //      put it into the channel so that we can process without worrying about null states. Note that since
+            //      there's no state, we have no distributed tracing state either, so there's no benefit to trying
+            //      to do a "with tracing" log message. It'll just be a raw log message without Trace ID.
             logger.error(
                 "Found an empty state for this request in the finalizer - this should not be possible and indicates a "
                 + "major problem in the channel pipeline.",
@@ -154,7 +161,7 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         if (!state.isResponseSendingStarted()) {
             String errorMsg = "Discovered a request that snuck through without a response being sent. This should not "
                               + "be possible and indicates a major problem in the channel pipeline.";
-            logger.error(errorMsg, new Exception("Wrapper exception", cause));
+            logErrorWithTracing(errorMsg, new Exception("Wrapper exception", cause), state);
 
             // Send a generic unhandled error response with a wrapper exception so that the logging info output by the
             //      exceptionHandlingHandler will have the overview of what went wrong.
@@ -183,13 +190,12 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         // If we're in an error case (cause != null) and the response sending has started but not completed, then this
         //      request is broken. We can't do anything except kill the channel.
         if ((cause != null) && state.isResponseSendingStarted() && !state.isResponseSendingLastChunkSent()) {
-            runnableWithTracingAndMdc(
-                () -> logger.error(
-                    "Received an error in ChannelPipelineFinalizerHandler after response sending was started, but "
-                    + "before it finished. Closing the channel. unexpected_error={}", cause.toString()
-                ),
-                ctx
-            ).run();
+            logErrorWithTracing(
+                "Received an error in ChannelPipelineFinalizerHandler after response sending was started, but "
+                + "before it finished. Closing the channel. unexpected_error=" + cause.toString(),
+                null,
+                state
+            );
             ctx.channel().close();
         }
     }
@@ -198,28 +204,36 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         // Send response-sent event for metrics purposes now that we handled all possible cases.
         //      Due to multiple messages and exception possibilities/interactions it's possible we've already dealt with
         //      the metrics for this request, so make sure we only do it if appropriate.
-        if (metricsListener != null && !state.isRequestMetricsRecordedOrScheduled()) {
-            state.setRequestMetricsRecordedOrScheduled(true);
+        try {
+            if (metricsListener != null && !state.isRequestMetricsRecordedOrScheduled()) {
+                state.setRequestMetricsRecordedOrScheduled(true);
 
-            // If there was no response sent then do the metrics event now (should only happen under rare error
-            //      conditions), otherwise do it when the response finishes.
-            if (!state.isResponseSendingLastChunkSent()) {
-                // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
-                metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, state);
+                // If there was no response sent then do the metrics event now (should only happen under rare error
+                //      conditions), otherwise do it when the response finishes.
+                if (!state.isResponseSendingLastChunkSent()) {
+                    // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
+                    metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, state);
+                }
+                else {
+                    // We need to use a copy of the state in case the original state gets cleaned.
+                    HttpProcessingState stateCopy = new HttpProcessingState(state);
+                    stateCopy.getResponseWriterFinalChunkChannelFuture()
+                             .addListener((ChannelFutureListener) channelFuture -> {
+                                 if (channelFuture.isSuccess())
+                                     metricsListener.onEvent(ServerMetricsEvent.RESPONSE_SENT, stateCopy);
+                                 else {
+                                     // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
+                                     metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, null);
+                                 }
+                             });
+                }
             }
-            else {
-                // We need to use a copy of the state in case the original state gets cleaned.
-                HttpProcessingState stateCopy = new HttpProcessingState(state);
-                stateCopy.getResponseWriterFinalChunkChannelFuture()
-                         .addListener((ChannelFutureListener) channelFuture -> {
-                             if (channelFuture.isSuccess())
-                                 metricsListener.onEvent(ServerMetricsEvent.RESPONSE_SENT, stateCopy);
-                             else {
-                                 // TODO: Somehow mark the state as a failed request and update the metrics listener to handle it
-                                 metricsListener.onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, null);
-                             }
-                         });
-            }
+        }
+        catch (Throwable t) {
+            logErrorWithTracing(
+                "An unexpected error occurred while trying to finalize metrics. "
+                + "This exception will be swallowed.", t, state
+            );
         }
     }
 
@@ -243,6 +257,10 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
                 ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
 
             if (httpState == null) {
+                // Note that since httpState is null, there's no point in trying to do "with tracing" log messages,
+                //      since there's no tracing state to pull from. We'll try to do a Tracer.getCurrentSpan() just
+                //      in case, but realistically it'll probably be null here.
+                
                 if (proxyRouterState == null) {
                     logger.debug("This channel closed before it processed any requests. Nothing to cleanup. "
                                  + "current_span={}", Tracer.getInstance().getCurrentSpan());
@@ -282,40 +300,58 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             boolean tracingAlreadyCompleted = httpState.isTraceCompletedOrScheduled();
             boolean responseNotFullySent = responseInfo == null || !responseInfo.isResponseSendingLastChunkSent();
             if (responseNotFullySent || !tracingAlreadyCompleted) {
-                runnableWithTracingAndMdc(
-                    () -> {
-                        if (responseNotFullySent) {
-                            logger.warn(
-                                "The caller's channel was closed before a response could be sent. Distributed tracing "
-                                + "will be completed now if it wasn't already done, and we will attempt to output an "
-                                + "access log if needed. Any dangling resources will be released. "
-                                + "response_info_is_null={}",
-                                (responseInfo == null)
-                            );
-                        }
+                try {
+                    runnableWithTracingAndMdc(
+                        () -> {
+                            if (responseNotFullySent) {
+                                logger.warn(
+                                    "The caller's channel was closed before a response could be sent. Distributed tracing "
+                                    + "will be completed now if it wasn't already done, and we will attempt to output an "
+                                    + "access log if needed. Any dangling resources will be released. "
+                                    + "response_info_is_null={}",
+                                    (responseInfo == null)
+                                );
+                            }
 
-                        if (!tracingAlreadyCompleted) {
-                            httpState.setTraceCompletedOrScheduled(true);
+                            if (!tracingAlreadyCompleted) {
+                                httpState.setTraceCompletedOrScheduled(true);
+                                httpState.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
 
-                            Span currentSpan = Tracer.getInstance().getCurrentSpan();
-                            if (currentSpan != null && !currentSpan.isCompleted())
-                                Tracer.getInstance().completeRequestSpan();
-                        }
-                    },
-                    ctx
-                ).run();
+                                Span currentSpan = Tracer.getInstance().getCurrentSpan();
+                                if (currentSpan != null && !currentSpan.isCompleted()) {
+                                    Tracer.getInstance().completeRequestSpan();
+                                }
+                            }
+                        },
+                        ctx
+                    ).run();
+                }
+                catch (Throwable t) {
+                    logErrorWithTracing(
+                        "An unexpected error occurred while trying to finalize distributed tracing. "
+                        + "This exception will be swallowed.", t, httpState
+                    );
+                }
             }
 
             // Make sure access logging is handled
-            if (!httpState.isAccessLogCompletedOrScheduled() && accessLogger != null) {
-                httpState.setAccessLogCompletedOrScheduled(true);
+            try {
+                if (!httpState.isAccessLogCompletedOrScheduled() && accessLogger != null) {
+                    httpState.setAccessLogCompletedOrScheduled(true);
 
-                RequestInfo<?> requestInfoToUse = (requestInfo == null)
-                                                  ? RequestInfoImpl.dummyInstanceForUnknownRequests()
-                                                  : requestInfo;
-                accessLogger.log(
-                    requestInfoToUse, httpState.getActualResponseObject(), responseInfo,
-                    httpState.calculateTotalRequestTimeMillis()
+                    RequestInfo<?> requestInfoToUse = (requestInfo == null)
+                                                      ? RequestInfoImpl.dummyInstanceForUnknownRequests()
+                                                      : requestInfo;
+                    accessLogger.log(
+                        requestInfoToUse, httpState.getActualResponseObject(), responseInfo,
+                        httpState.calculateTotalRequestTimeMillis()
+                    );
+                }
+            }
+            catch (Throwable t) {
+                logErrorWithTracing(
+                    "An unexpected error occurred while trying to finalize access logging. "
+                    + "This exception will be swallowed.", t, httpState
                 );
             }
 
@@ -323,21 +359,77 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
             handleMetricsForCompletedRequestIfNotAlreadyDone(httpState);
 
             // Tell the RequestInfo it can release all its resources.
-            if (requestInfo != null)
-                requestInfo.releaseAllResources();
+            if (requestInfo != null) {
+                try {
+                    requestInfo.releaseAllResources();
+                }
+                catch (Throwable t) {
+                    logErrorWithTracing(
+                        "An unexpected error occurred while trying to release request resources. "
+                        + "This exception will be swallowed.", t, httpState
+                    );
+                }
+            }
 
-            releaseProxyRouterStateResources(proxyRouterState, ctx);
+            try {
+                releaseProxyRouterStateResources(proxyRouterState, ctx);
+            }
+            catch (Throwable t) {
+                logErrorWithTracing(
+                    "An unexpected error occurred while trying to release ProxyRouter state resources. "
+                    + "This exception will be swallowed.", t, httpState
+                );
+            }
         }
         catch(Throwable t) {
-            runnableWithTracingAndMdc(
-                () -> logger.error(
-                    "An unexpected error occurred during ChannelPipelineFinalizerHandler.doChannelInactive() - this "
-                    + "should not happen and indicates a bug that needs to be fixed in Riposte.", t),
-                ctx
-            ).run();
+            logErrorWithTracing(
+                "An unexpected error occurred during ChannelPipelineFinalizerHandler.doChannelInactive() - this "
+                + "should not happen and indicates a bug that needs to be fixed in Riposte.", t, ctx
+            );
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    protected void logErrorWithTracing(String msg, Throwable ex, HttpProcessingState state) {
+        Deque<Span> distributedTraceStackToLink = null;
+        Map<String, String> mdcContextMapToLink = null;
+
+        if (state != null) {
+            distributedTraceStackToLink = state.getDistributedTraceStack();
+            mdcContextMapToLink = state.getLoggerMdcContextMap();
+        }
+
+        logErrorWithTracing(msg, ex, distributedTraceStackToLink, mdcContextMapToLink);
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    protected void logErrorWithTracing(String msg, Throwable ex, ChannelHandlerContext ctx) {
+        Pair<Deque<Span>, Map<String, String>> tracingState =
+            AsyncNettyHelper.extractTracingAndMdcInfoFromChannelHandlerContext(ctx);
+
+        Deque<Span> distributedTraceStackToLink = null;
+        Map<String, String> mdcContextMapToLink = null;
+
+        if (tracingState != null) {
+            distributedTraceStackToLink = tracingState.getLeft();
+            mdcContextMapToLink = tracingState.getRight();
+        }
+
+        logErrorWithTracing(msg, ex, distributedTraceStackToLink, mdcContextMapToLink);
+    }
+
+    protected void logErrorWithTracing(
+        String msg,
+        Throwable ex,
+        Deque<Span> distributedTraceStackToLink,
+        Map<String, String> mdcContextMapToLink
+    ) {
+        runnableWithTracingAndMdc(
+            () -> logger.error(msg, ex),
+            distributedTraceStackToLink,
+            mdcContextMapToLink
+        ).run();
     }
 
     /**

@@ -64,8 +64,14 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
                 // This should be done by RoutingHandler already but it doesn't hurt to double check here, and it
                 //      keeps this handler independent in case things get refactored again in the future.
                 handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
-                    (HttpRequest)msg, state
+                    (HttpRequest) msg, state
                 );
+
+                // The above method call should set RequestInfo on the state, even if the Netty HttpRequest obj was
+                //      invalid (if it's invalid it will default to a synthetic/dummy RequestInfo that indicates an
+                //      error). But if it *is* invalid, we want to throw an exception here to immediately invoke
+                //      error handling behavior.
+                handlerUtils.throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
             }
             else if (msg instanceof HttpContent) {
                 HttpContent httpContentMsg = (HttpContent) msg;
@@ -80,7 +86,9 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
                 }
 
                 int currentRequestLengthInBytes = requestInfo.addContentChunk(httpContentMsg);
-                int configuredMaxRequestSize = getConfiguredMaxRequestSize(state.getEndpointForExecution(), globalConfiguredMaxRequestSizeInBytes);
+                int configuredMaxRequestSize = getConfiguredMaxRequestSize(
+                    state.getEndpointForExecution(), globalConfiguredMaxRequestSizeInBytes
+                );
 
                 if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
                     && currentRequestLengthInBytes > configuredMaxRequestSize) {
@@ -104,18 +112,16 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
 
     @Override
     public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        // If this method is called, there's a chance that the HttpProcessingState does not have a RequestInfo set on it
-        //      (i.e. if this exception was caused by a bad HTTP call and throwExceptionIfNotSuccessfullyDecoded()
-        //      threw a InvalidHttpRequestException). Things like access logger and metrics listener need a RequestInfo
-        //      in order to function, so we should create a synthetic one.
+        // If this method is called, there's a (small) chance that the HttpProcessingState does not have a RequestInfo
+        //      set on it. Things like access logger and metrics listener need a RequestInfo in order to function, so
+        //      we should create a synthetic one.
         HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
         if (state != null && state.getRequestInfo() == null) {
             state.setRequestInfo(RequestInfoImpl.dummyInstanceForUnknownRequests());
             runnableWithTracingAndMdc(
                 () -> logger.warn(
                     "An error occurred before a RequestInfo could be created, so a synthetic RequestInfo indicating an "
-                    + "error will be used instead. This can happen when the request cannot be decoded as a valid HTTP "
-                    + "request.", cause
+                    + "error will be used instead.", cause
                 ),
                 ctx
             ).run();

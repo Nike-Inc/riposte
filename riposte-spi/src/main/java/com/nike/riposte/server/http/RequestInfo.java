@@ -43,7 +43,7 @@ public interface RequestInfo<T> {
      * The full URI associated with this request. This will be the raw, potentially encoded, value sent to the server.
      * It may include the query string (use {@link #getPath()} if you don't want the query string).
      *
-     * see {@link #getPathTemplate()} if you are looking for the matching template of the request
+     * see {@link #getPathTemplate()} if you are looking for the matching template of the request.
      *
      * Will never be null - the empty string will be used if no URI information was provided.
      */

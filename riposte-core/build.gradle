@@ -15,8 +15,11 @@ dependencies {
             "org.javassist:javassist:$javassistVersion",
             "com.jcraft:jzlib:$jzlibVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
             "org.spockframework:spock-core:$spockVersion",
             "org.codehaus.groovy:groovy-all:$groovyVersion",

@@ -294,8 +294,8 @@ public class RequestInfoSetterHandlerTest {
     public void doChannelRead_HttpRequest_throws_exception_when_failed_decoder_result() {
         // given
         HttpRequest msgMock = mock(HttpRequest.class);
-        DecoderResult decoderResult = mock(DecoderResult.class);
-        doReturn(true).when(decoderResult).isFailure();
+        Throwable decoderFailureCauseMock = mock(Throwable.class);
+        DecoderResult decoderResult = DecoderResult.failure(decoderFailureCauseMock);
         doReturn(decoderResult).when(msgMock).decoderResult();
         doReturn(null).when(stateMock).getRequestInfo();
 
@@ -304,13 +304,14 @@ public class RequestInfoSetterHandlerTest {
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+        assertThat(thrownException.getCause()).isSameAs(decoderFailureCauseMock);
     }
 
     @Test
     public void doChannelRead_HttpContent_throws_exception_when_failed_decoder_result() {
         // given
-        DecoderResult decoderResult = mock(DecoderResult.class);
-        doReturn(true).when(decoderResult).isFailure();
+        Throwable decoderFailureCauseMock = mock(Throwable.class);
+        DecoderResult decoderResult = DecoderResult.failure(decoderFailureCauseMock);
         doReturn(decoderResult).when(httpContentMock).decoderResult();
 
         // when
@@ -318,6 +319,7 @@ public class RequestInfoSetterHandlerTest {
 
         // then
         assertThat(thrownException).isExactlyInstanceOf(InvalidHttpRequestException.class);
+        assertThat(thrownException.getCause()).isSameAs(decoderFailureCauseMock);
         verify(httpContentMock).release();
     }
 }

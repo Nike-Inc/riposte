@@ -4,6 +4,7 @@ import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreakerImpl;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
@@ -811,6 +812,9 @@ public class AsyncNettyHelperTest {
             MDC.getCopyOfContextMap()
         );
 
+        state.setDistributedTracingConfig(mock(DistributedTracingConfig.class));
+        assertThat(state.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
+
         // when
         AsyncNettyHelper.executeOnlyIfChannelIsActive(ctxMock, "foo", runnableMock);
 
@@ -830,8 +834,10 @@ public class AsyncNettyHelperTest {
             verify(proxyRouterStateMock).cancelDownstreamRequest(any());
         }
 
-        if (!stateIsNull && !isTraceCompletedOrScheduledSetup)
+        if (!stateIsNull && !isTraceCompletedOrScheduledSetup) {
             assertThat(state.isTraceCompletedOrScheduled()).isTrue();
+            assertThat(state.isTracingResponseTaggingAndFinalSpanNameCompleted()).isTrue();
+        }
 
         Pair<Deque<Span>, Map<String, String>> postCallTracingInfo = Pair.of(
             Tracer.getInstance().getCurrentSpanStackCopy(),

@@ -5,16 +5,19 @@ import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.fastbreak.CircuitBreakerDelegate;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.SpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
-import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.http.HttpRequestTracingUtils;
+
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
 import com.ning.http.client.NameResolver;
 import com.ning.http.client.Response;
 import com.ning.http.client.SignatureCalculator;
 import com.ning.http.client.uri.Uri;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -113,6 +116,11 @@ public class AsyncHttpClientHelper {
 
     protected final AsyncHttpClient asyncHttpClient;
     protected boolean performSubSpanAroundDownstreamCalls;
+    /**
+     * Controls span naming and tagging when {@link #performSubSpanAroundDownstreamCalls} is true.
+     */
+    protected SpanNamingAndTaggingStrategy<RequestBuilderWrapper, Response, Span> spanNamingAndTaggingStrategy =
+        DefaultAsyncHttpClientHelperSpanNamingAndTaggingStrategy.getDefaultInstance();
 
     /**
      * Constructor that gives you maximum control over configuration and behavior.
@@ -196,6 +204,26 @@ public class AsyncHttpClientHelper {
      */
     public AsyncHttpClientHelper setPerformSubSpanAroundDownstreamCalls(boolean performSubSpanAroundDownstreamCalls) {
         this.performSubSpanAroundDownstreamCalls = performSubSpanAroundDownstreamCalls;
+        return this;
+    }
+
+    /**
+     * Sets the {@link SpanNamingAndTaggingStrategy} that should be used when this class surrounds outbound calls
+     * with subspans (i.e. when {@link #performSubSpanAroundDownstreamCalls} is true). The standard/default
+     * class that is used is {@link DefaultAsyncHttpClientHelperSpanNamingAndTaggingStrategy} - if you want to
+     * adjust something, you will probably want to start with that class as a base.
+     *
+     * @param spanNamingAndTaggingStrategy The strategy to use.
+     * @return This same instance being called, to enable fluent setup.
+     */
+    public AsyncHttpClientHelper setSpanNamingAndTaggingStrategy(
+        SpanNamingAndTaggingStrategy<RequestBuilderWrapper, Response, Span> spanNamingAndTaggingStrategy
+    ) {
+        if (spanNamingAndTaggingStrategy == null) {
+            throw new IllegalArgumentException("spanNamingAndTaggingStrategy cannot be null");
+        }
+        
+        this.spanNamingAndTaggingStrategy = spanNamingAndTaggingStrategy;
         return this;
     }
 
@@ -355,20 +383,28 @@ public class AsyncHttpClientHelper {
             AsyncCompletionHandlerWithTracingAndMdcSupport<O> asyncCompletionHandler =
                 new AsyncCompletionHandlerWithTracingAndMdcSupport<>(
                     completableFutureResponse, responseHandlerFunction, performSubSpanAroundDownstreamCalls,
-                    requestBuilderWrapper.httpMethod,
-                    requestBuilderWrapper.url, circuitBreakerManualTask, distributedTraceStackForCall, mdcContextForCall);
+                    requestBuilderWrapper, circuitBreakerManualTask, distributedTraceStackForCall, mdcContextForCall,
+                    spanNamingAndTaggingStrategy
+                );
 
             // Add distributed trace headers to the downstream call if we have a span.
             Span spanForCall = asyncCompletionHandler.getSpanForCall();
             if (spanForCall != null) {
-                requestBuilderWrapper.requestBuilder.setHeader(TraceHeaders.TRACE_SAMPLED,
-                                                               String.valueOf(spanForCall.isSampleable()));
-                requestBuilderWrapper.requestBuilder.setHeader(TraceHeaders.TRACE_ID, spanForCall.getTraceId());
-                requestBuilderWrapper.requestBuilder.setHeader(TraceHeaders.SPAN_ID, spanForCall.getSpanId());
-                requestBuilderWrapper.requestBuilder.setHeader(TraceHeaders.PARENT_SPAN_ID,
-                                                               spanForCall.getParentSpanId());
-                requestBuilderWrapper.requestBuilder.setHeader(TraceHeaders.SPAN_NAME, spanForCall.getSpanName());
+                HttpRequestTracingUtils.propagateTracingHeaders(
+                    (headerKey, headerValue) -> {
+                        if (headerValue != null) {
+                            requestBuilderWrapper.requestBuilder.setHeader(headerKey, headerValue);
+                        }
+                    },
+                    spanForCall
+                );
             }
+
+            // Add span tags if we're doing a subspan around the call.
+            if (performSubSpanAroundDownstreamCalls && spanForCall != null) {
+                spanNamingAndTaggingStrategy.handleRequestTagging(spanForCall, requestBuilderWrapper);
+            }
+
             // Execute the downstream call. The completableFutureResponse will be completed or completed exceptionally
             //      depending on the result of the call.
             requestBuilderWrapper.requestBuilder.execute(asyncCompletionHandler);

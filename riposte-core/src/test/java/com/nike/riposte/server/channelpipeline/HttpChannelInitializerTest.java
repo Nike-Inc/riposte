@@ -4,6 +4,9 @@ import com.nike.internal.util.Pair;
 import com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient;
 import com.nike.riposte.metrics.MetricsListener;
 import com.nike.riposte.server.config.ServerConfig.HttpRequestDecoderConfig;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
+import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
 import com.nike.riposte.server.error.validation.RequestSecurityValidator;
@@ -36,6 +39,7 @@ import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.http.filter.RequestAndResponseFilter;
 import com.nike.riposte.server.logging.AccessLogger;
 import com.nike.riposte.util.Matcher;
+import com.nike.wingtips.Span;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tngtech.java.junit.dataprovider.DataProvider;
@@ -156,6 +160,11 @@ public class HttpChannelInitializerTest {
         List<String> userIdHeaderKeys = mock(List.class);
         int responseCompressionThresholdBytes = 5678;
         HttpRequestDecoderConfig httpRequestDecoderConfig = new HttpRequestDecoderConfig() {};
+        DistributedTracingConfig<Span> distributedTracingConfig = mock(DistributedTracingConfig.class);
+        ProxyRouterSpanNamingAndTaggingStrategy<Span> proxySpanTaggingStrategyMock =
+            mock(ProxyRouterSpanNamingAndTaggingStrategy.class);
+        doReturn(proxySpanTaggingStrategyMock).when(distributedTracingConfig)
+                                              .getProxyRouterSpanNamingAndTaggingStrategy();
 
         // when
         HttpChannelInitializer hci = new HttpChannelInitializer(
@@ -163,7 +172,7 @@ public class HttpChannelInitializerTest {
             validationService, requestContentDeserializer, responseSender, metricsListener, defaultCompletableFutureTimeoutMillis, accessLogger,
             pipelineCreateHooks, requestSecurityValidator, workerChannelIdleTimeoutMillis, proxyRouterConnectTimeoutMillis,
             incompleteHttpCallTimeoutMillis, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled, userIdHeaderKeys,
-            responseCompressionThresholdBytes, httpRequestDecoderConfig);
+            responseCompressionThresholdBytes, httpRequestDecoderConfig, distributedTracingConfig);
 
         // then
         assertThat(extractField(hci, "sslCtx"), is(sslCtx));
@@ -187,11 +196,13 @@ public class HttpChannelInitializerTest {
         assertThat(extractField(hci, "userIdHeaderKeys"), is(userIdHeaderKeys));
         assertThat(extractField(hci, "responseCompressionThresholdBytes"), is(responseCompressionThresholdBytes));
         assertThat(extractField(hci, "httpRequestDecoderConfig"), is(httpRequestDecoderConfig));
+        assertThat(extractField(hci, "distributedTracingConfig"), is(distributedTracingConfig));
 
         StreamingAsyncHttpClient sahc = extractField(hci, "streamingAsyncHttpClientForProxyRouterEndpoints");
         assertThat(extractField(sahc, "idleChannelTimeoutMillis"), is(workerChannelIdleTimeoutMillis));
         assertThat(extractField(sahc, "downstreamConnectionTimeoutMillis"), is((int)proxyRouterConnectTimeoutMillis));
         assertThat(extractField(sahc, "debugChannelLifecycleLoggingEnabled"), is(debugChannelLifecycleLoggingEnabled));
+        assertThat(extractField(sahc, "proxySpanTaggingStrategy"), is(proxySpanTaggingStrategyMock));
 
         RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
         assertThat(extractField(beforeSecReqFH, "filters"), is(Collections.singletonList(beforeSecurityRequestFilter)));
@@ -212,7 +223,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123, null);
+            123, null, mock(DistributedTracingConfig.class));
 
         // then
         assertThat(extractField(hci, "sslCtx"), nullValue());
@@ -244,7 +255,7 @@ public class HttpChannelInitializerTest {
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
                 null, null, 121, 42, 321, 100, false, null,
-                123, null);
+                123, null, mock(DistributedTracingConfig.class));
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "beforeSecurityRequestFilterHandler");
@@ -268,7 +279,7 @@ public class HttpChannelInitializerTest {
                 null, 42, Arrays.asList(getMockEndpoint("/some/path")), reqResFilters, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
                 null, null, mock(ResponseSender.class), null, 4242L, null,
                 null, null, 121, 42, 321, 100, false, null,
-                123, null);
+                123, null, mock(DistributedTracingConfig.class));
 
         // then
         RequestFilterHandler beforeSecReqFH = extractField(hci, "afterSecurityRequestFilterHandler");
@@ -287,7 +298,7 @@ public class HttpChannelInitializerTest {
             null, 42, null, null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123, null);
+            123, null, mock(DistributedTracingConfig.class));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -297,7 +308,7 @@ public class HttpChannelInitializerTest {
             null, 42, Collections.emptyList(), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123, null);
+            123, null, mock(DistributedTracingConfig.class));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -307,7 +318,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, null, mock(RiposteUnhandledErrorHandler.class),
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123, null);
+            123, null, mock(DistributedTracingConfig.class));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -317,7 +328,7 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), null,
             null, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123, null);
+            123, null, mock(DistributedTracingConfig.class));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -327,7 +338,17 @@ public class HttpChannelInitializerTest {
             null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
             null, null, null, null, 4242L, null,
             null, null, 121, 42, 321, 100, false, null,
-            123, null);
+            123, null, mock(DistributedTracingConfig.class));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructor_throws_IllegalArgumentException_if_distributedTracingConfig_is_null() {
+        // expect
+        new HttpChannelInitializer(
+            null, 42, Arrays.asList(getMockEndpoint("/some/path")), null, null, mock(RiposteErrorHandler.class), mock(RiposteUnhandledErrorHandler.class),
+            null, null, mock(ResponseSender.class), null, 4242L, null,
+            null, null, 121, 42, 321, 100, false, null,
+            123, null, null);
     }
 
     private <T extends ChannelHandler> Pair<Integer, T> findChannelHandler(List<ChannelHandler> channelHandlers, Class<T> classToFind, boolean findLast) {
@@ -361,7 +382,7 @@ public class HttpChannelInitializerTest {
             sslCtx, 42, Arrays.asList(getMockEndpoint("/some/path")), requestAndResponseFilters, null, mock(RiposteErrorHandler.class),
             mock(RiposteUnhandledErrorHandler.class), validationService, null, mock(ResponseSender.class), null, 4242L, null,
             null, null, workerChannelIdleTimeoutMillis, 4200, 1234, maxOpenChannelsThreshold, debugChannelLifecycleLoggingEnabled,
-            null, 123, null);
+            null, 123, null, mock(DistributedTracingConfig.class));
     }
 
     @Test
@@ -576,8 +597,10 @@ public class HttpChannelInitializerTest {
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
         MetricsListener expectedMetricsListener = mock(MetricsListener.class);
         long expectedIncompleteCallTimeoutMillis = 424242;
+        DistributedTracingConfig<Span> distributedTracingConfigMock = mock(DistributedTracingConfig.class);
         Whitebox.setInternalState(hci, "metricsListener", expectedMetricsListener);
         Whitebox.setInternalState(hci, "incompleteHttpCallTimeoutMillis", expectedIncompleteCallTimeoutMillis);
+        Whitebox.setInternalState(hci, "distributedTracingConfig", distributedTracingConfigMock);
 
         // when
         hci.initChannel(socketChannelMock);
@@ -602,12 +625,19 @@ public class HttpChannelInitializerTest {
         RequestStateCleanerHandler handler = requestStateCleanerHandler.getRight();
         assertThat(Whitebox.getInternalState(handler, "metricsListener"), is(expectedMetricsListener));
         assertThat(Whitebox.getInternalState(handler, "incompleteHttpCallTimeoutMillis"), is(expectedIncompleteCallTimeoutMillis));
+        assertThat(Whitebox.getInternalState(handler, "distributedTracingConfig"), is(distributedTracingConfigMock));
     }
 
     @Test
     public void initChannel_adds_DTraceStartHandler_immediately_after_RequestStateCleanerHandler() {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
+        DistributedTracingConfig<Span> distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        ServerSpanNamingAndTaggingStrategy<Span> serverSpanNamingAndTaggingStrategyMock =
+            mock(ServerSpanNamingAndTaggingStrategy.class);
+        Whitebox.setInternalState(hci, "distributedTracingConfig", distributedTracingConfigMock);
+        doReturn(serverSpanNamingAndTaggingStrategyMock)
+            .when(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
 
         // when
         hci.initChannel(socketChannelMock);
@@ -623,6 +653,8 @@ public class HttpChannelInitializerTest {
         assertThat(dTraceStartHandler, notNullValue());
 
         assertThat(dTraceStartHandler.getLeft(), is(requestStateCleanerHandler.getLeft() + 1));
+        assertThat(extractField(dTraceStartHandler.getRight(), "spanNamingAndTaggingStrategy"),
+                   is(serverSpanNamingAndTaggingStrategyMock));
     }
 
     @Test
@@ -919,6 +951,13 @@ public class HttpChannelInitializerTest {
         Executor expectedLongRunningTaskExecutor = extractField(hci, "longRunningTaskExecutor");
         long expectedDefaultCompletableFutureTimeoutMillis = extractField(hci, "defaultCompletableFutureTimeoutMillis");
 
+        DistributedTracingConfig<Span> distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        ServerSpanNamingAndTaggingStrategy<Span> expectedServerSpanNamingAndTaggingStrategy =
+            mock(ServerSpanNamingAndTaggingStrategy.class);
+        Whitebox.setInternalState(hci, "distributedTracingConfig", distributedTracingConfigMock);
+        doReturn(expectedServerSpanNamingAndTaggingStrategy)
+            .when(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
+
         // when
         hci.initChannel(socketChannelMock);
 
@@ -943,8 +982,13 @@ public class HttpChannelInitializerTest {
         // and then
         Executor actualLongRunningTaskExecutor = (Executor) Whitebox.getInternalState(nonblockingEndpointExecutionHandler.getRight(), "longRunningTaskExecutor");
         long actualDefaultCompletableFutureTimeoutMillis = (long) Whitebox.getInternalState(nonblockingEndpointExecutionHandler.getRight(), "defaultCompletableFutureTimeoutMillis");
+        ServerSpanNamingAndTaggingStrategy<Span> actualTaggingStrategy =
+            (ServerSpanNamingAndTaggingStrategy<Span>) Whitebox.getInternalState(
+                nonblockingEndpointExecutionHandler.getRight(), "spanTaggingStrategy"
+            );
         assertThat(actualLongRunningTaskExecutor, is(expectedLongRunningTaskExecutor));
         assertThat(actualDefaultCompletableFutureTimeoutMillis, is(expectedDefaultCompletableFutureTimeoutMillis));
+        assertThat(actualTaggingStrategy, is(expectedServerSpanNamingAndTaggingStrategy));
     }
 
     @Test
@@ -1007,6 +1051,13 @@ public class HttpChannelInitializerTest {
         RiposteUnhandledErrorHandler
             expectedRiposteUnhandledErrorHandler = extractField(hci, "riposteUnhandledErrorHandler");
 
+        DistributedTracingConfig<Span> distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        ServerSpanNamingAndTaggingStrategy<Span> serverSpanNamingAndTaggingStrategyMock =
+            mock(ServerSpanNamingAndTaggingStrategy.class);
+        Whitebox.setInternalState(hci, "distributedTracingConfig", distributedTracingConfigMock);
+        doReturn(serverSpanNamingAndTaggingStrategyMock)
+            .when(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
+
         // when
         hci.initChannel(socketChannelMock);
 
@@ -1024,6 +1075,8 @@ public class HttpChannelInitializerTest {
 
         assertThat(exceptionHandlingHandler.getLeft(), is(responseSenderHandler.getLeft() - 1));
         assertThat(exceptionHandlingHandler.getLeft(), is(greaterThan(nonblockingEndpointExecutionHandler.getLeft())));
+        assertThat(extractField(exceptionHandlingHandler.getRight(), "spanNamingAndTaggingStrategy"),
+                   is(serverSpanNamingAndTaggingStrategyMock));
 
         // and then
         RiposteErrorHandler

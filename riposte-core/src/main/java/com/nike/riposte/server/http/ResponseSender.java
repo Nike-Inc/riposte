@@ -4,6 +4,8 @@ import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.channelpipeline.message.ChunkedOutboundMessage;
 import com.nike.riposte.server.channelpipeline.message.OutboundMessageSendContentChunk;
 import com.nike.riposte.server.channelpipeline.message.OutboundMessageSendHeadersChunkFromResponseInfo;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.handler.ErrorResponseBody;
 import com.nike.riposte.server.error.handler.ErrorResponseBodySerializer;
 import com.nike.riposte.util.ErrorContractSerializerHelper;
@@ -16,6 +18,8 @@ import com.nike.wingtips.Tracer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,6 +79,7 @@ public class ResponseSender {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
     private final ObjectMapper defaultResponseContentSerializer;
     private final ErrorResponseBodySerializer errorResponseBodySerializer;
+    private final @NotNull ServerSpanNamingAndTaggingStrategy<Span> spanNamingAndTaggingStrategy;
 
     public static final int DEFAULT_HTTP_STATUS_CODE = HttpResponseStatus.OK.code();
 
@@ -95,8 +100,11 @@ public class ResponseSender {
         };
     }
 
-    public ResponseSender(ObjectMapper defaultResponseContentSerializer,
-                          ErrorResponseBodySerializer errorResponseBodySerializer) {
+    public ResponseSender(
+        @Nullable ObjectMapper defaultResponseContentSerializer,
+        @Nullable ErrorResponseBodySerializer errorResponseBodySerializer,
+        @NotNull DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
         if (defaultResponseContentSerializer == null) {
             logger.info("No defaultResponseContentSerializer specified - using a new no-arg ObjectMapper as the "
                         + "default response serializer");
@@ -109,8 +117,13 @@ public class ResponseSender {
             errorResponseBodySerializer = ErrorContractSerializerHelper.SMART_ERROR_SERIALIZER;
         }
 
+        if (distributedTracingConfig == null) {
+            throw new IllegalArgumentException("distributedTracingConfig cannot be null");
+        }
+
         this.defaultResponseContentSerializer = defaultResponseContentSerializer;
         this.errorResponseBodySerializer = errorResponseBodySerializer;
+        this.spanNamingAndTaggingStrategy = distributedTracingConfig.getServerSpanNamingAndTaggingStrategy();
     }
 
     protected String serializeOutputToString(Object output, ObjectMapper serializer, ResponseInfo<?> responseInfo,
@@ -642,8 +655,17 @@ public class ResponseSender {
         }
     }
 
-    protected void writeChunk(ChannelHandlerContext ctx, HttpObject chunkToWrite, RequestInfo requestInfo,
-                              ResponseInfo<?> responseInfo, HttpProcessingState state) {
+    protected void writeChunk(
+        ChannelHandlerContext ctx,
+        HttpObject chunkToWrite,
+        RequestInfo requestInfo,
+        ResponseInfo<?> responseInfo,
+        HttpProcessingState state
+    ) {
+        boolean chunkIsInitialHttpResponse = chunkToWrite instanceof HttpResponse;
+        boolean chunkIsPayloadContent = chunkToWrite instanceof HttpContent;
+        boolean isLastChunk = chunkToWrite instanceof LastHttpContent;
+
         if (responseInfo.getUncompressedRawContentLength() == null) {
             // This is the first chunk being sent for this response. Initialize the uncompressed raw content length
             //      value to 0 so we can add to it as we find content.
@@ -651,7 +673,7 @@ public class ResponseSender {
         }
 
         // Add to responseInfo's uncompressed content length value if appropriate
-        if (chunkToWrite instanceof HttpContent) {
+        if (chunkIsPayloadContent) {
             ByteBuf actualContent = ((HttpContent) chunkToWrite).content();
             if (actualContent != null) {
                 long newUncompressedRawContentLengthValue =
@@ -663,11 +685,11 @@ public class ResponseSender {
         // We have to update some state info before the write() call because we could have other messages processed by
         //      the pipeline before the write is finished, and they need to know that the response sending has started
         //      (or finished).
-        boolean isLastChunk = chunkToWrite instanceof LastHttpContent;
         if (state != null) {
             // Update the ResponseInfo to indicate that the response sending has been started if this is the first chunk
-            if (chunkToWrite instanceof HttpResponse)
+            if (chunkIsInitialHttpResponse) {
                 responseInfo.setResponseSendingStarted(true);
+            }
 
             // Update ResponseInfo to indicate that the last chunk has been sent if this is the last chunk.
             if (isLastChunk) {
@@ -675,12 +697,31 @@ public class ResponseSender {
             }
         }
 
-        if (chunkToWrite instanceof HttpResponse)
+        // Debog-log the chunk.
+        if (chunkIsInitialHttpResponse) {
             logResponseFirstChunk((HttpResponse) chunkToWrite, ctx);
-        else if (chunkToWrite instanceof HttpContent)
+        }
+        else if (chunkIsPayloadContent) {
             logResponseContentChunk((HttpContent) chunkToWrite, ctx);
-        else
+        }
+        else {
             throw new IllegalStateException("What is this?: " + chunkToWrite.getClass().getName());
+        }
+
+        if (chunkIsInitialHttpResponse && state != null) {
+            // This is the first bytes of the response, and the state's ResponseInfo has been updated with the final
+            //      response data (like HTTP response status code), so we want to handle the response tagging on the
+            //      overall-request distributed tracing span, and set final span name.
+            state.handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone();
+
+            // We also want to set the wire-send annotation on the span.
+            Span overallRequestSpan = state.getOverallRequestSpan();
+            if (overallRequestSpan != null && spanNamingAndTaggingStrategy.shouldAddWireSendStartAnnotation()) {
+                overallRequestSpan.addTimestampedAnnotationForCurrentTime(
+                    spanNamingAndTaggingStrategy.wireSendStartAnnotationName()
+                );
+            }
+        }
 
         // Write the response, which will send it through the outbound pipeline
         //      (where it might be modified by outbound handlers).
@@ -691,8 +732,17 @@ public class ResponseSender {
             // Set the state's responseWriterFinalChunkChannelFuture so that handlers can hook into it if desired.
             state.setResponseWriterFinalChunkChannelFuture(writeFuture);
 
-            // Always attach a listener that sets response end time.
-            writeFuture.addListener(future -> state.setResponseEndTimeNanosToNowIfNotAlreadySet());
+            // Always attach a listener that sets response end time, and adds a "we sent the last bytes of the
+            //      response on the wire" annotation to the overall request span.
+            writeFuture.addListener(future -> {
+                state.setResponseEndTimeNanosToNowIfNotAlreadySet();
+                Span overallRequestSpan = state.getOverallRequestSpan();
+                if (overallRequestSpan != null && spanNamingAndTaggingStrategy.shouldAddWireSendFinishAnnotation()) {
+                    overallRequestSpan.addTimestampedAnnotationForCurrentTime(
+                        spanNamingAndTaggingStrategy.wireSendFinishAnnotationName()
+                    );
+                }
+            });
         }
 
         // Always attach a listener that logs write errors.

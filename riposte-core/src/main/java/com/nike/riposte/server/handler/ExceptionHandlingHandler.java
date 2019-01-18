@@ -1,6 +1,8 @@
 package com.nike.riposte.server.handler;
 
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.exception.IncompleteHttpCallTimeoutException;
 import com.nike.riposte.server.error.exception.InvalidRipostePipelineException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
@@ -18,9 +20,9 @@ import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.impl.FullResponseInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
+import com.nike.wingtips.Span;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +34,7 @@ import io.netty.handler.codec.http.HttpRequest;
 
 import static com.nike.riposte.server.channelpipeline.ChannelAttributes.getProxyRouterProcessingStateForChannel;
 import static com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport.HandlerMethodToExecute.DO_EXCEPTION_CAUGHT;
-import static com.nike.riposte.util.AsyncNettyHelper.callableWithTracingAndMdc;
+import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 
 /**
  * Handles errors thrown due to the incoming message and converts them to the appropriate {@link ResponseInfo} payload
@@ -55,20 +57,35 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
     private final RiposteErrorHandler riposteErrorHandler;
     private final RiposteUnhandledErrorHandler riposteUnhandledErrorHandler;
 
-    public ExceptionHandlingHandler(RiposteErrorHandler riposteErrorHandler,
-                                    RiposteUnhandledErrorHandler riposteUnhandledErrorHandler) {
-        if (riposteErrorHandler == null)
-            throw new IllegalArgumentException("riposteErrorHandler cannot be null");
+    private final @NotNull ServerSpanNamingAndTaggingStrategy<Span> spanNamingAndTaggingStrategy;
 
-        if (riposteUnhandledErrorHandler == null)
+    private final RiposteHandlerInternalUtil handlerUtils = RiposteHandlerInternalUtil.DEFAULT_IMPL;
+
+    @SuppressWarnings("ConstantConditions")
+    public ExceptionHandlingHandler(
+        @NotNull RiposteErrorHandler riposteErrorHandler,
+        @NotNull RiposteUnhandledErrorHandler riposteUnhandledErrorHandler,
+        @NotNull DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
+        if (riposteErrorHandler == null) {
+            throw new IllegalArgumentException("riposteErrorHandler cannot be null");
+        }
+
+        if (riposteUnhandledErrorHandler == null) {
             throw new IllegalArgumentException("riposteUnhandledErrorHandler cannot be null");
+        }
+
+        if (distributedTracingConfig == null) {
+            throw new IllegalArgumentException("distributedTracingConfig cannot be null");
+        }
 
         this.riposteErrorHandler = riposteErrorHandler;
         this.riposteUnhandledErrorHandler = riposteUnhandledErrorHandler;
+        this.spanNamingAndTaggingStrategy = distributedTracingConfig.getServerSpanNamingAndTaggingStrategy();
     }
 
     @Override
-    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // We expect to end up here when handlers previously in the pipeline throw an error, so do the normal
         //      processError call.
         HttpProcessingState state = getStateAndCreateIfNeeded(ctx, cause);
@@ -91,30 +108,32 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
             if (shouldForceConnectionCloseAfterResponseSent(cause))
                 responseInfo.setForceConnectionCloseAfterResponseSent(true);
 
-            state.setResponseInfo(responseInfo);
+            state.setResponseInfo(responseInfo, cause);
 
             // We're about to send a full error response back to the original caller, so any proxy/router streaming is
             //      invalid. Cancel request and response streaming for proxy/router endpoints.
             Endpoint<?> endpoint = state.getEndpointForExecution();
-            if (endpoint != null && endpoint instanceof ProxyRouterEndpoint) {
+            if (endpoint instanceof ProxyRouterEndpoint) {
                 ProxyRouterProcessingState proxyRouterState = getProxyRouterProcessingStateForChannel(ctx).get();
                 if (proxyRouterState != null) {
                     proxyRouterState.cancelRequestStreaming(cause, ctx);
                     proxyRouterState.cancelDownstreamRequest(cause);
                 }
             }
+
+            addErrorAnnotationToOverallRequestSpan(state, responseInfo, cause);
         }
 
         return PipelineContinuationBehavior.CONTINUE;
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         // We expect to be here for normal message processing, but only as a pass-through. If the state indicates that
         //      the request was not handled then that's a pipeline misconfiguration and we need to throw an error.
         HttpProcessingState state = getStateAndCreateIfNeeded(ctx, null);
         if (!state.isRequestHandled()) {
-            callableWithTracingAndMdc(() -> {
+            runnableWithTracingAndMdc(() -> {
                 String errorMsg = "In ExceptionHandlingHandler's channelRead method, but the request has not yet been "
                                   + "handled. This should not be possible and indicates the pipeline is not set up "
                                   + "properly or some unknown and unexpected error state was triggered. Sending "
@@ -122,12 +141,36 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
                 logger.error(errorMsg);
                 Exception ex = new InvalidRipostePipelineException(errorMsg);
                 ResponseInfo<ErrorResponseBody> responseInfo = processUnhandledError(state, msg, ex);
-                state.setResponseInfo(responseInfo);
-                return null;
-            }, ctx).call();
+                state.setResponseInfo(responseInfo, ex);
+                addErrorAnnotationToOverallRequestSpan(state, responseInfo, ex);
+            }, ctx).run();
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    protected void addErrorAnnotationToOverallRequestSpan(
+        @NotNull HttpProcessingState state,
+        @NotNull ResponseInfo<ErrorResponseBody> responseInfo,
+        @NotNull Throwable error
+    ) {
+        try {
+            Span requestSpan = state.getOverallRequestSpan();
+            if (
+                requestSpan != null
+                && spanNamingAndTaggingStrategy.shouldAddErrorAnnotationForCaughtException(responseInfo, error)
+            ) {
+                requestSpan.addTimestampedAnnotationForCurrentTime(
+                    spanNamingAndTaggingStrategy.errorAnnotationName(responseInfo, error)
+                );
+            }
+        }
+        catch (Throwable t) {
+            logger.error(
+                "An unexpected error occurred while trying to add an error annotation to the overall request span. "
+                + "This should never happen.", t
+            );
+        }
     }
 
     @Override
@@ -163,14 +206,27 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
         // Try to get the RequestInfo from the state variable first.
         RequestInfo requestInfo = state.getRequestInfo();
 
-        // If the state did not have a request info, see if we can build one from the msg
-        if (requestInfo == null && msg != null && (msg instanceof HttpRequest))
-            requestInfo = new RequestInfoImpl((HttpRequest) msg);
+        if (requestInfo != null) {
+            return requestInfo;
+        }
 
-        // If requestInfo is still null then something major blew up, and we just need to create a dummy one for an
-        //      unknown request
-        if (requestInfo == null)
-            requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
+        // The state did not have a request info. See if we can build one from the msg.
+        if (msg instanceof HttpRequest) {
+            try {
+                return handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
+                    (HttpRequest) msg, state
+                );
+            } catch (Throwable t) {
+                logger.error(
+                    "Unable to generate RequestInfo from HttpRequest. Defaulting to a synthetic RequestInfo.", t
+                );
+            }
+        }
+
+        // Something major blew up if we reach here, so we just need to create a dummy RequestInfo for an unknown
+        //      request.
+        requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
+        state.setRequestInfo(requestInfo);
 
         return requestInfo;
     }
@@ -185,7 +241,7 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
      */
     protected ResponseInfo<ErrorResponseBody> processError(HttpProcessingState state,
                                                            Object msg,
-                                                           Throwable cause) throws JsonProcessingException {
+                                                           Throwable cause) {
         RequestInfo<?> requestInfo = getRequestInfo(state, msg);
 
         try {
@@ -216,7 +272,7 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
      */
     ResponseInfo<ErrorResponseBody> processUnhandledError(HttpProcessingState state,
                                                           Object msg,
-                                                          Throwable cause) throws JsonProcessingException {
+                                                          Throwable cause) {
         RequestInfo<?> requestInfo = getRequestInfo(state, msg);
 
         // Run the error through the riposteUnhandledErrorHandler

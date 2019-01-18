@@ -3,9 +3,17 @@ package com.nike.riposte.client.asynchttp.ning;
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.internal.util.Pair;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.InitialSpanNameArgs;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.RequestTaggingArgs;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.ResponseTaggingArgs;
+import com.nike.riposte.server.config.distributedtracing.SpanNamingAndTaggingStrategy;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
+import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
 
+import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
@@ -24,6 +32,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.nike.riposte.client.asynchttp.ning.AsyncCompletionHandlerWithTracingAndMdcSupportTest.ExistingSpanStackState.EMPTY;
 import static java.lang.Boolean.TRUE;
@@ -50,6 +60,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
     private AsyncResponseHandler<String> responseHandlerFunctionMock;
     private Response responseMock;
     private String responseHandlerResult;
+    private RequestBuilderWrapper requestBuilderWrapper;
     private String downstreamMethod;
     private String downstreamUrl;
     private ManualModeTask<Response> circuitBreakerManualTaskMock;
@@ -57,15 +68,46 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
     private Map<String, String> initialMdcInfo;
     private AsyncCompletionHandlerWithTracingAndMdcSupport<String> handlerSpy;
 
+    private SpanNamingAndTaggingStrategy<RequestBuilderWrapper, Response, Span> tagAndNamingStrategy;
+    private HttpTagAndSpanNamingStrategy<RequestBuilderWrapper, Response> wingtipsTagAndNamingStrategy;
+    private HttpTagAndSpanNamingAdapter<RequestBuilderWrapper, Response> wingtipsTagAndNamingAdapterMock;
+    private AtomicReference<String> initialSpanNameFromStrategy;
+    private AtomicBoolean strategyInitialSpanNameMethodCalled;
+    private AtomicBoolean strategyRequestTaggingMethodCalled;
+    private AtomicBoolean strategyResponseTaggingAndFinalSpanNameMethodCalled;
+    private AtomicReference<InitialSpanNameArgs<RequestBuilderWrapper>> strategyInitialSpanNameArgs;
+    private AtomicReference<RequestTaggingArgs<RequestBuilderWrapper>> strategyRequestTaggingArgs;
+    private AtomicReference<ResponseTaggingArgs<RequestBuilderWrapper, Response>> strategyResponseTaggingArgs;
+
     @Before
     public void beforeMethod() throws Throwable {
         resetTracingAndMdc();
+
+        initialSpanNameFromStrategy = new AtomicReference<>("span-name-from-strategy-" + UUID.randomUUID().toString());
+        strategyInitialSpanNameMethodCalled = new AtomicBoolean(false);
+        strategyRequestTaggingMethodCalled = new AtomicBoolean(false);
+        strategyResponseTaggingAndFinalSpanNameMethodCalled = new AtomicBoolean(false);
+        strategyInitialSpanNameArgs = new AtomicReference<>(null);
+        strategyRequestTaggingArgs = new AtomicReference<>(null);
+        strategyResponseTaggingArgs = new AtomicReference<>(null);
+        wingtipsTagAndNamingStrategy = new ArgCapturingHttpTagAndSpanNamingStrategy<>(
+            initialSpanNameFromStrategy, strategyInitialSpanNameMethodCalled, strategyRequestTaggingMethodCalled,
+            strategyResponseTaggingAndFinalSpanNameMethodCalled, strategyInitialSpanNameArgs,
+            strategyRequestTaggingArgs, strategyResponseTaggingArgs
+        );
+        wingtipsTagAndNamingAdapterMock = mock(HttpTagAndSpanNamingAdapter.class);
+        tagAndNamingStrategy = new DefaultAsyncHttpClientHelperSpanNamingAndTaggingStrategy(
+            wingtipsTagAndNamingStrategy, wingtipsTagAndNamingAdapterMock
+        );
 
         completableFutureResponse = new CompletableFuture<>();
         responseHandlerFunctionMock = mock(AsyncResponseHandler.class);
         downstreamMethod = "method-" + UUID.randomUUID().toString();
         downstreamUrl = "url-" + UUID.randomUUID().toString();
         circuitBreakerManualTaskMock = mock(ManualModeTask.class);
+
+        requestBuilderWrapper = new RequestBuilderWrapper(
+            downstreamUrl, downstreamMethod, mock(AsyncHttpClient.BoundRequestBuilder.class), Optional.empty(), true);
 
         responseMock = mock(Response.class);
         responseHandlerResult = "result-" + UUID.randomUUID().toString();
@@ -76,8 +118,9 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         initialMdcInfo = MDC.getCopyOfContextMap();
 
         handlerSpy = spy(new AsyncCompletionHandlerWithTracingAndMdcSupport<>(
-            completableFutureResponse, responseHandlerFunctionMock, true, downstreamMethod, downstreamUrl,
-            Optional.of(circuitBreakerManualTaskMock), initialSpanStack, initialMdcInfo
+            completableFutureResponse, responseHandlerFunctionMock, true, requestBuilderWrapper,
+            Optional.of(circuitBreakerManualTaskMock), initialSpanStack, initialMdcInfo,
+            tagAndNamingStrategy
         ));
 
         resetTracingAndMdc();
@@ -90,7 +133,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
     private void resetTracingAndMdc() {
         MDC.clear();
-        Tracer.getInstance().completeRequestSpan();
+        Tracer.getInstance().unregisterFromThread();
     }
 
     @Test
@@ -98,8 +141,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         // given
         CompletableFuture cfResponse = mock(CompletableFuture.class);
         AsyncResponseHandler responseHandlerFunc = mock(AsyncResponseHandler.class);
-        String method = "notused-method";
-        String url = "notused-url";
+        RequestBuilderWrapper rbwMock = mock(RequestBuilderWrapper.class);
         Optional<CircuitBreaker<Response>> circuitBreaker = Optional.of(mock(CircuitBreaker.class));
         Deque<Span> spanStack = mock(Deque.class);
         Map<String, String> mdcInfo = mock(Map.class);
@@ -109,7 +151,8 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
         // when
         AsyncCompletionHandlerWithTracingAndMdcSupport instance = new AsyncCompletionHandlerWithTracingAndMdcSupport(
-            cfResponse, responseHandlerFunc, false, method, url, circuitBreaker, spanStack, mdcInfo
+            cfResponse, responseHandlerFunc, false, rbwMock, circuitBreaker, spanStack, mdcInfo,
+            tagAndNamingStrategy
         );
 
         // then
@@ -139,8 +182,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         // given
         CompletableFuture cfResponse = mock(CompletableFuture.class);
         AsyncResponseHandler responseHandlerFunc = mock(AsyncResponseHandler.class);
-        String method = UUID.randomUUID().toString();
-        String url = UUID.randomUUID().toString();
+        RequestBuilderWrapper rbwMock = mock(RequestBuilderWrapper.class);
         Optional<CircuitBreaker<Response>> circuitBreaker = Optional.of(mock(CircuitBreaker.class));
         Span initialSpan = null;
         switch (existingSpanStackState) {
@@ -166,7 +208,8 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
         // when
         AsyncCompletionHandlerWithTracingAndMdcSupport instance = new AsyncCompletionHandlerWithTracingAndMdcSupport(
-            cfResponse, responseHandlerFunc, true, method, url, circuitBreaker, spanStack, mdcInfo
+            cfResponse, responseHandlerFunc, true, rbwMock, circuitBreaker, spanStack, mdcInfo,
+            tagAndNamingStrategy
         );
 
         // then
@@ -188,7 +231,9 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
             assertThat(subspan).isNotEqualTo(initialSpan);
             assertThat(subspan.getTraceId()).isEqualTo(initialSpan.getTraceId());
             assertThat(subspan.getParentSpanId()).isEqualTo(initialSpan.getSpanId());
-            assertThat(subspan.getSpanName()).isEqualTo(instance.getSubspanSpanName(method, url));
+            assertThat(subspan.getSpanName()).isEqualTo(instance.getSubspanSpanName(
+                rbwMock, tagAndNamingStrategy
+            ));
         }
 
         assertThat(Tracer.getInstance().getCurrentSpanStackCopy()).isEqualTo(spanStackBeforeCall);
@@ -231,11 +276,32 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         assertThat(spanForCall).isEqualTo(expectedResult);
     }
 
+    @DataProvider(value = {
+        "spanNameFromStrategy   |   PATCH           |   spanNameFromStrategy",
+        "null                   |   PATCH           |   async_downstream_call-PATCH",
+        "                       |   PATCH           |   async_downstream_call-PATCH",
+        "[whitespace]           |   PATCH           |   async_downstream_call-PATCH",
+        "null                   |   null            |   async_downstream_call-UNKNOWN_HTTP_METHOD",
+    }, splitBy = "\\|")
     @Test
-    public void getSubspanSpanName_returns_expected_value() {
-        // expect
-        assertThat(handlerSpy.getSubspanSpanName(downstreamMethod, downstreamUrl))
-            .isEqualTo("async_downstream_call-" + downstreamMethod + "_" + downstreamUrl);
+    public void getSubspanSpanName_works_as_expected(
+        String strategyResult, String httpMethod, String expectedResult
+    ) {
+        // given
+        if ("[whitespace]".equals(strategyResult)) {
+            strategyResult = "  \n\r\t  ";
+        }
+
+        initialSpanNameFromStrategy.set(strategyResult);
+        requestBuilderWrapper.setHttpMethod(httpMethod);
+
+        // when
+        String result = handlerSpy.getSubspanSpanName(
+            requestBuilderWrapper, tagAndNamingStrategy
+        );
+
+        // then
+        assertThat(result).isEqualTo(expectedResult);
     }
 
     @DataProvider(value = {
@@ -346,12 +412,12 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
         doAnswer(invocation -> {
             before.setObj(Tracer.getInstance().getCurrentSpan());
-            return invocation.callRealMethod();
+            return null;
         }).when(circuitBreakerManualTaskMock).handleEvent(responseMock);
 
         doAnswer(invocation -> {
             after.setObj(Tracer.getInstance().getCurrentSpan());
-            return invocation.callRealMethod();
+            return responseHandlerResult;
         }).when(responseHandlerFunctionMock).handleResponse(responseMock);
 
         return Pair.of(before, after);
@@ -368,8 +434,15 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         Pair<Deque<Span>, Map<String, String>> traceInfo = generateTraceInfo(setupForSubspan);
         Whitebox.setInternalState(handlerSpy, "distributedTraceStackToUse", traceInfo.getLeft());
         Whitebox.setInternalState(handlerSpy, "mdcContextToUse", traceInfo.getRight());
+        Whitebox.setInternalState(handlerSpy, "performSubSpanAroundDownstreamCalls", TRUE.equals(setupForSubspan));
         Span expectedSpanBeforeCompletion = (traceInfo.getLeft() == null) ? null : traceInfo.getLeft().peek();
-        Span expectedSpanAfterCompletion = (TRUE.equals(setupForSubspan)) ? traceInfo.getLeft().peekLast() : null;
+        Span expectedSpanAfterCompletion = (setupForSubspan == null)
+                                           ? null
+                                           // If setupForSubspan is true, then there will be two items and peekLast will
+                                           //       get the "parent". Otherwise there will only be one item, and
+                                           //       peekLast will still get the correct thing (in this case the only
+                                           //       one there).
+                                           : traceInfo.getLeft().peekLast();
         Pair<ObjectHolder<Span>, ObjectHolder<Span>> actualBeforeAndAfterSpanHolders =
             setupBeforeAndAfterSpanCaptureForOnCompleted();
 
@@ -385,6 +458,17 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
         assertThat(actualBeforeAndAfterSpanHolders.getLeft().obj).isEqualTo(expectedSpanBeforeCompletion);
         assertThat(actualBeforeAndAfterSpanHolders.getRight().obj).isEqualTo(expectedSpanAfterCompletion);
+
+        if (TRUE.equals(setupForSubspan)) {
+            assertThat(strategyResponseTaggingAndFinalSpanNameMethodCalled.get()).isTrue();
+            strategyResponseTaggingArgs.get().verifyArgs(
+                expectedSpanBeforeCompletion, handlerSpy.rbwCopyWithHttpMethodAndUrlOnly, responseMock,
+                null, wingtipsTagAndNamingAdapterMock
+            );
+        }
+        else {
+            assertThat(strategyResponseTaggingAndFinalSpanNameMethodCalled.get()).isFalse();
+        }
     }
 
     @DataProvider(value = {
@@ -504,8 +588,15 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         Pair<Deque<Span>, Map<String, String>> traceInfo = generateTraceInfo(setupForSubspan);
         Whitebox.setInternalState(handlerSpy, "distributedTraceStackToUse", traceInfo.getLeft());
         Whitebox.setInternalState(handlerSpy, "mdcContextToUse", traceInfo.getRight());
+        Whitebox.setInternalState(handlerSpy, "performSubSpanAroundDownstreamCalls", TRUE.equals(setupForSubspan));
         Span expectedSpanBeforeCompletion = (traceInfo.getLeft() == null) ? null : traceInfo.getLeft().peek();
-        Span expectedSpanAfterCompletion = (TRUE.equals(setupForSubspan)) ? traceInfo.getLeft().peekLast() : null;
+        Span expectedSpanAfterCompletion = (setupForSubspan == null)
+                                           ? null
+                                           // If setupForSubspan is true, then there will be two items and peekLast will
+                                           //       get the "parent". Otherwise there will only be one item, and
+                                           //       peekLast will still get the correct thing (in this case the only
+                                           //       one there).
+                                           : traceInfo.getLeft().peekLast();
         Pair<ObjectHolder<Span>, ObjectHolder<Span>> actualBeforeAndAfterSpanHolders =
             setupBeforeAndAfterSpanCaptureForOnThrowable(cfMock);
 
@@ -521,6 +612,17 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
 
         assertThat(actualBeforeAndAfterSpanHolders.getLeft().obj).isEqualTo(expectedSpanBeforeCompletion);
         assertThat(actualBeforeAndAfterSpanHolders.getRight().obj).isEqualTo(expectedSpanAfterCompletion);
+
+        if (TRUE.equals(setupForSubspan)) {
+            assertThat(strategyResponseTaggingAndFinalSpanNameMethodCalled.get()).isTrue();
+            strategyResponseTaggingArgs.get().verifyArgs(
+                expectedSpanBeforeCompletion, handlerSpy.rbwCopyWithHttpMethodAndUrlOnly, null,
+                ex, wingtipsTagAndNamingAdapterMock
+            );
+        }
+        else {
+            assertThat(strategyResponseTaggingAndFinalSpanNameMethodCalled.get()).isFalse();
+        }
     }
 
     @DataProvider(value = {

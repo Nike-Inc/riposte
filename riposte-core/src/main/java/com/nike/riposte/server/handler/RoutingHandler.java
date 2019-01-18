@@ -118,6 +118,11 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
                 (HttpRequest)msg,
                 state
             );
+
+            // If the Netty HttpRequest is invalid, we shouldn't do any endpoint routing.
+            handlerUtils.throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
+
+            // The HttpRequest is valid, so continue with the endpoint routing.
             Pair<Endpoint<?>, String> endpointForExecution = findSingleEndpointForExecution(request);
 
             request.setPathParamsBasedOnPathTemplate(endpointForExecution.getRight());

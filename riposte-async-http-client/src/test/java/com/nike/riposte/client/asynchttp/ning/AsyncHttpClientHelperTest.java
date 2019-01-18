@@ -7,11 +7,18 @@ import com.nike.fastbreak.CircuitBreakerForHttpStatusCode;
 import com.nike.fastbreak.exception.CircuitBreakerOpenException;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.MultiIpAwareNameResolver;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.InitialSpanNameArgs;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.RequestTaggingArgs;
+import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSpanNamingStrategy.ResponseTaggingArgs;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.SpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
+import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
 
 import com.ning.http.client.AsyncHandler;
 import com.ning.http.client.AsyncHttpClient;
@@ -43,7 +50,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import io.netty.channel.Channel;
@@ -54,6 +63,7 @@ import io.netty.util.Attribute;
 
 import static com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.DEFAULT_POOLED_DOWNSTREAM_CONNECTION_TTL_MILLIS;
 import static com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.DEFAULT_REQUEST_TIMEOUT_MILLIS;
+import static com.nike.wingtips.http.HttpRequestTracingUtils.convertSampleableBooleanToExpectedB3Value;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
@@ -64,6 +74,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
@@ -85,9 +96,37 @@ public class AsyncHttpClientHelperTest {
     private AsyncCompletionHandlerWithTracingAndMdcSupport handlerWithTracingAndMdcDummyExample;
     private SignatureCalculator signatureCalculator;
 
+    private SpanNamingAndTaggingStrategy<RequestBuilderWrapper, Response, Span> tagAndNamingStrategy;
+    private HttpTagAndSpanNamingStrategy<RequestBuilderWrapper, Response> wingtipsTagAndNamingStrategy;
+    private HttpTagAndSpanNamingAdapter<RequestBuilderWrapper, Response> wingtipsTagAndNamingAdapterMock;
+    private AtomicReference<String> initialSpanNameFromStrategy;
+    private AtomicBoolean strategyInitialSpanNameMethodCalled;
+    private AtomicBoolean strategyRequestTaggingMethodCalled;
+    private AtomicBoolean strategyResponseTaggingAndFinalSpanNameMethodCalled;
+    private AtomicReference<InitialSpanNameArgs<RequestBuilderWrapper>> strategyInitialSpanNameArgs;
+    private AtomicReference<RequestTaggingArgs<RequestBuilderWrapper>> strategyRequestTaggingArgs;
+    private AtomicReference<ResponseTaggingArgs<RequestBuilderWrapper, Response>> strategyResponseTaggingArgs;
+    
     @Before
     public void beforeMethod() {
-        helperSpy = spy(new AsyncHttpClientHelper());
+        initialSpanNameFromStrategy = new AtomicReference<>("span-name-from-strategy-" + UUID.randomUUID().toString());
+        strategyInitialSpanNameMethodCalled = new AtomicBoolean(false);
+        strategyRequestTaggingMethodCalled = new AtomicBoolean(false);
+        strategyResponseTaggingAndFinalSpanNameMethodCalled = new AtomicBoolean(false);
+        strategyInitialSpanNameArgs = new AtomicReference<>(null);
+        strategyRequestTaggingArgs = new AtomicReference<>(null);
+        strategyResponseTaggingArgs = new AtomicReference<>(null);
+        wingtipsTagAndNamingStrategy = new ArgCapturingHttpTagAndSpanNamingStrategy<>(
+            initialSpanNameFromStrategy, strategyInitialSpanNameMethodCalled, strategyRequestTaggingMethodCalled,
+            strategyResponseTaggingAndFinalSpanNameMethodCalled, strategyInitialSpanNameArgs,
+            strategyRequestTaggingArgs, strategyResponseTaggingArgs
+        );
+        wingtipsTagAndNamingAdapterMock = mock(HttpTagAndSpanNamingAdapter.class);
+        tagAndNamingStrategy = new DefaultAsyncHttpClientHelperSpanNamingAndTaggingStrategy(
+            wingtipsTagAndNamingStrategy, wingtipsTagAndNamingAdapterMock
+        );
+
+        helperSpy = spy(new AsyncHttpClientHelper().setSpanNamingAndTaggingStrategy(tagAndNamingStrategy));
         channelMock = mock(Channel.class);
         ctxMock = mock(ChannelHandlerContext.class);
         stateAttributeMock = mock(Attribute.class);
@@ -100,7 +139,8 @@ public class AsyncHttpClientHelperTest {
         doReturn(eventLoopMock).when(channelMock).eventLoop();
 
         handlerWithTracingAndMdcDummyExample = new AsyncCompletionHandlerWithTracingAndMdcSupport<>(
-            null, null, false, null, null, null, null, null
+            null, null, false, mock(RequestBuilderWrapper.class), null, null, null,
+            DefaultAsyncHttpClientHelperSpanNamingAndTaggingStrategy.getDefaultInstance()
         );
 
         resetTracingAndMdc();
@@ -140,12 +180,29 @@ public class AsyncHttpClientHelperTest {
         // when
         AsyncHttpClientHelper instance = new AsyncHttpClientHelper(false);
         assertThat(instance.performSubSpanAroundDownstreamCalls).isFalse();
-        instance.setPerformSubSpanAroundDownstreamCalls(true)
-                .setDefaultSignatureCalculator(signatureCalculator);
+        AsyncHttpClientHelper result = instance.setPerformSubSpanAroundDownstreamCalls(true)
+                                               .setDefaultSignatureCalculator(signatureCalculator)
+                                               .setSpanNamingAndTaggingStrategy(tagAndNamingStrategy);
 
         // then
+        assertThat(result).isSameAs(instance);
         assertThat(instance.performSubSpanAroundDownstreamCalls).isTrue();
         assertThat(Whitebox.getInternalState(instance.asyncHttpClient, "signatureCalculator")).isEqualTo(signatureCalculator);
+        assertThat(instance.spanNamingAndTaggingStrategy).isSameAs(tagAndNamingStrategy);
+    }
+
+    @Test
+    public void setSpanNamingAndTaggingStrategy_throws_IllegalArgumentException_if_passed_null() {
+        // given
+        AsyncHttpClientHelper instance = new AsyncHttpClientHelper(false);
+
+        // when
+        Throwable ex = catchThrowable(() -> instance.setSpanNamingAndTaggingStrategy(null));
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("spanNamingAndTaggingStrategy cannot be null");
     }
 
     @DataProvider(value = {
@@ -426,7 +483,7 @@ public class AsyncHttpClientHelperTest {
             assertThat(achwtams.distributedTraceStackToUse).hasSize(initialSpanStackSize + 1);
             Span subspan = (Span) achwtams.distributedTraceStackToUse.peek();
             assertThat(subspan.getSpanName())
-                .isEqualTo(handlerWithTracingAndMdcDummyExample.getSubspanSpanName(method, url));
+                .isEqualTo(initialSpanNameFromStrategy.get());
             if (initialSpan != null) {
                 assertThat(subspan.getTraceId()).isEqualTo(initialSpan.getTraceId());
                 assertThat(subspan.getParentSpanId()).isEqualTo(initialSpan.getSpanId());
@@ -446,11 +503,22 @@ public class AsyncHttpClientHelperTest {
         }
         else {
             assertThat(spanForDownstreamCall).isNotNull();
-            verify(reqMock).setHeader(TraceHeaders.TRACE_SAMPLED, String.valueOf(spanForDownstreamCall.isSampleable()));
+            verify(reqMock).setHeader(TraceHeaders.TRACE_SAMPLED,
+                                      convertSampleableBooleanToExpectedB3Value(spanForDownstreamCall.isSampleable()));
             verify(reqMock).setHeader(TraceHeaders.TRACE_ID, spanForDownstreamCall.getTraceId());
             verify(reqMock).setHeader(TraceHeaders.SPAN_ID, spanForDownstreamCall.getSpanId());
-            verify(reqMock).setHeader(TraceHeaders.PARENT_SPAN_ID, spanForDownstreamCall.getParentSpanId());
-            verify(reqMock).setHeader(TraceHeaders.SPAN_NAME, spanForDownstreamCall.getSpanName());
+            if (spanForDownstreamCall.getParentSpanId() == null) {
+                verify(reqMock, never()).setHeader(eq(TraceHeaders.PARENT_SPAN_ID), anyString());
+            }
+            else {
+                verify(reqMock).setHeader(TraceHeaders.PARENT_SPAN_ID, spanForDownstreamCall.getParentSpanId());
+            }
+            verify(reqMock, never()).setHeader(eq(TraceHeaders.SPAN_NAME), anyString());
+        }
+
+        // Verify that any subspan had request tagging performed.
+        if (performSubspan) {
+            strategyRequestTaggingArgs.get().verifyArgs(spanForDownstreamCall, rbw, wingtipsTagAndNamingAdapterMock);
         }
     }
 
