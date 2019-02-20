@@ -2,6 +2,9 @@ package com.nike.riposte.server.http.impl;
 
 import com.nike.riposte.server.http.ResponseInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.charset.Charset;
 import java.util.Set;
 
@@ -18,23 +21,25 @@ import io.netty.handler.codec.http.cookie.Cookie;
 @SuppressWarnings("WeakerAccess")
 public abstract class BaseResponseInfo<T> implements ResponseInfo<T> {
 
-    protected Integer httpStatusCode;
-    protected final HttpHeaders headers;
-    protected String desiredContentWriterMimeType;
-    protected Charset desiredContentWriterEncoding;
-    protected Set<Cookie> cookies;
+    protected @Nullable Integer httpStatusCode;
+    protected final @NotNull HttpHeaders headers;
+    protected @Nullable String desiredContentWriterMimeType;
+    protected @Nullable Charset desiredContentWriterEncoding;
+    protected @Nullable Set<Cookie> cookies;
     protected boolean preventCompressedOutput;
-    protected Long uncompressedRawContentLength;
-    protected Long finalContentLength;
+    protected @Nullable Long uncompressedRawContentLength;
+    protected @Nullable Long finalContentLength;
     protected boolean responseSendingStarted;
     protected boolean responseSendingLastChunkSent;
     protected boolean forceConnectionCloseAfterResponseSent = false;
 
-    protected BaseResponseInfo(Integer httpStatusCode, HttpHeaders headers,
-                               String desiredContentWriterMimeType,
-                               Charset desiredContentWriterEncoding,
-                               Set<Cookie> cookies,
-                               boolean preventCompressedOutput
+    protected BaseResponseInfo(
+        @Nullable Integer httpStatusCode,
+        @Nullable HttpHeaders headers,
+        @Nullable String desiredContentWriterMimeType,
+        @Nullable Charset desiredContentWriterEncoding,
+        @Nullable Set<Cookie> cookies,
+        boolean preventCompressedOutput
     ) {
 
         if (headers == null)
@@ -56,47 +61,47 @@ public abstract class BaseResponseInfo<T> implements ResponseInfo<T> {
     }
 
     @Override
-    public Integer getHttpStatusCode() {
+    public @Nullable Integer getHttpStatusCode() {
         return httpStatusCode;
     }
 
     @Override
-    public void setHttpStatusCode(Integer httpStatusCode) {
+    public void setHttpStatusCode(@Nullable Integer httpStatusCode) {
         this.httpStatusCode = httpStatusCode;
     }
 
     @Override
-    public HttpHeaders getHeaders() {
+    public @NotNull HttpHeaders getHeaders() {
         return headers;
     }
 
     @Override
-    public String getDesiredContentWriterMimeType() {
+    public @Nullable String getDesiredContentWriterMimeType() {
         return desiredContentWriterMimeType;
     }
 
     @Override
-    public void setDesiredContentWriterMimeType(String desiredContentWriterMimeType) {
+    public void setDesiredContentWriterMimeType(@Nullable String desiredContentWriterMimeType) {
         this.desiredContentWriterMimeType = desiredContentWriterMimeType;
     }
 
     @Override
-    public Charset getDesiredContentWriterEncoding() {
+    public @Nullable Charset getDesiredContentWriterEncoding() {
         return desiredContentWriterEncoding;
     }
 
     @Override
-    public void setDesiredContentWriterEncoding(Charset desiredContentWriterEncoding) {
+    public void setDesiredContentWriterEncoding(@Nullable Charset desiredContentWriterEncoding) {
         this.desiredContentWriterEncoding = desiredContentWriterEncoding;
     }
 
     @Override
-    public Set<Cookie> getCookies() {
+    public @Nullable Set<Cookie> getCookies() {
         return cookies;
     }
 
     @Override
-    public void setCookies(Set<Cookie> cookies) {
+    public void setCookies(@Nullable Set<Cookie> cookies) {
         this.cookies = cookies;
     }
 
@@ -111,22 +116,22 @@ public abstract class BaseResponseInfo<T> implements ResponseInfo<T> {
     }
 
     @Override
-    public Long getUncompressedRawContentLength() {
+    public @Nullable Long getUncompressedRawContentLength() {
         return uncompressedRawContentLength;
     }
 
     @Override
-    public void setUncompressedRawContentLength(Long uncompressedRawContentLength) {
+    public void setUncompressedRawContentLength(@Nullable Long uncompressedRawContentLength) {
         this.uncompressedRawContentLength = uncompressedRawContentLength;
     }
 
     @Override
-    public Long getFinalContentLength() {
+    public @Nullable Long getFinalContentLength() {
         return finalContentLength;
     }
 
     @Override
-    public void setFinalContentLength(Long finalContentLength) {
+    public void setFinalContentLength(@Nullable Long finalContentLength) {
         this.finalContentLength = finalContentLength;
     }
 

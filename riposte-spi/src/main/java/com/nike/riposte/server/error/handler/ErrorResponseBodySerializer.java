@@ -1,5 +1,7 @@
 package com.nike.riposte.server.error.handler;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Interface for a class that knows how to serialize a {@link ErrorResponseBody} to a string.
  *
@@ -19,6 +21,6 @@ public interface ErrorResponseBodySerializer {
      * should be returned to the caller (null will be returned if {@link ErrorResponseBody#bodyToSerialize()} or
      * the {@code errorResponseBody} parameter itself is null).
      */
-    String serializeErrorResponseBodyToString(ErrorResponseBody errorResponseBody);
+    @Nullable String serializeErrorResponseBodyToString(@Nullable ErrorResponseBody errorResponseBody);
 
 }

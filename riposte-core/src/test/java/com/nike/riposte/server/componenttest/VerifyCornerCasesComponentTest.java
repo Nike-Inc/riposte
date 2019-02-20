@@ -13,6 +13,7 @@ import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientReque
 import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -134,14 +135,16 @@ public class VerifyCornerCasesComponentTest {
         public static final String RESPONSE_PAYLOAD = "basic-endpoint-" + UUID.randomUUID().toString();
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
-                                                               Executor longRunningTaskExecutor,
-                                                               ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build());
         }
     }
@@ -161,7 +164,7 @@ public class VerifyCornerCasesComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 

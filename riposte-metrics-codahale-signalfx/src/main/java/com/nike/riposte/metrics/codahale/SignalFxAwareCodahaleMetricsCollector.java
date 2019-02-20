@@ -19,6 +19,9 @@ import com.signalfx.codahale.reporter.MetricMetadata.Tagger;
 import com.signalfx.codahale.reporter.MetricMetadata.TaggerBase;
 import com.signalfx.codahale.reporter.SignalFxReporter;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -32,9 +35,9 @@ import java.util.List;
 @SuppressWarnings("WeakerAccess")
 public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollector {
 
-    protected final MetricMetadata metricMetadata;
-    protected final MetricBuilder<Timer> timerBuilder;
-    protected final MetricBuilder<Histogram> histogramBuilder;
+    protected final @NotNull MetricMetadata metricMetadata;
+    protected final @NotNull MetricBuilder<Timer> timerBuilder;
+    protected final @NotNull MetricBuilder<Histogram> histogramBuilder;
 
     /**
      * Creates a new instance with a *new* {@link MetricRegistry} - this means you should be careful to retrieve it
@@ -49,7 +52,7 @@ public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollec
      * @param sfxReporterFactory The {@link SignalFxReporterFactory} to use to get the {@link
      * SignalFxReporter#getMetricMetadata()} and reporting frequency.
      */
-    public SignalFxAwareCodahaleMetricsCollector(SignalFxReporterFactory sfxReporterFactory) {
+    public SignalFxAwareCodahaleMetricsCollector(@NotNull SignalFxReporterFactory sfxReporterFactory) {
         this(new MetricRegistry(), sfxReporterFactory);
     }
 
@@ -64,8 +67,8 @@ public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollec
      * @param sfxReporterFactory The {@link SignalFxReporterFactory} to use to get the {@link
      * SignalFxReporter#getMetricMetadata()} and reporting frequency.
      */
-    public SignalFxAwareCodahaleMetricsCollector(MetricRegistry metricRegistry,
-                                                 SignalFxReporterFactory sfxReporterFactory) {
+    public SignalFxAwareCodahaleMetricsCollector(@NotNull MetricRegistry metricRegistry,
+                                                 @NotNull SignalFxReporterFactory sfxReporterFactory) {
         this(metricRegistry,
              sfxReporterFactory.getReporter(metricRegistry).getMetricMetadata(),
              new RollingWindowTimerBuilder(sfxReporterFactory.getInterval(),
@@ -85,85 +88,128 @@ public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollec
      * @param histogramBuilder The histogram builder for building new histograms. It's recommended that this be a {@link
      * RollingWindowHistogramBuilder} that matches the reporting frequency of your app's {@link SignalFxReporter}.
      */
-    public SignalFxAwareCodahaleMetricsCollector(MetricRegistry metricRegistry,
-                                                 MetricMetadata metricMetadata,
-                                                 MetricBuilder<Timer> timerBuilder,
-                                                 MetricBuilder<Histogram> histogramBuilder) {
+    @SuppressWarnings("ConstantConditions")
+    public SignalFxAwareCodahaleMetricsCollector(@NotNull MetricRegistry metricRegistry,
+                                                 @NotNull MetricMetadata metricMetadata,
+                                                 @NotNull MetricBuilder<Timer> timerBuilder,
+                                                 @NotNull MetricBuilder<Histogram> histogramBuilder) {
         super(metricRegistry);
+
+        if (metricMetadata == null) {
+            throw new IllegalArgumentException("metricMetadata cannot be null.");
+        }
+        if (timerBuilder == null) {
+            throw new IllegalArgumentException("timerBuilder cannot be null.");
+        }
+        if (histogramBuilder == null) {
+            throw new IllegalArgumentException("histogramBuilder cannot be null.");
+        }
+
         this.metricMetadata = metricMetadata;
         this.timerBuilder = timerBuilder;
         this.histogramBuilder = histogramBuilder;
     }
 
     @Override
-    public Timer getNamedTimer(String timerName) {
+    public @NotNull Timer getNamedTimer(@NotNull String timerName) {
         return getNamedTimer(timerName, (Iterable<Pair<String, String>>)null);
     }
 
     @SafeVarargs
-    public final Timer getNamedTimer(String timerName, Pair<String, String>... dimensions) {
+    public final @NotNull Timer getNamedTimer(
+        @NotNull String timerName,
+        @Nullable Pair<String, String>... dimensions
+    ) {
         return getNamedTimer(timerName, convertDimensionsToList(dimensions));
     }
 
-    public Timer getNamedTimer(String timerName, Iterable<Pair<String, String>> dimensions) {
+    public @NotNull Timer getNamedTimer(
+        @NotNull String timerName,
+        @Nullable Iterable<Pair<String, String>> dimensions
+    ) {
         return getNamedMetric(timerName, timerBuilder, dimensions);
     }
 
     @Override
-    public Meter getNamedMeter(String meterName) {
+    public @NotNull Meter getNamedMeter(@NotNull String meterName) {
         return getNamedMeter(meterName, (Iterable<Pair<String, String>>)null);
     }
 
     @SafeVarargs
-    public final Meter getNamedMeter(String meterName, Pair<String, String>... dimensions) {
+    public final @NotNull Meter getNamedMeter(
+        @NotNull String meterName,
+        @Nullable Pair<String, String>... dimensions
+    ) {
         return getNamedMeter(meterName, convertDimensionsToList(dimensions));
     }
 
-    public Meter getNamedMeter(String meterName, Iterable<Pair<String, String>> dimensions) {
+    public @NotNull Meter getNamedMeter(
+        @NotNull String meterName,
+        @Nullable Iterable<Pair<String, String>> dimensions
+    ) {
         return getNamedMetric(meterName, MetricBuilder.METERS, dimensions);
     }
 
     @Override
-    public Counter getNamedCounter(String counterName) {
+    public @NotNull Counter getNamedCounter(@NotNull String counterName) {
         return getNamedCounter(counterName, (Iterable<Pair<String, String>>)null);
     }
 
     @SafeVarargs
-    public final Counter getNamedCounter(String counterName, Pair<String, String>... dimensions) {
+    public final @NotNull Counter getNamedCounter(
+        @NotNull String counterName,
+        @Nullable Pair<String, String>... dimensions
+    ) {
         return getNamedCounter(counterName, convertDimensionsToList(dimensions));
     }
 
-    public Counter getNamedCounter(String counterName, Iterable<Pair<String, String>> dimensions) {
+    public @NotNull Counter getNamedCounter(
+        @NotNull String counterName,
+        @Nullable Iterable<Pair<String, String>> dimensions
+    ) {
         return getNamedMetric(counterName, MetricBuilder.COUNTERS, dimensions);
     }
 
     @Override
-    public Histogram getNamedHistogram(String histogramName) {
+    public @NotNull Histogram getNamedHistogram(@NotNull String histogramName) {
         return getNamedHistogram(histogramName, (Iterable<Pair<String, String>>)null);
     }
 
     @SafeVarargs
-    public final Histogram getNamedHistogram(String histogramName, Pair<String, String>... dimensions) {
+    public final @NotNull Histogram getNamedHistogram(
+        @NotNull String histogramName,
+        @Nullable Pair<String, String>... dimensions
+    ) {
         return getNamedHistogram(histogramName, convertDimensionsToList(dimensions));
     }
 
-    public Histogram getNamedHistogram(String histogramName, Iterable<Pair<String, String>> dimensions) {
+    public @NotNull Histogram getNamedHistogram(
+        @NotNull String histogramName,
+        @Nullable Iterable<Pair<String, String>> dimensions
+    ) {
         return getNamedMetric(histogramName, histogramBuilder, dimensions);
     }
 
-    public final <M extends Metric> M getNamedMetric(String metricName, MetricBuilder<M> builder) {
+    public final <M extends Metric> @NotNull M getNamedMetric(
+        @NotNull String metricName,
+        @NotNull MetricBuilder<M> builder
+    ) {
         return getNamedMetric(metricName, builder, (Iterable<Pair<String, String>>)null);
     }
 
     @SafeVarargs
-    public final <M extends Metric> M getNamedMetric(
-        String metricName, MetricBuilder<M> builder, Pair<String, String>... dimensions
+    public final <M extends Metric> @NotNull M getNamedMetric(
+        @NotNull String metricName,
+        @NotNull MetricBuilder<M> builder,
+        @Nullable Pair<String, String>... dimensions
     ) {
         return getNamedMetric(metricName, builder, convertDimensionsToList(dimensions));
     }
 
-    public <M extends Metric> M getNamedMetric(
-        String metricName, MetricBuilder<M> builder, Iterable<Pair<String, String>> dimensions
+    public <M extends Metric> @NotNull M getNamedMetric(
+        @NotNull String metricName,
+        @NotNull MetricBuilder<M> builder,
+        @Nullable Iterable<Pair<String, String>> dimensions
     ) {
         BuilderTagger<M> builderTagger = metricMetadata.forBuilder(builder)
                                                        .withMetricName(metricName);
@@ -172,32 +218,36 @@ public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollec
     }
 
     @Override
-    public <M extends Metric> M registerNamedMetric(String metricName, M metric) {
+    public <M extends Metric> @NotNull M registerNamedMetric(@NotNull String metricName, @NotNull M metric) {
         return registerNamedMetric(metricName, metric, (Iterable<Pair<String, String>>)null);
     }
 
     @SafeVarargs
-    public final <M extends Metric> M registerNamedMetric(String metricName,
-                                                          M metric,
-                                                          Pair<String, String>... dimensions) {
+    public final <M extends Metric> @NotNull M registerNamedMetric(
+        @NotNull String metricName,
+        @NotNull M metric,
+        @Nullable Pair<String, String>... dimensions
+    ) {
         return registerNamedMetric(metricName, metric, convertDimensionsToList(dimensions));
     }
     
-    public <M extends Metric> M registerNamedMetric(String metricName,
-                                                    M metric,
-                                                    Iterable<Pair<String, String>> dimensions) {
+    public <M extends Metric> @NotNull M registerNamedMetric(
+        @NotNull String metricName,
+        @NotNull M metric,
+        @Nullable Iterable<Pair<String, String>> dimensions
+    ) {
         Tagger<M> metricTagger = metricMetadata.forMetric(metric)
                                                .withMetricName(metricName);
         addDimensions(metricTagger, dimensions);
         return metricTagger.register(metricRegistry);
     }
 
-    protected List<Pair<String, String>> convertDimensionsToList(Pair<String, String>[] dimensions) {
+    protected List<Pair<String, String>> convertDimensionsToList(@Nullable Pair<String, String>[] dimensions) {
         return (dimensions == null) ? null : Arrays.asList(dimensions);
     }
 
-    protected <M extends Metric, T extends TaggerBase<M, ?>> T addDimensions(
-        T builder, Iterable<Pair<String, String>> dimensions
+    protected <M extends Metric, T extends TaggerBase<M, ?>> @NotNull T addDimensions(
+        @NotNull T builder, @Nullable Iterable<Pair<String, String>> dimensions
     ) {
         if (dimensions == null)
             return builder;

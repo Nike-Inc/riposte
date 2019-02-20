@@ -11,7 +11,7 @@ dependencies {
             "org.slf4j:log4j-over-slf4j:$slf4jVersion"
     )
     compileOnly(
-            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
     testCompile (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",

@@ -5,8 +5,11 @@ dependencies {
             project(":riposte-spi"),
             "javax.servlet:javax.servlet-api:$servletApiVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "org.assertj:assertj-core:$assertJVersion",

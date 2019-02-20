@@ -85,10 +85,13 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
     }
 
     @Override
-    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    public PipelineContinuationBehavior doExceptionCaught(ChannelHandlerContext ctx, @NotNull Throwable cause) {
         // We expect to end up here when handlers previously in the pipeline throw an error, so do the normal
         //      processError call.
         HttpProcessingState state = getStateAndCreateIfNeeded(ctx, cause);
+        // Ensure that a RequestInfo is set on the state, no matter what.
+        getRequestInfo(state, null);
+        
         if (state.isResponseSendingStarted()) {
             String infoMessage =
                 "A response has already been started. Ignoring this exception since it's secondary. NOTE: This often "
@@ -132,6 +135,9 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
         // We expect to be here for normal message processing, but only as a pass-through. If the state indicates that
         //      the request was not handled then that's a pipeline misconfiguration and we need to throw an error.
         HttpProcessingState state = getStateAndCreateIfNeeded(ctx, null);
+        // Ensure that a RequestInfo is set on the state, no matter what.
+        getRequestInfo(state, msg);
+        
         if (!state.isRequestHandled()) {
             runnableWithTracingAndMdc(() -> {
                 String errorMsg = "In ExceptionHandlingHandler's channelRead method, but the request has not yet been "
@@ -180,7 +186,7 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
         return (methodToExecute == DO_EXCEPTION_CAUGHT);
     }
 
-    protected HttpProcessingState getStateAndCreateIfNeeded(ChannelHandlerContext ctx, Throwable cause) {
+    protected @NotNull HttpProcessingState getStateAndCreateIfNeeded(ChannelHandlerContext ctx, Throwable cause) {
         HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
         if (state == null) {
             // The error must have occurred before RequestStateCleanerHandler could even execute. Create a new state and
@@ -201,8 +207,10 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
      * will try to get it from the given state. If that fails, it will try to create a new one based on the given msg
      * (which only works if the msg is a {@link HttpRequest}). If that also fails then a new dummy instance for an
      * unknown request will be created via {@link RequestInfoImpl#dummyInstanceForUnknownRequests()} and returned.
+     * This will never return null, and the given {@link HttpProcessingState#getRequestInfo()} will always be non-null
+     * by the time this method returns.
      */
-    RequestInfo<?> getRequestInfo(HttpProcessingState state, Object msg) {
+    @NotNull RequestInfo<?> getRequestInfo(@NotNull HttpProcessingState state, Object msg) {
         // Try to get the RequestInfo from the state variable first.
         RequestInfo requestInfo = state.getRequestInfo();
 
@@ -239,9 +247,11 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
      * happen" variety you can (and should) directly call {@link #processUnhandledError(HttpProcessingState, Object,
      * Throwable)} instead.
      */
-    protected ResponseInfo<ErrorResponseBody> processError(HttpProcessingState state,
-                                                           Object msg,
-                                                           Throwable cause) {
+    protected @NotNull ResponseInfo<ErrorResponseBody> processError(
+        @NotNull HttpProcessingState state,
+        Object msg,
+        @NotNull Throwable cause
+    ) {
         RequestInfo<?> requestInfo = getRequestInfo(state, msg);
 
         try {
@@ -270,9 +280,11 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
      * Object, Throwable)} instead in order to get an error response that is better tailored to the given error rather
      * than this one which guarantees a somewhat unhelpful generic error response.
      */
-    ResponseInfo<ErrorResponseBody> processUnhandledError(HttpProcessingState state,
-                                                          Object msg,
-                                                          Throwable cause) {
+    @NotNull ResponseInfo<ErrorResponseBody> processUnhandledError(
+        @NotNull HttpProcessingState state,
+        Object msg,
+        @NotNull Throwable cause
+    ) {
         RequestInfo<?> requestInfo = getRequestInfo(state, msg);
 
         // Run the error through the riposteUnhandledErrorHandler
@@ -283,8 +295,10 @@ public class ExceptionHandlingHandler extends BaseInboundHandlerWithTracingAndMd
         return responseInfo;
     }
 
-    protected void setupResponseInfoBasedOnErrorResponseInfo(ResponseInfo<ErrorResponseBody> responseInfo,
-                                                             ErrorResponseInfo errorInfo) {
+    protected void setupResponseInfoBasedOnErrorResponseInfo(
+        @NotNull ResponseInfo<ErrorResponseBody> responseInfo,
+        @NotNull ErrorResponseInfo errorInfo
+    ) {
         responseInfo.setContentForFullResponse(errorInfo.getErrorResponseBody());
         responseInfo.setHttpStatusCode(errorInfo.getErrorHttpStatusCode());
         Map<String, List<String>> extraHeaders = errorInfo.getExtraHeadersToAddToResponse();

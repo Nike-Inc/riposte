@@ -4,6 +4,9 @@ import com.nike.backstopper.service.ClientDataValidationService;
 import com.nike.riposte.server.error.validation.RequestValidator;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -24,12 +27,12 @@ public class BackstopperRiposteValidatorAdapter implements RequestValidator {
     }
 
     @Override
-    public void validateRequestContent(RequestInfo<?> request) {
+    public void validateRequestContent(@NotNull RequestInfo<?> request) {
         clientDataValidationService.validateObjectsFailFast(request.getContent());
     }
 
     @Override
-    public void validateRequestContent(RequestInfo<?> request, Class<?>... validationGroups) {
+    public void validateRequestContent(@NotNull RequestInfo<?> request, @Nullable Class<?>... validationGroups) {
         clientDataValidationService.validateObjectsWithGroupsFailFast(validationGroups, request.getContent());
     }
 }

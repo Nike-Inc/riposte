@@ -19,6 +19,7 @@ import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -333,7 +334,7 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -365,7 +366,11 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         public static final String SUCCESS_STRING = "done";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             long delayMillis = Long.parseLong(request.getHeaders().get(DELAY_MILLIS_HEADER_KEY));
 
             CompletableFuture<ResponseInfo<String>> cf = new CompletableFuture<>();
@@ -376,7 +381,7 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
@@ -387,9 +392,11 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         public static final String MATCHING_PATH = "/proxy" + LongDelayTestEndpoint.MATCHING_PATH;
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     new DownstreamRequestFirstChunkInfo(
                             "127.0.0.1",
@@ -401,7 +408,7 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -411,12 +418,16 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         public static final String MATCHING_PATH = "/channelinfo";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(ResponseInfo.newBuilder(ctx.channel().toString()).build());
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
 
@@ -427,9 +438,11 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         public static final String MATCHING_PATH = "/proxy" + ChannelInfoTestEndpoint.MATCHING_PATH;
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     new DownstreamRequestFirstChunkInfo(
                             "127.0.0.1",
@@ -441,7 +454,7 @@ public class VerifyTimeoutsAndProxyConnectionPoolingWorksComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }

@@ -4,8 +4,11 @@ import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Collections;
 
 /**
  * A {@link RequestSecurityValidator} for validating that the incoming request for any of the given collection
@@ -14,7 +17,7 @@ import java.util.Collection;
 @SuppressWarnings("WeakerAccess")
 public class BasicAuthSecurityValidator implements RequestSecurityValidator {
 
-    protected final Collection<Endpoint<?>> basicAuthValidatedEndpoints;
+    protected final @NotNull Collection<Endpoint<?>> basicAuthValidatedEndpoints;
 
     protected final String expectedUsername;
     protected final String expectedPassword;
@@ -28,13 +31,18 @@ public class BasicAuthSecurityValidator implements RequestSecurityValidator {
     public BasicAuthSecurityValidator(Collection<Endpoint<?>> basicAuthValidatedEndpoints,
                                       String expectedUsername,
                                       String expectedPassword) {
-        this.basicAuthValidatedEndpoints = basicAuthValidatedEndpoints;
+        this.basicAuthValidatedEndpoints = (basicAuthValidatedEndpoints == null)
+                                           ? Collections.emptySet()
+                                           : basicAuthValidatedEndpoints;
         this.expectedUsername = expectedUsername;
         this.expectedPassword = expectedPassword;
     }
 
     @Override
-    public void validateSecureRequestForEndpoint(RequestInfo<?> requestInfo, Endpoint<?> endpoint) {
+    public void validateSecureRequestForEndpoint(
+        @NotNull RequestInfo<?> requestInfo,
+        @NotNull Endpoint<?> endpoint
+    ) {
         String authorizationHeader = requestInfo.getHeaders().get("Authorization");
 
         if (authorizationHeader == null) {
@@ -74,7 +82,7 @@ public class BasicAuthSecurityValidator implements RequestSecurityValidator {
     }
 
     @Override
-    public Collection<Endpoint<?>> endpointsToValidate() {
+    public @NotNull Collection<Endpoint<?>> endpointsToValidate() {
         return basicAuthValidatedEndpoints;
     }
 

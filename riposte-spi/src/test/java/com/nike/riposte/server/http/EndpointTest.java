@@ -1,9 +1,13 @@
 package com.nike.riposte.server.http;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.nike.riposte.util.Matcher;
+
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -61,12 +65,12 @@ public class EndpointTest {
     private Endpoint<?> getEndpointWithRequestContentType(Class<?> type) {
         return new Endpoint<Object>() {
             @Override
-            public Matcher requestMatcher() {
+            public @NotNull Matcher requestMatcher() {
                 return null;
             }
 
             @Override
-            public TypeReference<Object> requestContentType() {
+            public @Nullable TypeReference<Object> requestContentType() {
                 if (type == null) {
                     return null;
                 } else {

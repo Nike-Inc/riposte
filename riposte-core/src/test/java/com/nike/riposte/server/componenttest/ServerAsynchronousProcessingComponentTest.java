@@ -11,6 +11,7 @@ import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -186,7 +187,7 @@ public class ServerAsynchronousProcessingComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -215,7 +216,11 @@ public class ServerAsynchronousProcessingComponentTest {
         public static String MATCHING_PATH = "/testAsync";
 
         @Override
-        public CompletableFuture<ResponseInfo<Map<String,String>>> execute(RequestInfo<Object> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Map<String,String>>> execute(
+            @NotNull RequestInfo<Object> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             String nettyWorkerThreadName = Thread.currentThread().getName();
             nettyWorkerThreadsUsed.add(nettyWorkerThreadName);
             CompletableFuture<ResponseInfo<Map<String, String>>> result = CompletableFuture.supplyAsync(() -> doEndpointWork(nettyWorkerThreadName), executor);
@@ -223,7 +228,7 @@ public class ServerAsynchronousProcessingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 

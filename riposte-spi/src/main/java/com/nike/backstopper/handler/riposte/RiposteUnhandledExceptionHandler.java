@@ -13,6 +13,8 @@ import com.nike.riposte.server.error.handler.ErrorResponseInfo;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -36,25 +38,32 @@ public class RiposteUnhandledExceptionHandler extends UnhandledExceptionHandlerB
     protected final int genericServiceErrorHttpStatusCode;
 
     @Inject
-    public RiposteUnhandledExceptionHandler(ProjectApiErrors projectApiErrors, ApiExceptionHandlerUtils utils) {
+    public RiposteUnhandledExceptionHandler(
+        @NotNull ProjectApiErrors projectApiErrors,
+        @NotNull ApiExceptionHandlerUtils utils
+    ) {
         super(projectApiErrors, utils);
         singletonGenericServiceError = Collections.singleton(projectApiErrors.getGenericServiceError());
         genericServiceErrorHttpStatusCode = projectApiErrors.getGenericServiceError().getHttpStatusCode();
     }
 
     @Override
-    protected ErrorResponseBody prepareFrameworkRepresentation(DefaultErrorContractDTO errorContractDTO,
-                                                               int httpStatusCode,
-                                                               Collection<ApiError> rawFilteredApiErrors,
-                                                               Throwable originalException,
-                                                               RequestInfoForLogging request) {
+    protected @NotNull ErrorResponseBody prepareFrameworkRepresentation(
+        @NotNull DefaultErrorContractDTO errorContractDTO,
+        int httpStatusCode,
+        @NotNull Collection<ApiError> rawFilteredApiErrors,
+        @NotNull Throwable originalException,
+        @NotNull RequestInfoForLogging request
+    ) {
         return new ErrorResponseBodyImpl(errorContractDTO);
     }
 
     @Override
     protected com.nike.backstopper.handler.ErrorResponseInfo<ErrorResponseBody> generateLastDitchFallbackErrorResponseInfo(
-        Throwable ex, RequestInfoForLogging request, String errorUid,
-        Map<String, List<String>> headersForResponseWithErrorUid
+        @NotNull Throwable ex,
+        @NotNull RequestInfoForLogging request,
+        @NotNull String errorUid,
+        @NotNull Map<String, List<String>> headersForResponseWithErrorUid
     ) {
         return new com.nike.backstopper.handler.ErrorResponseInfo<>(
             genericServiceErrorHttpStatusCode,
@@ -64,7 +73,7 @@ public class RiposteUnhandledExceptionHandler extends UnhandledExceptionHandlerB
     }
 
     @Override
-    public ErrorResponseInfo handleError(Throwable error, RequestInfo<?> requestInfo) {
+    public @NotNull ErrorResponseInfo handleError(@NotNull Throwable error, @NotNull RequestInfo<?> requestInfo) {
 
         com.nike.backstopper.handler.ErrorResponseInfo<ErrorResponseBody> backstopperErrorResponseInfo =
             handleException(error, new RequestInfoForLoggingRiposteAdapter(requestInfo));

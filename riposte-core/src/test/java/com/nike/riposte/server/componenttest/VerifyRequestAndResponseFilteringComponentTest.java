@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -379,12 +381,12 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
         @Override
-        public List<RequestAndResponseFilter> requestAndResponseFilters() {
+        public @Nullable List<@NotNull RequestAndResponseFilter> requestAndResponseFilters() {
             return filters;
         }
 
@@ -402,7 +404,11 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         public static final ApiError FORCED_ERROR = new ApiErrorBase("FORCED_ERROR", 42, "forced error", 542);
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             if ("true".equals(request.getHeaders().get(FORCE_ERROR_HEADER_KEY)))
                 throw ApiException.newBuilder().withApiErrors(FORCED_ERROR).build();
 
@@ -412,7 +418,7 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -454,7 +460,9 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         public static final String FIRST_FILTER_RESPONSE_CUMULATIVE_HEADER_KEY = UUID.randomUUID().toString();
 
         @Override
-        public <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable RequestInfo<T> filterRequestFirstChunkNoPayload(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
+        ) {
             currentRequestInfo.getHeaders().set(FIRST_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_KEY, FIRST_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_VALUE);
             currentRequestInfo.getHeaders().set(COMMON_FILTER_REQUEST_FIRST_CHUNK_OVERRIDE_HEADER_KEY, FIRST_FILTER_REQUEST_FIRST_CHUNK_OVERRIDE_HEADER_VALUE);
             currentRequestInfo.getHeaders().add(COMMON_FILTER_REQUEST_FIRST_CHUNK_CUMULATIVE_HEADER_KEY, FIRST_FILTER_REQUEST_FIRST_CHUNK_CUMULATIVE_HEADER_VALUE);
@@ -463,7 +471,9 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable RequestInfo<T> filterRequestLastChunkWithFullPayload(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
+        ) {
             currentRequestInfo.getHeaders().set(FIRST_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_KEY, FIRST_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_VALUE);
             currentRequestInfo.getHeaders().set(COMMON_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_KEY, FIRST_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_VALUE);
             currentRequestInfo.getHeaders().add(COMMON_FILTER_REQUEST_LAST_CHUNK_CUMULATIVE_HEADER_KEY, FIRST_FILTER_REQUEST_LAST_CHUNK_CUMULATIVE_HEADER_VALUE);
@@ -472,7 +482,11 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> currentResponseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable ResponseInfo<T> filterResponse(
+            @NotNull ResponseInfo<T> currentResponseInfo,
+            @NotNull RequestInfo<?> requestInfo,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             addRequestHeadersToResponseIfNotAlreadyDone(requestInfo, currentResponseInfo);
 
             currentResponseInfo.getHeaders().set(FIRST_FILTER_ONLY_RESPONSE_HEADER_KEY, FIRST_FILTER_ONLY_RESPONSE_HEADER_VALUE);
@@ -509,8 +523,8 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         public static final String SHORT_CIRCUIT_LAST_CHUNK_RESPONSE_PAYLOAD = "short-circuit-last-chunk-" + UUID.randomUUID().toString();
 
         @Override
-        public <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
-            RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx
+        public <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
         ) {
             currentRequestInfo.getHeaders().set(SECOND_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_KEY, SECOND_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_VALUE);
             currentRequestInfo.getHeaders().set(COMMON_FILTER_REQUEST_FIRST_CHUNK_OVERRIDE_HEADER_KEY, SECOND_FILTER_REQUEST_FIRST_CHUNK_OVERRIDE_HEADER_VALUE);
@@ -525,8 +539,8 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
-            RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx
+        public <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
         ) {
             currentRequestInfo.getHeaders().set(SECOND_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_KEY, SECOND_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_VALUE);
             currentRequestInfo.getHeaders().set(COMMON_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_KEY, SECOND_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_VALUE);
@@ -541,7 +555,11 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> currentResponseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable ResponseInfo<T> filterResponse(
+            @NotNull ResponseInfo<T> currentResponseInfo,
+            @NotNull RequestInfo<?> requestInfo,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             addRequestHeadersToResponseIfNotAlreadyDone(requestInfo, currentResponseInfo);
 
             currentResponseInfo.getHeaders().set(SECOND_FILTER_ONLY_RESPONSE_HEADER_KEY, SECOND_FILTER_ONLY_RESPONSE_HEADER_VALUE);
@@ -571,7 +589,9 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         public static final String THIRD_FILTER_RESPONSE_CUMULATIVE_HEADER_KEY = UUID.randomUUID().toString();
 
         @Override
-        public <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable RequestInfo<T> filterRequestFirstChunkNoPayload(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
+        ) {
             currentRequestInfo.getHeaders().set(THIRD_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_KEY, THIRD_FILTER_ONLY_FIRST_CHUNK_REQ_HEADER_VALUE);
             currentRequestInfo.getHeaders().set(COMMON_FILTER_REQUEST_FIRST_CHUNK_OVERRIDE_HEADER_KEY, THIRD_FILTER_REQUEST_FIRST_CHUNK_OVERRIDE_HEADER_VALUE);
             currentRequestInfo.getHeaders().add(COMMON_FILTER_REQUEST_FIRST_CHUNK_CUMULATIVE_HEADER_KEY, THIRD_FILTER_REQUEST_FIRST_CHUNK_CUMULATIVE_HEADER_VALUE);
@@ -580,7 +600,9 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable RequestInfo<T> filterRequestLastChunkWithFullPayload(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
+        ) {
             currentRequestInfo.getHeaders().set(THIRD_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_KEY, THIRD_FILTER_ONLY_LAST_CHUNK_REQ_HEADER_VALUE);
             currentRequestInfo.getHeaders().set(COMMON_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_KEY, THIRD_FILTER_REQUEST_LAST_CHUNK_OVERRIDE_HEADER_VALUE);
             currentRequestInfo.getHeaders().add(COMMON_FILTER_REQUEST_LAST_CHUNK_CUMULATIVE_HEADER_KEY, THIRD_FILTER_REQUEST_LAST_CHUNK_CUMULATIVE_HEADER_VALUE);
@@ -589,7 +611,11 @@ public class VerifyRequestAndResponseFilteringComponentTest {
         }
 
         @Override
-        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> currentResponseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable ResponseInfo<T> filterResponse(
+            @NotNull ResponseInfo<T> currentResponseInfo,
+            @NotNull RequestInfo<?> requestInfo,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             addRequestHeadersToResponseIfNotAlreadyDone(requestInfo, currentResponseInfo);
 
             currentResponseInfo.getHeaders().set(THIRD_FILTER_ONLY_RESPONSE_HEADER_KEY, THIRD_FILTER_ONLY_RESPONSE_HEADER_VALUE);

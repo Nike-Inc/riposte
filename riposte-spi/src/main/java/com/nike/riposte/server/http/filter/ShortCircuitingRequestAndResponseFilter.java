@@ -4,6 +4,9 @@ import com.nike.internal.util.Pair;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Optional;
 
 import io.netty.channel.ChannelHandlerContext;
@@ -20,15 +23,25 @@ import io.netty.channel.ChannelHandlerContext;
 public interface ShortCircuitingRequestAndResponseFilter extends RequestAndResponseFilter {
 
     @Override
-    default <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
-        throw new UnsupportedOperationException("This method should never be called for ShortCircuitingRequestAndResponseFilter classes "
-                                                + "(where isShortCircuitRequestFilter() returns true)");
+    default <T> @Nullable RequestInfo<T> filterRequestFirstChunkNoPayload(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
+    ) {
+        throw new UnsupportedOperationException(
+            "This method should never be called for ShortCircuitingRequestAndResponseFilter classes "
+            + "(where isShortCircuitRequestFilter() returns true)"
+        );
     }
 
     @Override
-    default <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
-        throw new UnsupportedOperationException("This method should never be called for ShortCircuitingRequestAndResponseFilter classes "
-                                                + "(where isShortCircuitRequestFilter() returns true)");
+    default <T> @Nullable RequestInfo<T> filterRequestLastChunkWithFullPayload(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
+    ) {
+        throw new UnsupportedOperationException(
+            "This method should never be called for ShortCircuitingRequestAndResponseFilter classes "
+            + "(where isShortCircuitRequestFilter() returns true)"
+        );
     }
 
     @Override
@@ -37,8 +50,14 @@ public interface ShortCircuitingRequestAndResponseFilter extends RequestAndRespo
     }
 
     @Override
-    <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx);
+    <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
+    );
 
     @Override
-    <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx);
+    <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
+    );
 }

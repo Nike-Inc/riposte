@@ -15,6 +15,7 @@ import com.nike.riposte.util.Matcher;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -148,7 +149,11 @@ public class VerifySmartHttpContentCompressorComponentTest {
         public static final String DISABLE_COMPRESSION_HEADER_KEY = "disable-compression";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             String responsePayload = generatePayloadOfSizeInBytes(
                 RESPONSE_PAYLOAD_PREFIX,
                 Integer.parseInt(request.getHeaders().get(DESIRED_UNCOMPRESSED_PAYLOAD_SIZE_HEADER_KEY))
@@ -163,7 +168,7 @@ public class VerifySmartHttpContentCompressorComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -182,7 +187,7 @@ public class VerifySmartHttpContentCompressorComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 

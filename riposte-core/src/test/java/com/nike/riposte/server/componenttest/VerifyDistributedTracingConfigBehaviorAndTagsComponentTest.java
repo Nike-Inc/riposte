@@ -542,8 +542,10 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         public static final String TRIGGER_DOWNSTREAM_ERROR_HEADER_KEY = "triggerDownstreamError";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(
-            RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
         ) {
             if ("true".equals(request.getHeaders().get(TRIGGER_DOWNSTREAM_ERROR_HEADER_KEY))) {
                 throw new RuntimeException("intentional downstream exception");
@@ -555,7 +557,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -571,8 +573,10 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
-            RequestInfo<?> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
         ) {
             String fooPathParam = request.getPathParam("fooPathParam");
             String downstreamUri = DownstreamEndpoint.MATCHING_PATH_BASE + "/" + fooPathParam;
@@ -588,7 +592,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -611,7 +615,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -621,7 +625,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public DistributedTracingConfig<?> distributedTracingConfig() {
+        public @Nullable DistributedTracingConfig<?> distributedTracingConfig() {
             return dtConfig;
         }
     }
@@ -644,7 +648,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -654,7 +658,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
         }
 
         @Override
-        public DistributedTracingConfig<?> distributedTracingConfig() {
+        public @Nullable DistributedTracingConfig<?> distributedTracingConfig() {
             return dtConfig;
         }
     }

@@ -3,12 +3,15 @@ package com.nike.riposte.server.http;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.nio.charset.Charset;
 import java.util.Set;
 
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.cookie.Cookie;
 
@@ -40,20 +43,18 @@ public class ResponseInfoTest {
     }
 
     private static class ResponseInfoForTesting<T> implements ResponseInfo<T> {
-
         @Override
-        public Integer getHttpStatusCode() {
+        public @Nullable Integer getHttpStatusCode() {
             return null;
         }
 
         @Override
-        public void setHttpStatusCode(Integer httpStatusCode) {
-
+        public void setHttpStatusCode(@Nullable Integer httpStatusCode) {
         }
 
         @Override
-        public HttpHeaders getHeaders() {
-            return null;
+        public @NotNull HttpHeaders getHeaders() {
+            return new DefaultHttpHeaders();
         }
 
         @Override
@@ -62,43 +63,40 @@ public class ResponseInfoTest {
         }
 
         @Override
-        public T getContentForFullResponse() {
+        public @Nullable T getContentForFullResponse() {
             return null;
         }
 
         @Override
-        public void setContentForFullResponse(T contentForFullResponse) {
+        public void setContentForFullResponse(@Nullable T contentForFullResponse) {
 
         }
 
         @Override
-        public String getDesiredContentWriterMimeType() {
+        public @Nullable String getDesiredContentWriterMimeType() {
             return null;
         }
 
         @Override
-        public void setDesiredContentWriterMimeType(String desiredContentWriterMimeType) {
-
+        public void setDesiredContentWriterMimeType(@Nullable String desiredContentWriterMimeType) {
         }
 
         @Override
-        public Charset getDesiredContentWriterEncoding() {
+        public @Nullable Charset getDesiredContentWriterEncoding() {
             return null;
         }
 
         @Override
-        public void setDesiredContentWriterEncoding(Charset desiredContentWriterEncoding) {
-
+        public void setDesiredContentWriterEncoding(@Nullable Charset desiredContentWriterEncoding) {
         }
 
         @Override
-        public Set<Cookie> getCookies() {
+        public @Nullable Set<Cookie> getCookies() {
             return null;
         }
 
         @Override
-        public void setCookies(Set<Cookie> cookies) {
-
+        public void setCookies(@Nullable Set<Cookie> cookies) {
         }
 
         @Override
@@ -112,23 +110,21 @@ public class ResponseInfoTest {
         }
 
         @Override
-        public Long getUncompressedRawContentLength() {
+        public @Nullable Long getUncompressedRawContentLength() {
             return null;
         }
 
         @Override
-        public void setUncompressedRawContentLength(Long uncompressedRawContentLength) {
-
+        public void setUncompressedRawContentLength(@Nullable Long uncompressedRawContentLength) {
         }
 
         @Override
-        public Long getFinalContentLength() {
+        public @Nullable Long getFinalContentLength() {
             return null;
         }
 
         @Override
-        public void setFinalContentLength(Long finalContentLength) {
-
+        public void setFinalContentLength(@Nullable Long finalContentLength) {
         }
 
         @Override
@@ -138,7 +134,6 @@ public class ResponseInfoTest {
 
         @Override
         public void setResponseSendingStarted(boolean responseSendingStarted) {
-
         }
 
         @Override
@@ -148,7 +143,6 @@ public class ResponseInfoTest {
 
         @Override
         public void setResponseSendingLastChunkSent(boolean responseSendingLastChunkSent) {
-
         }
 
         @Override
@@ -158,7 +152,6 @@ public class ResponseInfoTest {
 
         @Override
         public void setForceConnectionCloseAfterResponseSent(boolean forceConnectionCloseAfterResponseSent) {
-
         }
     }
 

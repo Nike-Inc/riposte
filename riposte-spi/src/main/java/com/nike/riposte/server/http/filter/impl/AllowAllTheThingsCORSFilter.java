@@ -5,6 +5,9 @@ import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.filter.ShortCircuitingRequestAndResponseFilter;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Optional;
 
 import io.netty.channel.ChannelHandlerContext;
@@ -36,20 +39,23 @@ import io.netty.handler.codec.http.HttpMethod;
  *
  * @author Nic Munroe
  */
-@SuppressWarnings("WeakerAccess")
 public class AllowAllTheThingsCORSFilter implements ShortCircuitingRequestAndResponseFilter {
 
     @Override
-    public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> currentResponseInfo, RequestInfo<?> requestInfo,
-                                              ChannelHandlerContext ctx) {
+    public <T> @Nullable ResponseInfo<T> filterResponse(
+        @NotNull ResponseInfo<T> currentResponseInfo,
+        @NotNull RequestInfo<?> requestInfo,
+        @NotNull ChannelHandlerContext ctx
+    ) {
         // *All* responses get tagged with the "do whatever you want" CORS ACAO header.
         currentResponseInfo.getHeaders().set("Access-Control-Allow-Origin", "*");
         return currentResponseInfo;
     }
 
     @Override
-    public <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
-        RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx
+    public <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
     ) {
         if (HttpMethod.OPTIONS.equals(currentRequestInfo.getMethod())) {
             // CORS preflight OPTIONS request. Return a blank 200 response, and the filterResponse() method will
@@ -62,8 +68,9 @@ public class AllowAllTheThingsCORSFilter implements ShortCircuitingRequestAndRes
     }
 
     @Override
-    public <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
-        RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx
+    public <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
     ) {
         // If it was a CORS preflight OPTIONS request it would have been handled by
         //      filterRequestFirstChunkWithOptionalShortCircuitResponse() and we would never reach here.

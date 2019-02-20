@@ -4,6 +4,7 @@ import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.hooks.PostServerStartupHook;
 import com.nike.riposte.server.hooks.ServerShutdownHook;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,7 @@ public class EurekaServerHook implements PostServerStartupHook, ServerShutdownHo
     }
 
     @Override
-    public void executePostServerStartupHook(ServerConfig serverConfig, Channel channel) {
+    public void executePostServerStartupHook(@NotNull ServerConfig serverConfig, @NotNull Channel channel) {
         try {
             // register
             logger.info("About to register with Eureka");
@@ -65,7 +66,7 @@ public class EurekaServerHook implements PostServerStartupHook, ServerShutdownHo
     }
 
     @Override
-    public void executeServerShutdownHook(ServerConfig serverConfig, Channel channel) {
+    public void executeServerShutdownHook(@NotNull ServerConfig serverConfig, @NotNull Channel channel) {
         try {
             // deregister
             logger.info("About to de-register with Eureka");

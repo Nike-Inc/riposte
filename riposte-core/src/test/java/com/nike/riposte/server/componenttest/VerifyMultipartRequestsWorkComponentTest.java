@@ -17,6 +17,7 @@ import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 
 import org.apache.commons.io.IOUtils;
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -171,7 +172,7 @@ public class VerifyMultipartRequestsWorkComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -186,7 +187,11 @@ public class VerifyMultipartRequestsWorkComponentTest {
         public static String MATCHING_PATH = "/multipart";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             List<String> hashesFound = new ArrayList<>();
 
             for (InterfaceHttpData multipartData : request.getMultipartParts()) {
@@ -217,7 +222,7 @@ public class VerifyMultipartRequestsWorkComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 

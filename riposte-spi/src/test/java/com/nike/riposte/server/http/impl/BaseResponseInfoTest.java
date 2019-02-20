@@ -4,6 +4,7 @@ import com.google.common.collect.Sets;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -44,12 +45,12 @@ public class BaseResponseInfoTest {
             }
 
             @Override
-            public T getContentForFullResponse() {
+            public @Nullable T getContentForFullResponse() {
                 throw new UnsupportedOperationException("not implemented, don't call me during the test");
             }
 
             @Override
-            public void setContentForFullResponse(T contentForFullResponse) {
+            public void setContentForFullResponse(@Nullable T contentForFullResponse) {
                 throw new UnsupportedOperationException("not implemented, don't call me during the test");
             }
         };

@@ -1,5 +1,8 @@
 package com.nike.riposte.server.http.impl;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.charset.Charset;
 import java.util.Set;
 
@@ -17,19 +20,20 @@ import io.netty.handler.codec.http.cookie.Cookie;
 public class FullResponseInfo<T> extends BaseResponseInfo<T> {
 
     @SuppressWarnings("WeakerAccess")
-    protected T contentForFullResponse;
+    protected @Nullable T contentForFullResponse;
 
     /**
      * The "populate everything" constructor. It's recommended that you use the {@link FullResponseInfoBuilder} instead.
      */
-    public FullResponseInfo(T contentForFullResponse,
-                            Integer httpStatusCode,
-                            HttpHeaders headers,
-                            String desiredContentWriterMimeType,
-                            Charset desiredContentWriterEncoding,
-                            Set<Cookie> cookies,
-                            boolean preventCompressedOutput) {
-
+    public FullResponseInfo(
+        @Nullable T contentForFullResponse,
+        @Nullable Integer httpStatusCode,
+        @Nullable HttpHeaders headers,
+        @Nullable String desiredContentWriterMimeType,
+        @Nullable Charset desiredContentWriterEncoding,
+        @Nullable Set<Cookie> cookies,
+        boolean preventCompressedOutput
+    ) {
         super(httpStatusCode, headers, desiredContentWriterMimeType, desiredContentWriterEncoding, cookies,
               preventCompressedOutput);
 
@@ -51,12 +55,12 @@ public class FullResponseInfo<T> extends BaseResponseInfo<T> {
     }
 
     @Override
-    public T getContentForFullResponse() {
+    public @Nullable T getContentForFullResponse() {
         return contentForFullResponse;
     }
 
     @Override
-    public void setContentForFullResponse(T contentForFullResponse) {
+    public void setContentForFullResponse(@Nullable T contentForFullResponse) {
         if (isResponseSendingLastChunkSent()) {
             throw new IllegalStateException("isFullResponseSent() is true. You cannot set content for a response that "
                                             + "has already been sent to the user.");
@@ -74,7 +78,7 @@ public class FullResponseInfo<T> extends BaseResponseInfo<T> {
      */
     public static final class FullResponseInfoBuilder<T> extends BaseResponseInfoBuilder<T> {
 
-        private T contentForFullResponse;
+        private @Nullable T contentForFullResponse;
 
         public FullResponseInfoBuilder() {
 
@@ -84,43 +88,47 @@ public class FullResponseInfo<T> extends BaseResponseInfo<T> {
          * Populates this builder with the given content <b>intended for a full response</b>. Can be null if there is no
          * response body content to send.
          */
-        public FullResponseInfoBuilder<T> withContentForFullResponse(T content) {
+        public @NotNull FullResponseInfoBuilder<T> withContentForFullResponse(@Nullable T content) {
             this.contentForFullResponse = content;
             return this;
         }
 
         @Override
-        public FullResponseInfoBuilder<T> withHttpStatusCode(Integer httpStatusCode) {
+        public @NotNull FullResponseInfoBuilder<T> withHttpStatusCode(@Nullable Integer httpStatusCode) {
             super.withHttpStatusCode(httpStatusCode);
             return this;
         }
 
         @Override
-        public FullResponseInfoBuilder<T> withHeaders(HttpHeaders headers) {
+        public @NotNull FullResponseInfoBuilder<T> withHeaders(@Nullable HttpHeaders headers) {
             super.withHeaders(headers);
             return this;
         }
 
         @Override
-        public FullResponseInfoBuilder<T> withDesiredContentWriterMimeType(String desiredContentWriterMimeType) {
+        public @NotNull FullResponseInfoBuilder<T> withDesiredContentWriterMimeType(
+            @Nullable String desiredContentWriterMimeType
+        ) {
             super.withDesiredContentWriterMimeType(desiredContentWriterMimeType);
             return this;
         }
 
         @Override
-        public FullResponseInfoBuilder<T> withDesiredContentWriterEncoding(Charset desiredContentWriterEncoding) {
+        public @NotNull FullResponseInfoBuilder<T> withDesiredContentWriterEncoding(
+            @Nullable Charset desiredContentWriterEncoding
+        ) {
             super.withDesiredContentWriterEncoding(desiredContentWriterEncoding);
             return this;
         }
 
         @Override
-        public FullResponseInfoBuilder<T> withCookies(Set<Cookie> cookies) {
+        public @NotNull FullResponseInfoBuilder<T> withCookies(@Nullable Set<Cookie> cookies) {
             super.withCookies(cookies);
             return this;
         }
 
         @Override
-        public FullResponseInfoBuilder<T> withPreventCompressedOutput(boolean preventCompressedOutput) {
+        public @NotNull FullResponseInfoBuilder<T> withPreventCompressedOutput(boolean preventCompressedOutput) {
             super.withPreventCompressedOutput(preventCompressedOutput);
             return this;
         }
@@ -128,7 +136,7 @@ public class FullResponseInfo<T> extends BaseResponseInfo<T> {
         /**
          * @return A {@link FullResponseInfo} setup with all the values contained in this builder.
          */
-        public FullResponseInfo<T> build() {
+        public @NotNull FullResponseInfo<T> build() {
             return new FullResponseInfo<>(contentForFullResponse,
                                           getHttpStatusCode(),
                                           getHeaders(),

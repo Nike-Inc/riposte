@@ -4,6 +4,9 @@ import com.nike.backstopper.service.riposte.BackstopperRiposteValidatorAdapter;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Interface for a request validator. Concrete implementations might perform JSR 303 validation, or custom validation
  * based on specific object types, or anything else your application needs. If an endpoint wants the request content
@@ -25,14 +28,21 @@ public interface RequestValidator {
     /**
      * Performs default validation on the given request's {@link RequestInfo#getContent()}. If this implementation uses
      * JSR 303 validation then this method call indicates using the default group.
+     *
+     * @param request The request whose {@link RequestInfo#getContent()} needs validating. Should never be null.
      */
-    void validateRequestContent(RequestInfo<?> request);
+    void validateRequestContent(@NotNull RequestInfo<?> request);
 
     /**
      * Performs validation on the given request's {@link RequestInfo#getContent()} using the given validation groups. If
      * this implementation uses JSR 303 validation then this method call indicates using the given groups with the
      * {@code javax.validation.Validator}.
+     *
+     * @param request The request whose {@link RequestInfo#getContent()} needs validating. Should never be null.
+     * @param validationGroups The validation groups to use when validating the given request's content. This can
+     * safely be null if you have no groups to apply, however in that case you should probably simply call
+     * {@link #validateRequestContent(RequestInfo)} instead.
      */
-    void validateRequestContent(RequestInfo<?> request, Class<?>... validationGroups);
+    void validateRequestContent(@NotNull RequestInfo<?> request, @Nullable Class<?>... validationGroups);
 
 }

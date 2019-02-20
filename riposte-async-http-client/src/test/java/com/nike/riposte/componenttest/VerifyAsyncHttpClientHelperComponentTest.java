@@ -23,6 +23,7 @@ import com.ning.http.client.Response;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -285,13 +286,15 @@ public class VerifyAsyncHttpClientHelperComponentTest {
             new ApiErrorBase("MISSING_EXPECTED_HEADER", 42, "Missing expected header", 400);
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(
-            RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
         ) {
             if (!EXPECTED_REQUEST_PAYLOAD.equals(request.getContent()))
                 throw new ApiException(MISSING_EXPECTED_REQ_PAYLOAD);
@@ -329,7 +332,7 @@ public class VerifyAsyncHttpClientHelperComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 

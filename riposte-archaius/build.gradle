@@ -5,8 +5,11 @@ dependencies {
             project(":riposte-core"),
             "com.netflix.archaius:archaius-core:$archaiusVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",

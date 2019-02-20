@@ -2,6 +2,8 @@ package com.nike.riposte.util;
 
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -30,12 +32,16 @@ public class MultiMatcher implements Matcher {
 
     protected static final AntPathMatcher pathParamExtractor = new AntPathMatcher();
 
-    protected final Collection<String> matchingPathTemplates;
-    protected final Collection<HttpMethod> matchingMethods;
+    protected final @NotNull Collection<String> matchingPathTemplates;
+    protected final @NotNull Collection<HttpMethod> matchingMethods;
     protected final boolean matchAllMethods;
 
-    protected MultiMatcher(Collection<String> matchingPathTemplates, Collection<HttpMethod> matchingMethods,
-                           boolean matchAllMethods) {
+    @SuppressWarnings("ConstantConditions")
+    protected MultiMatcher(
+        @NotNull Collection<String> matchingPathTemplates,
+        @NotNull Collection<HttpMethod> matchingMethods,
+        boolean matchAllMethods
+    ) {
         // If the path template doesn't start with a forward slash it has no hope of ever matching any incoming request.
         if (matchingPathTemplates == null
             || matchingPathTemplates.isEmpty()
@@ -45,8 +51,9 @@ public class MultiMatcher implements Matcher {
                                                + "with a forward slash '/'");
         }
 
-        if (matchingMethods == null)
+        if (matchingMethods == null) {
             throw new IllegalArgumentException("matchingMethods cannot be null");
+        }
 
         this.matchingMethods = matchingMethods;
         this.matchingPathTemplates = matchingPathTemplates.stream()
@@ -59,14 +66,18 @@ public class MultiMatcher implements Matcher {
      * @return A new multi-matcher with the given path template that matches all HTTP methods ({@link
      * #isMatchAllMethods()} will return true).
      */
-    public static MultiMatcher match(Collection<String> matchingPathTemplates) {
+    public static @NotNull MultiMatcher match(@NotNull Collection<String> matchingPathTemplates) {
         return new MultiMatcher(matchingPathTemplates, Collections.emptyList(), true);
     }
 
     /**
      * @return A new multi-matcher with the given path templates that match the given HTTP methods.
      */
-    public static MultiMatcher match(Collection<String> matchingPathTemplates, HttpMethod... matchingMethods) {
+    public static @NotNull MultiMatcher match(
+        @NotNull Collection<String> matchingPathTemplates,
+        @NotNull HttpMethod... matchingMethods
+    ) {
+        //noinspection ConstantConditions
         if (matchingMethods == null || matchingMethods.length == 0) {
             throw new IllegalArgumentException("matchingMethods cannot be null or empty. If you want to match all "
                                                + "methods use the single-arg match(Collection<String>) method.");
@@ -78,7 +89,11 @@ public class MultiMatcher implements Matcher {
     /**
      * @return A new multi-matcher with the given path templates that match the given HTTP methods.
      */
-    public static MultiMatcher match(Collection<String> matchingPathTemplates, Collection<HttpMethod> matchingMethods) {
+    public static @NotNull MultiMatcher match(
+        @NotNull Collection<String> matchingPathTemplates,
+        @NotNull Collection<HttpMethod> matchingMethods
+    ) {
+        //noinspection ConstantConditions
         if (matchingMethods == null || matchingMethods.isEmpty()) {
             throw new IllegalArgumentException("matchingMethods cannot be null or empty. If you want to match all "
                                                + "methods use the single-arg match(Collection<String>) method.");
@@ -91,14 +106,14 @@ public class MultiMatcher implements Matcher {
      * {@inheritDoc}
      */
     @Override
-    public Collection<HttpMethod> matchingMethods() {
+    public @NotNull Collection<HttpMethod> matchingMethods() {
         return matchingMethods;
     }
 
     /**
      * {@inheritDoc}
      */
-    public Collection<String> matchingPathTemplates() {
+    public @NotNull Collection<String> matchingPathTemplates() {
         return matchingPathTemplates;
     }
 
@@ -109,7 +124,8 @@ public class MultiMatcher implements Matcher {
      * multiple patterns.
      */
     @Override
-    public Optional<String> matchesPath(RequestInfo<?> request) {
+    public @NotNull Optional<String> matchesPath(@NotNull RequestInfo<?> request) {
+        //noinspection ConstantConditions
         if (request == null || request.getPath() == null)
             return Optional.empty();
 
@@ -127,11 +143,11 @@ public class MultiMatcher implements Matcher {
      * {@inheritDoc}
      */
     @Override
-    public boolean matchesMethod(RequestInfo<?> request) {
+    public boolean matchesMethod(@NotNull RequestInfo<?> request) {
         if (matchAllMethods)
             return true;
 
-        //noinspection SimplifiableIfStatement
+        //noinspection ConstantConditions
         if (request == null || request.getMethod() == null)
             return false;
 

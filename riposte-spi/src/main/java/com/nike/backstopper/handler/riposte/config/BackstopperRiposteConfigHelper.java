@@ -13,6 +13,8 @@ import com.nike.backstopper.handler.riposte.listener.impl.BackstopperRiposteFram
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.error.handler.RiposteUnhandledErrorHandler;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -32,8 +34,10 @@ public class BackstopperRiposteConfigHelper {
      * Returns a {@link RiposteErrorHandler} that uses the given {@link ProjectApiErrors}, and {@link
      * #defaultHandlerListeners(ProjectApiErrors, ApiExceptionHandlerUtils)} for the error handler listeners.
      */
-    public static RiposteErrorHandler defaultErrorHandler(ProjectApiErrors projectApiErrors,
-                                                          ApiExceptionHandlerUtils utils) {
+    public static @NotNull RiposteErrorHandler defaultErrorHandler(
+        @NotNull ProjectApiErrors projectApiErrors,
+        @NotNull ApiExceptionHandlerUtils utils
+    ) {
         return new RiposteApiExceptionHandler(
             projectApiErrors,
             defaultHandlerListeners(projectApiErrors, utils),
@@ -44,8 +48,10 @@ public class BackstopperRiposteConfigHelper {
     /**
      * Returns a {@link RiposteUnhandledErrorHandler} that uses the given {@link ProjectApiErrors}.
      */
-    public static RiposteUnhandledErrorHandler defaultUnhandledErrorHandler(ProjectApiErrors projectApiErrors,
-                                                                            ApiExceptionHandlerUtils utils) {
+    public static @NotNull RiposteUnhandledErrorHandler defaultUnhandledErrorHandler(
+        @NotNull ProjectApiErrors projectApiErrors,
+        @NotNull ApiExceptionHandlerUtils utils
+    ) {
         return new RiposteUnhandledExceptionHandler(projectApiErrors, utils);
     }
 
@@ -53,8 +59,10 @@ public class BackstopperRiposteConfigHelper {
      * Returns the default list of {@link ApiExceptionHandlerListener}s that should work for most applications without
      * any further additions.
      */
-    public static List<ApiExceptionHandlerListener> defaultHandlerListeners(ProjectApiErrors projectApiErrors,
-                                                                            ApiExceptionHandlerUtils utils) {
+    public static @NotNull List<ApiExceptionHandlerListener> defaultHandlerListeners(
+        @NotNull ProjectApiErrors projectApiErrors,
+        @NotNull ApiExceptionHandlerUtils utils
+    ) {
         return Arrays.asList(new GenericApiExceptionHandlerListener(),
                              new ServersideValidationErrorHandlerListener(projectApiErrors, utils),
                              new ClientDataValidationErrorHandlerListener(projectApiErrors, utils),

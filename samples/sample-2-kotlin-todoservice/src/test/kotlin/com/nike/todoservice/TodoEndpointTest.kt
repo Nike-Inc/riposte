@@ -118,7 +118,7 @@ class TodoEndpointTest : FeatureSpec()  {
         @Throws(Exception::class)
         fun setup() {
             serverConfig = AppServerConfigForTesting(findFreePort())
-            server = Server(serverConfig)
+            server = Server(serverConfig!!)
             server!!.startup()
         }
 

@@ -21,6 +21,8 @@ import com.nike.riposte.util.Matcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -158,14 +160,16 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         static final String MATCHING_PATH = "/blankPayloadErrorContractEndpoint";
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
-                                                             Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new BlankPayloadErrorContractException();
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -176,14 +180,16 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         static final String DESIRED_ERROR_MESSAGE_HEADER_KEY = "desired-error-message";
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
-                                                             Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new DelegatedErrorContractException(request.getHeaders().get(DESIRED_ERROR_MESSAGE_HEADER_KEY));
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -194,14 +200,16 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         static final String DESIRED_ERROR_PAYLOAD_HEADER_KEY = "desired-error-payload";
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
-                                                            Executor longRunningTaskExecutor,
-                                                            ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new StringErrorContractException(request.getHeaders().get(DESIRED_ERROR_PAYLOAD_HEADER_KEY));
         }
 
         @Override
-        public Matcher requestMatcher() { return Matcher.match(MATCHING_PATH, HttpMethod.GET); }
+        public @NotNull Matcher requestMatcher() { return Matcher.match(MATCHING_PATH, HttpMethod.GET); }
     }
 
     static class DefaultErrorContractEndpoint extends StandardEndpoint<Void, Void> {
@@ -209,14 +217,16 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         static final String MATCHING_PATH = "/defaultErrorContractEndpoint";
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
-                                                             Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new RuntimeException("kaboom");
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -275,12 +285,12 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         }
 
         @Override
-        public RiposteUnhandledErrorHandler riposteUnhandledErrorHandler() {
+        public @NotNull RiposteUnhandledErrorHandler riposteUnhandledErrorHandler() {
             return new CustomRiposteUnhandledErrorHandler(projectApiErrors, exceptionHandlerUtils);
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -297,10 +307,12 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
         }
 
         @Override
-        protected ErrorResponseBody prepareFrameworkRepresentation(
-            final DefaultErrorContractDTO errorContractDTO,
-            final int httpStatusCode, final Collection<ApiError> rawFilteredApiErrors,
-            final Throwable originalException, final RequestInfoForLogging request
+        protected @NotNull ErrorResponseBody prepareFrameworkRepresentation(
+            final @NotNull DefaultErrorContractDTO errorContractDTO,
+            final int httpStatusCode,
+            final @NotNull Collection<ApiError> rawFilteredApiErrors,
+            final @NotNull Throwable originalException,
+            final @NotNull RequestInfoForLogging request
         ) {
             Throwable cause = originalException.getCause();
 
@@ -325,12 +337,12 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
 
             return new ErrorResponseBody() {
                 @Override
-                public String errorId() {
+                public @NotNull String errorId() {
                     return errorId;
                 }
 
                 @Override
-                public Object bodyToSerialize() {
+                public @Nullable Object bodyToSerialize() {
                     return null;
                 }
             };
@@ -341,12 +353,12 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
             
             return new ErrorResponseBody() {
                 @Override
-                public String errorId() {
+                public @NotNull String errorId() {
                     return errorId;
                 }
 
                 @Override
-                public Object bodyToSerialize() {
+                public @Nullable Object bodyToSerialize() {
                     return new DelegatedErrorContract(originalException.message);
                 }
             };
@@ -357,10 +369,10 @@ public class VerifyErrorResponsePayloadHandlingComponentTest {
 
             return new ErrorResponseBody() {
                 @Override
-                public String errorId() { return errorId; }
+                public @NotNull String errorId() { return errorId; }
 
                 @Override
-                public Object bodyToSerialize() { return originalException.message; }
+                public @Nullable Object bodyToSerialize() { return originalException.message; }
             };
         }
     }

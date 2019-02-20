@@ -5,6 +5,9 @@ import com.nike.riposte.server.error.exception.PathParameterMatchingException;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.Collections;
@@ -14,18 +17,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.COOKIE;
+import static io.netty.handler.codec.http.HttpHeaderNames.COOKIE;
 
 /**
  * Static utility/helper methods for dealing with HTTP stuff (requests, responses, and all the associated tidbits).
@@ -50,15 +53,18 @@ public class HttpUtils {
     /**
      * @return The path portion of the given URI (i.e. everything before the '?' of a query string). For example if you
      * pass in {@code /my/uri?foo=bar} then this method will return {@code /my/uri}. If there is no query string in the
-     * URI then the URI will be returned unchanged.
+     * URI then the URI will be returned unchanged. Will never return null - this method will return empty string ""
+     * if passed null or empty string.
      */
-    public static String extractPath(String uri) {
-        if (uri == null)
+    public static @NotNull String extractPath(@Nullable String uri) {
+        if (uri == null) {
             return "";
+        }
 
         int pathEndPos = uri.indexOf('?');
-        if (pathEndPos < 0)
+        if (pathEndPos < 0) {
             return uri;
+        }
 
         return uri.substring(0, pathEndPos);
     }
@@ -68,16 +74,19 @@ public class HttpUtils {
      * you pass in {@code /my/uri?foo=bar} then this method will return {@code foo=bar}. If there is no query string in
      * the URI then this will return null.
      */
-    public static String extractQueryString(String uri) {
-        if (uri == null)
+    public static @Nullable String extractQueryString(@Nullable String uri) {
+        if (uri == null) {
             return null;
+        }
 
         int questionMarkPos = uri.indexOf('?');
-        if (questionMarkPos < 0)
+        if (questionMarkPos < 0) {
             return null;
+        }
 
-        if ((questionMarkPos + 1) >= uri.length())
+        if ((questionMarkPos + 1) >= uri.length()) {
             return null;
+        }
 
         return uri.substring(questionMarkPos + 1);
     }
@@ -90,13 +99,18 @@ public class HttpUtils {
      *
      * @return The encoding specified in the header or the default Charset if not specified.
      **/
-    public static Charset determineCharsetFromContentType(HttpHeaders headers, Charset def) {
-        if (headers == null)
+    public static @NotNull Charset determineCharsetFromContentType(
+        @Nullable HttpHeaders headers,
+        @NotNull Charset def
+    ) {
+        if (headers == null) {
             return def;
+        }
 
-        String contentTypeHeader = headers.get(HttpHeaders.Names.CONTENT_TYPE);
-        if (contentTypeHeader == null)
+        String contentTypeHeader = headers.get(HttpHeaderNames.CONTENT_TYPE);
+        if (contentTypeHeader == null) {
             return def;
+        }
 
         String charset;
         Matcher m = CONTENT_TYPE_CHARSET_EXTRACTOR_PATTERN.matcher(contentTypeHeader);
@@ -114,22 +128,30 @@ public class HttpUtils {
         return def;
     }
 
-    public static List<HttpContent> extractContentChunks(HttpRequest request) {
-        if (!(request instanceof HttpContent))
+    public static @Nullable List<HttpContent> extractContentChunks(@Nullable HttpRequest request) {
+        if (!(request instanceof HttpContent)) {
             return null;
+        }
 
         return Collections.singletonList((HttpContent) request);
     }
 
-    public static String convertRawBytesToString(Charset contentCharset, byte[] rawBytes) {
-        if (contentCharset == null)
+    public static @Nullable String convertRawBytesToString(
+        @NotNull Charset contentCharset,
+        @Nullable byte[] rawBytes
+    ) {
+        //noinspection ConstantConditions
+        if (contentCharset == null) {
             throw new IllegalArgumentException("contentCharset cannot be null");
+        }
 
-        if (rawBytes == null)
+        if (rawBytes == null) {
             return null;
+        }
 
-        if (rawBytes.length == 0)
+        if (rawBytes.length == 0) {
             return "";
+        }
 
         String rawString = new String(rawBytes, contentCharset);
         // UTF-16 can insert byte order mark characters when splicing together multiple chunks. Remove them
@@ -137,24 +159,30 @@ public class HttpUtils {
         return rawString;
     }
 
-    public static String convertContentChunksToRawString(Charset contentCharset,
-                                                         Collection<HttpContent> contentChunks) {
+    public static @Nullable String convertContentChunksToRawString(
+        @NotNull Charset contentCharset,
+        @Nullable Collection<HttpContent> contentChunks
+    ) {
         byte[] rawBytes = convertContentChunksToRawBytes(contentChunks);
-        if (rawBytes == null)
+        if (rawBytes == null) {
             return null;
+        }
 
         return convertRawBytesToString(contentCharset, rawBytes);
     }
 
-    public static byte[] convertContentChunksToRawBytes(Collection<HttpContent> contentChunks) {
-        if (contentChunks == null || contentChunks.size() == 0)
+    public static @Nullable byte[] convertContentChunksToRawBytes(
+        @Nullable Collection<HttpContent> contentChunks
+    ) {
+        if (contentChunks == null || contentChunks.size() == 0) {
             return null;
+        }
 
         ByteBuf[] chunkByteBufs = contentChunks.stream().map(ByteBufHolder::content).toArray(ByteBuf[]::new);
-        int totalNumBytes =
-            contentChunks.stream().collect(Collectors.summingInt(chunk -> chunk.content().readableBytes()));
-        if (totalNumBytes == 0)
+        int totalNumBytes = contentChunks.stream().mapToInt(chunk -> chunk.content().readableBytes()).sum();
+        if (totalNumBytes == 0) {
             return null;
+        }
 
         byte[] comboBytes = new byte[totalNumBytes];
         int bytesWrittenSoFar = 0;
@@ -167,35 +195,42 @@ public class HttpUtils {
         return comboBytes;
     }
 
-    public static HttpHeaders extractTrailingHeadersIfPossible(HttpRequest request) {
-        if (!(request instanceof LastHttpContent))
+    public static @Nullable HttpHeaders extractTrailingHeadersIfPossible(@Nullable HttpRequest request) {
+        if (!(request instanceof LastHttpContent)) {
             return null;
+        }
 
         return ((LastHttpContent) request).trailingHeaders();
     }
 
-    public static Set<Cookie> extractCookies(HttpRequest request) {
-        Set<Cookie> cookies = new HashSet<>();
+    public static @NotNull Set<Cookie> extractCookies(@Nullable HttpRequest request) {
+        if (request == null) {
+            return Collections.emptySet();
+        }
 
         HttpHeaders trailingHeaders = extractTrailingHeadersIfPossible(request);
 
         String cookieString = request.headers().get(COOKIE);
-        if (cookieString == null && trailingHeaders != null)
+        if (cookieString == null && trailingHeaders != null) {
             cookieString = trailingHeaders.get(COOKIE);
+        }
 
-        if (cookieString != null)
-            cookies.addAll(ServerCookieDecoder.LAX.decode(cookieString));
+        if (cookieString != null) {
+            return new HashSet<>(ServerCookieDecoder.LAX.decode(cookieString));
+        }
 
-        return cookies;
+        return Collections.emptySet();
     }
 
-    public static Map<String, String> decodePathParams(String pathTemplate, String path) {
+    public static @NotNull Map<String, String> decodePathParams(@NotNull String pathTemplate, @NotNull String path) {
         // Ignore trailing slashes on either the template or path.
-        if (pathTemplate.endsWith("/"))
+        if (pathTemplate.endsWith("/")) {
             pathTemplate = pathTemplate.substring(0, pathTemplate.length() - 1);
+        }
 
-        if (path.endsWith("/"))
+        if (path.endsWith("/")) {
             path = path.substring(0, path.length() - 1);
+        }
 
         if (!pathParamExtractor.match(pathTemplate, path)) {
             throw new PathParameterMatchingException(
@@ -206,10 +241,16 @@ public class HttpUtils {
     }
 
 
-    public static String replaceUriPathVariables(RequestInfo<?> request, String downstreamDestinationUriPath) {
-        for (String pathParam : request.getPathParams().keySet()) {
-            downstreamDestinationUriPath =
-                downstreamDestinationUriPath.replaceAll("\\{" + pathParam + "\\}", request.getPathParam(pathParam));
+    public static @NotNull String replaceUriPathVariables(
+        @NotNull RequestInfo<?> request,
+        @NotNull String downstreamDestinationUriPath
+    ) {
+        for (Map.Entry<String, String> pathParamKeyValue : request.getPathParams().entrySet()) {
+            String pathParamKey  = pathParamKeyValue.getKey();
+            String pathParamValue = pathParamKeyValue.getValue();
+            downstreamDestinationUriPath = downstreamDestinationUriPath.replaceAll(
+                "\\{" + pathParamKey + "}", pathParamValue
+            );
         }
 
         return downstreamDestinationUriPath;
@@ -219,12 +260,16 @@ public class HttpUtils {
         return configuredMaxRequestSize <= 0;
     }
 
-    public static int getConfiguredMaxRequestSize(Endpoint<?> endpoint, int globalConfiguredMaxRequestSizeInBytes) {
+    public static int getConfiguredMaxRequestSize(
+        @Nullable Endpoint<?> endpoint,
+        int globalConfiguredMaxRequestSizeInBytes
+    ) {
         //if the endpoint is null or the endpoint is not overriding, we should return the globally configured value
-        if (endpoint == null || endpoint.maxRequestSizeInBytesOverride() == null) {
+        Integer endpointMaxSizeOverride = (endpoint == null) ? null : endpoint.maxRequestSizeInBytesOverride();
+        if (endpointMaxSizeOverride == null) {
             return globalConfiguredMaxRequestSizeInBytes;
         }
 
-        return endpoint.maxRequestSizeInBytesOverride();
+        return endpointMaxSizeOverride;
     }
 }

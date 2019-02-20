@@ -8,6 +8,9 @@ import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.impl.ChunkedResponseInfo;
 import com.nike.riposte.server.http.impl.FullResponseInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Optional;
 
 import io.netty.channel.ChannelHandlerContext;
@@ -67,7 +70,10 @@ public interface RequestAndResponseFilter {
      * what you return so be careful. <b>Null can safely be returned - if null is returned then the original request
      * will continue to be used.</b>
      */
-    <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx);
+    <T> @Nullable RequestInfo<T> filterRequestFirstChunkNoPayload(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
+    );
 
     /**
      * Called by the application after the last chunk of a HTTP request arrives. The {@code currentRequestInfo} will now
@@ -100,8 +106,10 @@ public interface RequestAndResponseFilter {
      * what you return so be careful. <b>Null can safely be returned - if null is returned then the original request
      * will continue to be used.</b>
      */
-    <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo,
-                                                             ChannelHandlerContext ctx);
+    <T> @Nullable RequestInfo<T> filterRequestLastChunkWithFullPayload(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
+    );
 
     /**
      * Called by the application when the first chunk of the response is about to be sent to the client. Depending on
@@ -134,8 +142,11 @@ public interface RequestAndResponseFilter {
      * FullResponseInfo} must map to {@link FullResponseInfo}. This is another reason it's best to simply adjust the
      * original response when possible.
      */
-    <T> ResponseInfo<T> filterResponse(ResponseInfo<T> currentResponseInfo, RequestInfo<?> requestInfo,
-                                       ChannelHandlerContext ctx);
+    <T> @Nullable ResponseInfo<T> filterResponse(
+        @NotNull ResponseInfo<T> currentResponseInfo,
+        @NotNull RequestInfo<?> requestInfo,
+        @NotNull ChannelHandlerContext ctx
+    );
 
     /**
      * This method determines which request filtering methods are used. If this returns true indicating a short
@@ -182,8 +193,9 @@ public interface RequestAndResponseFilter {
      * the pair or for the request object in the pair then the original request will continue to be used, and if null is
      * returned for the pair or for the response object in the pair then no short circuiting will be performed.</b>
      */
-    default <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
-        RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx
+    default <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
     ) {
         throw new UnsupportedOperationException(
             "Not implemented - should only be called if isShortCircuitRequestFilter() is true");
@@ -226,8 +238,9 @@ public interface RequestAndResponseFilter {
      * the pair or for the request object in the pair then the original request will continue to be used, and if null is
      * returned for the pair or for the response object in the pair then no short circuiting will be performed.</b>
      */
-    default <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
-        RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx
+    default <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
+        @NotNull RequestInfo<T> currentRequestInfo,
+        @NotNull ChannelHandlerContext ctx
     ) {
         throw new UnsupportedOperationException(
             "Not implemented - should only be called if isShortCircuitRequestFilter() is true");

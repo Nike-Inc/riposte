@@ -5,10 +5,13 @@ dependencies {
             project(":riposte-core"),
             "com.netflix.eureka:eureka-client:$eurekaClientVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
             project(":riposte-guice"),
             project(":riposte-core").sourceSets.test.output,
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",

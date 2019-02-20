@@ -19,6 +19,8 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
 import com.codahale.metrics.SlidingTimeWindowReservoir;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -242,7 +244,7 @@ public class CodahaleMetricsListener implements MetricsListener {
     }
 
     @Override
-    public void onEvent(ServerMetricsEvent event, Object value) {
+    public void onEvent(@NotNull ServerMetricsEvent event, @Nullable Object value) {
         try {
             if (ServerMetricsEvent.REQUEST_RECEIVED.equals(event)) {
                 inflightRequests.inc();

@@ -5,6 +5,7 @@ import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 
 import org.apache.commons.codec.binary.Base64;
+import org.assertj.core.api.Assertions;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -14,7 +15,6 @@ import java.util.Collections;
 import io.netty.handler.codec.http.HttpHeaders;
 
 import static org.hamcrest.core.Is.is;
-import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -40,17 +40,23 @@ public class BasicAuthSecurityValidatorTest {
     }
 
     @Test
+    public void constructor_uses_empty_collection_if_passed_null_endpoints_collection() {
+        // when
+        BasicAuthSecurityValidator instance = new BasicAuthSecurityValidator(null, USERNAME, PASSWORD);
+
+        // then
+        Assertions.assertThat(instance.basicAuthValidatedEndpoints)
+                  .isNotNull()
+                  .isEmpty();
+        Assertions.assertThat(instance.endpointsToValidate()).isSameAs(instance.basicAuthValidatedEndpoints);
+    }
+
+    @Test
     public void endpointsToValidateTest() {
         assertThat(underTest.endpointsToValidate().size(), is(3));
         assertThat(underTest.endpointsToValidate().contains(mockEndpoint1), is(true));
         assertThat(underTest.endpointsToValidate().contains(mockEndpoint2), is(true));
         assertThat(underTest.endpointsToValidate().contains(mockEndpoint3), is(true));
-    }
-
-    @Test
-    public void endpointsToValidateNullTest() {
-        underTest = new BasicAuthSecurityValidator(null, USERNAME, PASSWORD);
-        assertThat(underTest.endpointsToValidate(), nullValue());
     }
 
     @Test

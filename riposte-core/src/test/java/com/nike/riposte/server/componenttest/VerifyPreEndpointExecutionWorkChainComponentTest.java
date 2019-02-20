@@ -20,6 +20,8 @@ import com.nike.riposte.util.Matcher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -372,14 +374,14 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
     private static RequestValidator customContentValidatorForWorkChainNotification() {
         return new RequestValidator() {
             @Override
-            public void validateRequestContent(RequestInfo<?> request) {
+            public void validateRequestContent(@NotNull RequestInfo<?> request) {
                 contentValidationThreadNames.add(Thread.currentThread().getName());
                 if ("true".equals(request.getHeaders().get(BLOW_UP_IN_CONTENT_VALIDATOR_HEADER_KEY)))
                     throw new ApiException(CONTENT_VALIDATOR_API_ERROR);
             }
 
             @Override
-            public void validateRequestContent(RequestInfo<?> request, Class<?>... validationGroups) {
+            public void validateRequestContent(@NotNull RequestInfo<?> request, @Nullable Class<?>... validationGroups) {
                 contentValidationThreadNames.add(Thread.currentThread().getName());
                 if ("true".equals(request.getHeaders().get(BLOW_UP_IN_CONTENT_VALIDATOR_HEADER_KEY)))
                     throw new ApiException(CONTENT_VALIDATOR_API_ERROR);
@@ -388,10 +390,14 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
     }
 
     private static RequestSecurityValidator customSecurityValidatorForWorkChainNotification(
-        Collection<Endpoint<?>> endpointsToValidate, boolean disableWorkChain) {
+        Collection<Endpoint<?>> endpointsToValidate, boolean disableWorkChain
+    ) {
         return new RequestSecurityValidator() {
             @Override
-            public void validateSecureRequestForEndpoint(RequestInfo<?> requestInfo, Endpoint<?> endpoint) {
+            public void validateSecureRequestForEndpoint(
+                @NotNull RequestInfo<?> requestInfo,
+                @NotNull Endpoint<?> endpoint
+            ) {
                 securityValidationThreadNames.add(Thread.currentThread().getName());
 
                 if ("true".equals(requestInfo.getHeaders().get(BLOW_UP_IN_SECURITY_VALIDATOR_HEADER_KEY)))
@@ -399,7 +405,7 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
             }
 
             @Override
-            public Collection<Endpoint<?>> endpointsToValidate() {
+            public @NotNull Collection<Endpoint<?>> endpointsToValidate() {
                 return endpointsToValidate;
             }
 
@@ -446,7 +452,7 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -456,12 +462,12 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
         }
 
         @Override
-        public RequestValidator requestContentValidationService() {
+        public @Nullable RequestValidator requestContentValidationService() {
             return customContentValidatorForWorkChainNotification;
         }
 
         @Override
-        public RequestSecurityValidator requestSecurityValidator() {
+        public @Nullable RequestSecurityValidator requestSecurityValidator() {
             return customSecurityValidatorForWorkChainNotification;
         }
     }
@@ -471,25 +477,29 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
         public static String WORK_CHAIN_MATCHING_PATH = "/workChain";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<PostObj> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<PostObj> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             endpointThreadNames.add(Thread.currentThread().getName() + "-NORMAL-ENDPOINT");
             return CompletableFuture.completedFuture(ResponseInfo.newBuilder("work chain passed, post obj foo: " + request.getContent().foo).build());
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(WORK_CHAIN_MATCHING_PATH, HttpMethod.POST);
         }
 
         // Force asynchronous deserialization/validation
         @Override
-        public boolean shouldValidateAsynchronously(RequestInfo<?> request) {
+        public boolean shouldValidateAsynchronously(@NotNull RequestInfo<?> request) {
             return true;
         }
 
         // Use a deserializer that will keep track of when it was called and on what thread.
         @Override
-        public ObjectMapper customRequestContentDeserializer(RequestInfo<?> request) {
+        public @Nullable ObjectMapper customRequestContentDeserializer(@NotNull RequestInfo<?> request) {
             return customRequestContentDeserializerForWorkChainNotification(request);
         }
     }
@@ -499,25 +509,29 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
         public static String NON_WORK_CHAIN_MATCHING_PATH = "/nonWorkChain";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<PostObj> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<PostObj> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             endpointThreadNames.add(Thread.currentThread().getName() + "-NONWORKCHAIN-ENDPOINT");
             return CompletableFuture.completedFuture(ResponseInfo.newBuilder("non work chain passed, post obj foo: " + request.getContent().foo).build());
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(NON_WORK_CHAIN_MATCHING_PATH, HttpMethod.POST);
         }
 
         // Force synchronous deserialization/validation
         @Override
-        public boolean shouldValidateAsynchronously(RequestInfo<?> request) {
+        public boolean shouldValidateAsynchronously(@NotNull RequestInfo<?> request) {
             return false;
         }
 
         // Use a deserializer that will keep track of when it was called and on what thread.
         @Override
-        public ObjectMapper customRequestContentDeserializer(RequestInfo<?> request) {
+        public @Nullable ObjectMapper customRequestContentDeserializer(@NotNull RequestInfo<?> request) {
             return customRequestContentDeserializerForWorkChainNotification(request);
         }
     }
@@ -527,9 +541,11 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
         public static String PROXY_MATCHING_PATH = "/workChainProxy";
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             endpointThreadNames.add(Thread.currentThread().getName() + "-PROXY-ENDPOINT");
             int destinationPort = Integer.parseInt(request.getHeaders().get(PROXY_ROUTER_DESTINATION_PORT_HEADER_KEY));
             return CompletableFuture.completedFuture(
@@ -539,19 +555,19 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(PROXY_MATCHING_PATH, HttpMethod.POST);
         }
 
         // Force asynchronous deserialization/validation (won't actually matter since proxy endpoints don't do content deserializaiton or validation)
         @Override
-        public boolean shouldValidateAsynchronously(RequestInfo request) {
+        public boolean shouldValidateAsynchronously(@NotNull RequestInfo request) {
             return true;
         }
 
         // Use a deserializer that will keep track of when it was called and on what thread.
         @Override
-        public ObjectMapper customRequestContentDeserializer(RequestInfo request) {
+        public @Nullable ObjectMapper customRequestContentDeserializer(@NotNull RequestInfo request) {
             return customRequestContentDeserializerForWorkChainNotification(request);
         }
     }

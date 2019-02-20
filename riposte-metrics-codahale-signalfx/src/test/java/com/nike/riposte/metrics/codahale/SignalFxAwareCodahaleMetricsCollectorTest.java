@@ -33,6 +33,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -203,6 +204,70 @@ public class SignalFxAwareCodahaleMetricsCollectorTest {
         assertThat(cmc.metricMetadata).isSameAs(metricMetadataMock);
         assertThat(cmc.timerBuilder).isSameAs(timerBuilderMock);
         assertThat(cmc.histogramBuilder).isSameAs(histogramBuilderMock);
+    }
+
+    private enum NullArgScenario {
+        NULL_METRIC_REGISTRY(
+            true, false, false, false,
+            "registry cannot be null."
+        ),
+        NULL_METRIC_METADATA(
+            false, true, false, false,
+            "metricMetadata cannot be null."
+        ),
+        NULL_TIMER_BUILDER(
+            false, false, true, false,
+            "timerBuilder cannot be null."
+        ),
+        NULL_HISTORGRAM_BUILDER(
+            false, false, false, true,
+            "histogramBuilder cannot be null."
+        );
+        
+        public final boolean metricRegistryIsNull;
+        public final boolean metricMetadataIsNull;
+        public final boolean timerBuilderIsNull;
+        public final boolean histogramBuilderIsNull;
+        public final String expectedExceptionMessage;
+
+        NullArgScenario(
+            boolean metricRegistryIsNull, boolean metricMetadataIsNull, boolean timerBuilderIsNull,
+            boolean histogramBuilderIsNull,
+            String expectedExceptionMessage
+        ) {
+            this.metricRegistryIsNull = metricRegistryIsNull;
+            this.metricMetadataIsNull = metricMetadataIsNull;
+            this.timerBuilderIsNull = timerBuilderIsNull;
+            this.histogramBuilderIsNull = histogramBuilderIsNull;
+            this.expectedExceptionMessage = expectedExceptionMessage;
+        }
+    }
+
+    @DataProvider(value = {
+        "NULL_METRIC_REGISTRY",
+        "NULL_METRIC_METADATA",
+        "NULL_TIMER_BUILDER",
+        "NULL_HISTORGRAM_BUILDER",
+    })
+    @Test
+    public void kitchen_sink_constructor_throws_IllegalArgumentException_when_passed_null_arguments(
+        NullArgScenario scenario
+    ) {
+        // given
+        MetricRegistry registry = scenario.metricRegistryIsNull ? null : metricRegistryMock;
+        MetricMetadata metadata = scenario.metricMetadataIsNull ? null : metricMetadataMock;
+        MetricBuilder<Timer> timerBuilder = scenario.timerBuilderIsNull ? null : timerBuilderMock;
+        MetricBuilder<Histogram> histogramBuilder = scenario.histogramBuilderIsNull ? null : histogramBuilderMock;
+
+        // when
+        Throwable ex = catchThrowable(
+            () -> new SignalFxAwareCodahaleMetricsCollector(registry, metadata, timerBuilder, histogramBuilder)
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage(scenario.expectedExceptionMessage);
     }
 
     private <M extends Metric> void verifyMetricCreation(

@@ -2,6 +2,7 @@ package com.nike.riposte.server.http;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,8 +28,8 @@ public abstract class StandardEndpoint<I, O> implements NonblockingEndpoint<I, O
     @SuppressWarnings("FieldCanBeLocal")
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    protected final Type inputType;
-    protected final TypeReference<I> inferredTypeReference;
+    protected final @Nullable Type inputType;
+    protected final @Nullable TypeReference<I> inferredTypeReference;
 
     /**
      * Uses some magic to determine the {@link #inputType} of the {@code I} generic type for this class (the {@code I}
@@ -66,7 +67,6 @@ public abstract class StandardEndpoint<I, O> implements NonblockingEndpoint<I, O
             throw ex;
         }
 
-        //noinspection EqualsBetweenInconvertibleTypes
         this.inferredTypeReference = (inputType == null || Void.class.equals(inputType))
                                      ? null
                                      : new TypeReference<I>() {
@@ -88,7 +88,7 @@ public abstract class StandardEndpoint<I, O> implements NonblockingEndpoint<I, O
      * used.
      */
     @Override
-    public TypeReference<I> requestContentType() {
+    public @Nullable TypeReference<I> requestContentType() {
         return inferredTypeReference;
     }
 }

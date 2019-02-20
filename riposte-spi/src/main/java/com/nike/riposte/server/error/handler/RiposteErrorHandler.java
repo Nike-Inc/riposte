@@ -4,6 +4,9 @@ import com.nike.backstopper.handler.riposte.RiposteApiExceptionHandler;
 import com.nike.riposte.server.error.exception.UnexpectedMajorErrorHandlingError;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Interface describing an error handler for Netty that takes in the error that occurred along with some info useful for
  * logging and returns an {@link ErrorResponseInfo} that can be used to build the response sent to the user (or null if
@@ -33,7 +36,7 @@ public interface RiposteErrorHandler {
      *     This should never be thrown - if it is it indicates something major went wrong in the handler and is likely a
      *     bug that should be fixed.
      */
-    ErrorResponseInfo maybeHandleError(Throwable error, RequestInfo<?> requestInfo)
+    @Nullable ErrorResponseInfo maybeHandleError(@NotNull Throwable error, @NotNull RequestInfo<?> requestInfo)
         throws UnexpectedMajorErrorHandlingError;
 
 }

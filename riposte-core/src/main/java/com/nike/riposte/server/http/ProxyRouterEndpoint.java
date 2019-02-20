@@ -4,6 +4,9 @@ import com.nike.fastbreak.CircuitBreaker;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -32,8 +35,11 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * endpoint it may not know what downstream system to connect to or what to send until an unspecified amount of time
      * has passed (e.g. DNS or Eureka lookups), and we can't allow this method to block.
      */
-    public abstract CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
-        RequestInfo<?> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx);
+    public abstract @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+        @NotNull RequestInfo<?> request,
+        @NotNull Executor longRunningTaskExecutor,
+        @NotNull ChannelHandlerContext ctx
+    );
 
     /**
      * This method allows for the inspection and optional alteration of the first chunk of the downstream system's
@@ -67,9 +73,10 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      *     it into this method you can pass it via the {@link RequestInfo#getRequestAttributes()} map and it will be
      *     available in {@code origRequestInfo} here when this method is called.
      */
-    @SuppressWarnings("UnusedParameters")
-    public void handleDownstreamResponseFirstChunk(HttpResponse downstreamResponseFirstChunk,
-                                                   RequestInfo<?> origRequestInfo) {
+    public void handleDownstreamResponseFirstChunk(
+        @NotNull HttpResponse downstreamResponseFirstChunk,
+        @NotNull RequestInfo<?> origRequestInfo
+    ) {
         // Do nothing by default
     }
 
@@ -77,7 +84,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * Proxy router endpoints don't generally do anything with content, so return null by default.
      */
     @Override
-    public TypeReference requestContentType() {
+    public @Nullable TypeReference requestContentType() {
         return null;
     }
 
@@ -85,7 +92,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * Proxy router endpoints don't generally validate content, so return false by default.
      */
     @Override
-    public boolean isValidateRequestContent(@SuppressWarnings("UnusedParameters") RequestInfo request) {
+    public boolean isValidateRequestContent(@NotNull RequestInfo request) {
         return false;
     }
 
@@ -104,8 +111,12 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * passed through without modification.
      */
     @SuppressWarnings("UnusedParameters")
-    protected HttpRequest generateSimplePassthroughRequest(RequestInfo<?> incomingRequest, String downstreamPath,
-                                                           HttpMethod downstreamMethod, ChannelHandlerContext ctx) {
+    protected @NotNull HttpRequest generateSimplePassthroughRequest(
+        @NotNull RequestInfo<?> incomingRequest,
+        @NotNull String downstreamPath,
+        @NotNull HttpMethod downstreamMethod,
+        @NotNull ChannelHandlerContext ctx
+    ) {
         String queryString = extractQueryString(incomingRequest.getUri());
         String downstreamUri = downstreamPath;
         // TODO: Add logic to support when downstreamPath already has a query string on it. The two query strings should be combined
@@ -131,7 +142,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * e.g. Passing in {@code "/some/path?"} will result in this method returning {@code "?"}.
      */
     @SuppressWarnings("WeakerAccess")
-    protected String extractQueryString(String uri) {
+    protected @Nullable String extractQueryString(@NotNull String uri) {
         int questionMarkIndex = uri.indexOf('?');
         if (questionMarkIndex == -1)
             return null;
@@ -148,7 +159,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
         /**
          * The host to call for the downstream request.
          */
-        public final String host;
+        public final @NotNull String host;
         /**
          * The port to use for the downstream request.
          */
@@ -161,7 +172,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * The first chunk info for the downstream request - contains uri/path, HTTP method, headers, and HTTP protocol
          * that should be used.
          */
-        public final HttpRequest firstChunk;
+        public final @NotNull HttpRequest firstChunk;
         /**
          * An Optional containing a custom circuit breaker if a custom one should be used, or empty if the router
          * handler should use a default circuit breaker. If you don't want *any* circuit breaker to be used, set {@link
@@ -169,7 +180,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * all calls to the same host will use the same circuit breaker). If you need something more (or less) fine
          * grained than that then you'll need to provide a custom circuit breaker.
          */
-        public final Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker;
+        public final @NotNull Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker;
         /**
          * Set this to true if you don't want *any* circuit breaker to be used - if this is false then {@link
          * #customCircuitBreaker} will be used to determine which circuit breaker to use (custom vs. default).
@@ -204,7 +215,9 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * @param firstChunk
          *     the value for {@link #firstChunk}
          */
-        public DownstreamRequestFirstChunkInfo(String host, int port, boolean isHttps, HttpRequest firstChunk) {
+        public DownstreamRequestFirstChunkInfo(
+            @NotNull String host, int port, boolean isHttps, @NotNull HttpRequest firstChunk
+        ) {
             this(host, port, isHttps, firstChunk, Optional.empty(), false);
         }
 
@@ -224,13 +237,28 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * @param disableCircuitBreaker
          *     the value for {@link #disableCircuitBreaker}
          */
-        public DownstreamRequestFirstChunkInfo(String host, int port, boolean isHttps, HttpRequest firstChunk,
-                                               Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker,
-                                               boolean disableCircuitBreaker) {
+        @SuppressWarnings("ConstantConditions")
+        public DownstreamRequestFirstChunkInfo(
+            @NotNull String host,
+            int port,
+            boolean isHttps,
+            @NotNull HttpRequest firstChunk,
+            @NotNull Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker,
+            boolean disableCircuitBreaker
+        ) {
+            if (host == null) {
+                throw new IllegalArgumentException("host cannot be null.");
+            }
+
+            if (firstChunk == null) {
+                throw new IllegalArgumentException("firstChunk cannot be null.");
+            }
+
             this.host = host;
             this.port = port;
             this.isHttps = isHttps;
             this.firstChunk = firstChunk;
+            //noinspection OptionalAssignedToNull
             this.customCircuitBreaker = (customCircuitBreaker == null) ? Optional.empty() : customCircuitBreaker;
             this.disableCircuitBreaker = disableCircuitBreaker;
         }
@@ -242,7 +270,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
          * WARNING: Setting this to true opens you up to security vulnerabilities - make sure you know what you're
          * doing.
          */
-        public DownstreamRequestFirstChunkInfo withRelaxedHttpsValidation(boolean relaxedHttpsValidation) {
+        public @NotNull DownstreamRequestFirstChunkInfo withRelaxedHttpsValidation(boolean relaxedHttpsValidation) {
             this.relaxedHttpsValidation = relaxedHttpsValidation;
             return this;
         }
@@ -250,7 +278,9 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
         /**
          * Pass in false if you do not want SubSpans created around your downstream call
          */
-        public DownstreamRequestFirstChunkInfo withPerformSubSpanAroundDownstreamCall(boolean performSubSpanAroundDownstreamCall) {
+        public @NotNull DownstreamRequestFirstChunkInfo withPerformSubSpanAroundDownstreamCall(
+            boolean performSubSpanAroundDownstreamCall
+        ) {
             this.performSubSpanAroundDownstreamCall = performSubSpanAroundDownstreamCall;
             return this;
         }
@@ -258,7 +288,9 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
         /**
          * Pass in false if you do not want the standard tracing headers added to your downstream call
          */
-        public DownstreamRequestFirstChunkInfo withAddTracingHeadersToDownstreamCall(boolean addTracingHeadersToDownstreamCall) {
+        public @NotNull DownstreamRequestFirstChunkInfo withAddTracingHeadersToDownstreamCall(
+            boolean addTracingHeadersToDownstreamCall
+        ) {
             this.addTracingHeadersToDownstreamCall = addTracingHeadersToDownstreamCall;
             return this;
         }
@@ -268,7 +300,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * Proxy router endpoints don't generally want to limit the request size they are proxying, so return 0 to disable
      */
     @Override
-    public Integer maxRequestSizeInBytesOverride() {
+    public @Nullable Integer maxRequestSizeInBytesOverride() {
         return 0;
     }
 
@@ -278,7 +310,7 @@ public abstract class ProxyRouterEndpoint implements Endpoint {
      * payload as it passes through.
      */
     @Override
-    public boolean isDecompressRequestPayloadAllowed(RequestInfo request) {
+    public boolean isDecompressRequestPayloadAllowed(@NotNull RequestInfo request) {
         return false;
     }
 }

@@ -800,12 +800,31 @@ public class ResponseSender {
                                                + "sendErrorResponse(...) only works with full responses");
         }
 
-        responseInfo.getHeaders().set("error_uid", responseInfo.getContentForFullResponse().errorId());
+        String errorIdValue = responseInfo.getContentForFullResponse().errorId();
+        //noinspection ConstantConditions
+        if (errorIdValue == null) {
+            errorIdValue = UUID.randomUUID().toString();
+            logger.warn(
+                "ErrorResponseBody.errorId() returned null - your service's error handler should never do this. "
+                + "Synthetic error ID created and sent back in response: {}", errorIdValue
+            );
+        }
+        responseInfo.getHeaders().set("error_uid", errorIdValue);
 
         @SuppressWarnings("UnnecessaryLocalVariable")
         ErrorResponseBody bodyToSerialize = responseInfo.getContentForFullResponse();
         if (bodyToSerialize != null) {
-            String errorBodyAsString = errorResponseBodySerializer.serializeErrorResponseBodyToString(bodyToSerialize);
+            String errorBodyAsString = null;
+            try {
+                errorBodyAsString = errorResponseBodySerializer.serializeErrorResponseBodyToString(bodyToSerialize);
+            }
+            catch (Exception ex) {
+                logger.error(
+                    "An unexpected exception occurred while attempting to serialize an ErrorResponseBody - please fix "
+                    + "your service's error handler. An empty response body will be used instead. error_id={}",
+                    errorIdValue, ex
+                );
+            }
             //noinspection unchecked
             ((ResponseInfo) responseInfo).setContentForFullResponse(errorBodyAsString);
         }

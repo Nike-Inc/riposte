@@ -2,6 +2,9 @@ package com.nike.riposte.metrics;
 
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Interface for handling {@link ServerMetricsEvent}s. Concrete implementations should track and report on metrics
  * around general server statistics and health (e.g. counters for inflight, processed, and failed requests, histograms
@@ -21,5 +24,5 @@ public interface MetricsListener {
      * @param value This should be a {@code HttpProcessingState} object, but may be null depending what happened during
      * the request.
      */
-    void onEvent(ServerMetricsEvent event, Object value);
+    void onEvent(@NotNull ServerMetricsEvent event, @Nullable Object value);
 }

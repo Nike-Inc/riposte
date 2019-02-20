@@ -10,6 +10,7 @@ import com.nike.riposte.util.Matcher;
 
 import com.netflix.config.ConfigurationManager;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,7 +53,7 @@ public class ArchaiusServerTest {
             protected ServerConfig getServerConfig() {
                 return new ServerConfig() {
                     @Override
-                    public Collection<Endpoint<?>> appEndpoints() {
+                    public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
                         return Collections.singleton(new SomeEndpoint());
                     }
 
@@ -136,14 +137,16 @@ public class ArchaiusServerTest {
         static final String MATCHING_PATH = "/archaiusValue";
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
-                                                               Executor longRunningTaskExecutor,
-                                                               ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             String value = ConfigurationManager.getConfigInstance().getString("archaiusServer.foo");
             return CompletableFuture.completedFuture(
                 ResponseInfo.newBuilder(value).build()

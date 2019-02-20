@@ -4,6 +4,9 @@ import com.nike.backstopper.handler.RequestInfoForLogging;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.util.HttpUtils;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,10 +20,11 @@ import java.util.Set;
 @SuppressWarnings("WeakerAccess")
 public class RequestInfoForLoggingRiposteAdapter implements RequestInfoForLogging {
 
-    private final RequestInfo<?> request;
-    private Map<String, List<String>> headersMapCache;
+    private final @NotNull RequestInfo<?> request;
+    private @Nullable Map<String, List<String>> headersMapCache;
 
-    public RequestInfoForLoggingRiposteAdapter(RequestInfo<?> request) {
+    public RequestInfoForLoggingRiposteAdapter(@NotNull RequestInfo<?> request) {
+        //noinspection ConstantConditions
         if (request == null)
             throw new IllegalArgumentException("request cannot be null");
 
@@ -28,22 +32,22 @@ public class RequestInfoForLoggingRiposteAdapter implements RequestInfoForLoggin
     }
 
     @Override
-    public String getRequestUri() {
+    public @NotNull String getRequestUri() {
         return request.getPath();
     }
 
     @Override
-    public String getRequestHttpMethod() {
+    public @NotNull String getRequestHttpMethod() {
         return String.valueOf(request.getMethod());
     }
 
     @Override
-    public String getQueryString() {
+    public @Nullable String getQueryString() {
         return HttpUtils.extractQueryString(request.getUri());
     }
 
     @Override
-    public Map<String, List<String>> getHeadersMap() {
+    public @NotNull Map<String, List<String>> getHeadersMap() {
         if (headersMapCache == null) {
             Map<String, List<String>> headersMap = new HashMap<>();
 
@@ -64,22 +68,31 @@ public class RequestInfoForLoggingRiposteAdapter implements RequestInfoForLoggin
     }
 
     @Override
-    public String getHeader(String headerName) {
+    public @Nullable String getHeader(String headerName) {
         return request.getHeaders().get(headerName);
     }
 
     @Override
-    public List<String> getHeaders(String headerName) {
+    public @Nullable List<String> getHeaders(String headerName) {
         return getHeadersMap().get(headerName);
     }
 
     @Override
-    public Object getAttribute(String key) {
+    public @Nullable Object getAttribute(String key) {
         return null;
     }
 
     @Override
-    public String getBody() throws GetBodyException {
-        return request.getRawContent();
+    public @NotNull String getBody() throws GetBodyException {
+        try {
+            String result = request.getRawContent();
+            if (result == null) {
+                result = "";
+            }
+            return result;
+        }
+        catch (Exception ex) {
+            throw new GetBodyException("An error occurred while trying to extract the request body.", ex);
+        }
     }
 }

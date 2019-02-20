@@ -5,6 +5,8 @@ import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -18,7 +20,7 @@ import java.util.Map;
 @SuppressWarnings("WeakerAccess")
 public class PolymorphicSecurityValidator implements RequestSecurityValidator {
 
-    protected Map<Endpoint<?>, List<RequestSecurityValidator>> validationMap;
+    protected @NotNull Map<Endpoint<?>, List<RequestSecurityValidator>> validationMap;
     protected final boolean isFastEnoughToRunOnNettyWorkerThread;
 
     /**
@@ -34,8 +36,9 @@ public class PolymorphicSecurityValidator implements RequestSecurityValidator {
         isFastEnoughToRunOnNettyWorkerThread = !containsSlowValidator;
     }
 
-    protected Map<Endpoint<?>, List<RequestSecurityValidator>> buildValidationMap(
-        List<RequestSecurityValidator> validators) {
+    protected @NotNull Map<Endpoint<?>, List<RequestSecurityValidator>> buildValidationMap(
+        List<RequestSecurityValidator> validators
+    ) {
         Map<Endpoint<?>, List<RequestSecurityValidator>> map = new HashMap<>();
         if (validators == null) {
             return map;
@@ -59,7 +62,10 @@ public class PolymorphicSecurityValidator implements RequestSecurityValidator {
      * validators.
      */
     @Override
-    public void validateSecureRequestForEndpoint(RequestInfo<?> requestInfo, Endpoint<?> endpoint) {
+    public void validateSecureRequestForEndpoint(
+        @NotNull RequestInfo<?> requestInfo,
+        @NotNull Endpoint<?> endpoint
+    ) {
         List<RequestSecurityValidator> validators = validationMap.get(endpoint);
         if (validators == null || validators.isEmpty()) {
             // if there are no validators for the endpoint, we don't need to validate
@@ -83,7 +89,7 @@ public class PolymorphicSecurityValidator implements RequestSecurityValidator {
     }
 
     @Override
-    public Collection<Endpoint<?>> endpointsToValidate() {
+    public @NotNull Collection<Endpoint<?>> endpointsToValidate() {
         return validationMap.keySet();
     }
 

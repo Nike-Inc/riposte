@@ -53,7 +53,7 @@ object TodoItemsEndpoint {
 
     class Post : StandardEndpoint<TodoItem, TodoItem?>() {
 
-        override fun customRequestContentDeserializer(request: RequestInfo<*>?): ObjectMapper {
+        override fun customRequestContentDeserializer(request: RequestInfo<*>): ObjectMapper? {
             return mapper
         }
 
@@ -78,7 +78,7 @@ object TodoItemsEndpoint {
 
     class Put : StandardEndpoint<TodoItem, TodoItem?>() {
 
-        override fun customRequestContentDeserializer(request: RequestInfo<*>?): ObjectMapper {
+        override fun customRequestContentDeserializer(request: RequestInfo<*>): ObjectMapper? {
             return mapper
         }
 

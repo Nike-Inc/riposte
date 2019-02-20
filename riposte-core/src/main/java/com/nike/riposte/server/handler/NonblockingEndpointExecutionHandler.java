@@ -51,7 +51,7 @@ import static com.nike.riposte.util.AsyncNettyHelper.runnableWithTracingAndMdc;
 public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
-    private final Executor longRunningTaskExecutor;
+    private final @NotNull Executor longRunningTaskExecutor;
     private final long defaultCompletableFutureTimeoutMillis;
 
     private final @NotNull ServerSpanNamingAndTaggingStrategy<Span> spanTaggingStrategy;
@@ -135,9 +135,10 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
 
                 // Also schedule a timeout check with our Netty event loop to make sure we kill the
                 //      CompletableFuture if it goes on too long.
-                long timeoutValueToUse = (nonblockingEndpoint.completableFutureTimeoutOverrideMillis() == null)
+                Long endpointTimeoutOverride = nonblockingEndpoint.completableFutureTimeoutOverrideMillis();
+                long timeoutValueToUse = (endpointTimeoutOverride == null)
                                          ? defaultCompletableFutureTimeoutMillis
-                                         : nonblockingEndpoint.completableFutureTimeoutOverrideMillis();
+                                         : endpointTimeoutOverride;
                 ScheduledFuture<?> responseTimeoutScheduledFuture = ctx.channel().eventLoop().schedule(() -> {
                     if (!responseFuture.isDone()) {
                         runnableWithTracingAndMdc(
@@ -219,10 +220,10 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
      * {@link ServerSpanNamingAndTaggingStrategy#shouldAddEndpointStartAnnotation()}).
      */
     protected Function<Void, CompletableFuture<ResponseInfo<?>>> doExecuteEndpointFunction(
-        RequestInfo<?> requestInfo,
-        NonblockingEndpoint nonblockingEndpoint,
-        Span endpointExecutionSpan,
-        ChannelHandlerContext ctx
+        @NotNull RequestInfo<?> requestInfo,
+        @NotNull NonblockingEndpoint nonblockingEndpoint,
+        @Nullable Span endpointExecutionSpan,
+        @NotNull ChannelHandlerContext ctx
     ) {
         return functionWithTracingAndMdc(
             aVoid -> {
@@ -242,9 +243,16 @@ public class NonblockingEndpointExecutionHandler extends BaseInboundHandlerWithT
 
                 // Kick off the endpoint execution.
                 //noinspection unchecked
-                return (CompletableFuture<ResponseInfo<?>>) nonblockingEndpoint.execute(
+                CompletableFuture<ResponseInfo<?>> executionResult = nonblockingEndpoint.execute(
                     requestInfo, longRunningTaskExecutor, ctx
                 );
+
+                //noinspection ConstantConditions
+                if (executionResult == null) {
+                    throw new NullPointerException("NonblockingEndpoint.execute() cannot return null.");
+                }
+
+                return executionResult;
             },
             ctx
         );

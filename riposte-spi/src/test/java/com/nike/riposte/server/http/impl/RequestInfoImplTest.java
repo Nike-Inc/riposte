@@ -702,14 +702,22 @@ public class RequestInfoImplTest {
             KNOWN_MULTIPART_DATA_ATTR_UUID + "\n" +
             "--OnbiRR2K8-ZzW3rj0wLh_r9td9w_XD34jBR--\n";
 
+    @DataProvider(value = {
+        "false  |   false",
+        "false  |   true",
+        "true   |   false",
+        "true   |   true",
+    }, splitBy = "\\|")
     @Test
-    public void getMultipartParts_works_as_expected_with_known_valid_data() throws IOException {
+    public void getMultipartParts_works_as_expected_with_known_valid_data(
+        boolean httpVersionIsNull, boolean httpMethodIsNull
+    ) throws IOException {
         // given
         RequestInfoImpl<?> requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
         Whitebox.setInternalState(requestInfo, "isMultipart", true);
         Whitebox.setInternalState(requestInfo, "contentCharset", CharsetUtil.UTF_8);
-        Whitebox.setInternalState(requestInfo, "protocolVersion", HttpVersion.HTTP_1_1);
-        Whitebox.setInternalState(requestInfo, "method", HttpMethod.POST);
+        Whitebox.setInternalState(requestInfo, "protocolVersion", (httpVersionIsNull) ? null : HttpVersion.HTTP_1_1);
+        Whitebox.setInternalState(requestInfo, "method", (httpMethodIsNull) ? null : HttpMethod.POST);
         requestInfo.isCompleteRequestWithAllChunks = true;
         requestInfo.rawContentBytes = KNOWN_MULTIPART_DATA_BODY.getBytes(CharsetUtil.UTF_8);
         requestInfo.getHeaders().set("Content-Type", KNOWN_MULTIPART_DATA_CONTENT_TYPE_HEADER);
@@ -729,7 +737,7 @@ public class RequestInfoImplTest {
     }
 
     @Test
-    public void getMultipartParts_works_as_expected_with_known_empty_data() throws IOException {
+    public void getMultipartParts_works_as_expected_with_known_empty_data() {
         // given
         RequestInfoImpl<?> requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
         Whitebox.setInternalState(requestInfo, "isMultipart", true);
@@ -749,7 +757,7 @@ public class RequestInfoImplTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void getMultipartParts_explodes_if_multipartData_had_been_released() throws IOException {
+    public void getMultipartParts_explodes_if_multipartData_had_been_released() {
         // given
         RequestInfoImpl<?> requestInfo = RequestInfoImpl.dummyInstanceForUnknownRequests();
         Whitebox.setInternalState(requestInfo, "isMultipart", true);

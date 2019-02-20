@@ -16,6 +16,8 @@ import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -346,7 +348,7 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return Collections.singleton(proxyEndpoint);
         }
 
@@ -373,7 +375,7 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -388,7 +390,7 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         }
 
         @Override
-        public List<PipelineCreateHook> pipelineCreateHooks() {
+        public @Nullable List<@NotNull PipelineCreateHook> pipelineCreateHooks() {
             return singletonList(pipeline -> pipeline
                 .addFirst("recordBackendRawOutboundResponse", new RecordBackendServerRawOutboundResponse())
             );
@@ -407,7 +409,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         public static final String NON_EMPTY_PAYLOAD = generatePayload(1000);
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             int statusCode = Integer.parseInt(request.getHeaders().get(DESIRED_RESPONSE_HTTP_STATUS_CODE_HEADER_KEY));
             boolean returnEmptyPayload = "true".equals(request.getHeaders().get(SHOULD_RETURN_EMPTY_PAYLOAD_BODY_HEADER_KEY));
             String callIdReceived = String.valueOf(request.getHeaders().get(CALL_ID_REQUEST_HEADER_KEY));
@@ -433,7 +439,7 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -446,9 +452,11 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         public static final String RESPONSE_PAYLOAD = generatePayload(1042);
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
-                                                               Executor longRunningTaskExecutor,
-                                                               ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             int statusCode = Integer.parseInt(request.getHeaders().get(DESIRED_HTTP_RESPONSE_CODE));
 
             return CompletableFuture.completedFuture(
@@ -460,7 +468,7 @@ public class VerifyResponseHttpStatusCodeHandlingRfcCorrectnessComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET, HttpMethod.HEAD);
         }
     }

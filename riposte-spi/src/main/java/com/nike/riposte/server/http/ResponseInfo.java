@@ -3,10 +3,14 @@ package com.nike.riposte.server.http;
 import com.nike.riposte.server.http.impl.ChunkedResponseInfo.ChunkedResponseInfoBuilder;
 import com.nike.riposte.server.http.impl.FullResponseInfo.FullResponseInfoBuilder;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.charset.Charset;
 import java.util.Set;
 
 import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.util.CharsetUtil;
@@ -18,19 +22,18 @@ import io.netty.util.CharsetUtil;
  *
  * @author Nic Munroe
  */
-@SuppressWarnings("UnnecessaryInterfaceModifier")
 public interface ResponseInfo<T> {
 
     /**
      * The default mime type that should be used by the response sender if {@link #getDesiredContentWriterMimeType()} is
      * null and the mime type is not specified in the headers.
      */
-    public static final String DEFAULT_MIME_TYPE = "application/json";
+    String DEFAULT_MIME_TYPE = "application/json";
     /**
      * The default content encoding charset that should be used if {@link #getDesiredContentWriterEncoding()} is null
      * and the charset is not specified in the headers.
      */
-    public static final Charset DEFAULT_CONTENT_ENCODING = CharsetUtil.UTF_8;
+    Charset DEFAULT_CONTENT_ENCODING = CharsetUtil.UTF_8;
 
     /**
      * The HTTP status code to return. Can be null - if this is null then the response sender will use a default value
@@ -41,12 +44,12 @@ public interface ResponseInfo<T> {
      * observers (e.g. {@link com.nike.riposte.server.logging.AccessLogger} or {@link
      * com.nike.riposte.metrics.MetricsListener}) know what was sent to the user after the fact.
      */
-    public Integer getHttpStatusCode();
+    @Nullable Integer getHttpStatusCode();
 
     /**
      * @return {@link #getHttpStatusCode()}, or the given default if {@link #getHttpStatusCode()} is null.
      */
-    public default int getHttpStatusCodeWithDefault(int defaultIfNull) {
+    default int getHttpStatusCodeWithDefault(int defaultIfNull) {
         Integer actual = getHttpStatusCode();
         if (actual == null)
             return defaultIfNull;
@@ -58,13 +61,13 @@ public interface ResponseInfo<T> {
      * Sets the value of the HTTP status code that the response sender should use. See {@link #getHttpStatusCode()} for
      * more information on how this is used.
      */
-    public void setHttpStatusCode(Integer httpStatusCode);
+    void setHttpStatusCode(@Nullable Integer httpStatusCode);
 
     /**
      * The response headers to send. This will never be null (it will default to a blank {@link DefaultHttpHeaders} if
      * necessary).
      */
-    public HttpHeaders getHeaders();
+    @NotNull HttpHeaders getHeaders();
 
     /**
      * Returns true if this response is a chunked response, false if it is a full ready-to-send-everything response. If
@@ -72,7 +75,7 @@ public interface ResponseInfo<T> {
      * content chunks to send to the user as it won't be stored in this object. Otherwise response senders should use
      * {@link #getContentForFullResponse()}.
      */
-    public boolean isChunkedResponse();
+    boolean isChunkedResponse();
 
     /**
      * The response content for a *FULL* (not chunked) response. Can be null - if this is null then the response writer
@@ -81,7 +84,7 @@ public interface ResponseInfo<T> {
      * <b>ALWAYS CHECK {@link #isChunkedResponse()} BEFORE CALLING THIS METHOD!</b> If {@link #isChunkedResponse()} is
      * true then this method will throw an {@link IllegalStateException}.
      */
-    public T getContentForFullResponse();
+    @Nullable T getContentForFullResponse();
 
     /**
      * Sets the response content for a *FULL* (not chunked) response. Can be null - if this is null then the response
@@ -91,13 +94,14 @@ public interface ResponseInfo<T> {
      * IllegalStateException} will be thrown. Similarly you can only call this method if {@link
      * #isResponseSendingLastChunkSent()} is false otherwise an {@link IllegalStateException} will be thrown.
      */
-    public void setContentForFullResponse(T contentForFullResponse);
+    void setContentForFullResponse(@Nullable T contentForFullResponse);
 
     /**
      * The mime type (e.g. application/json, or text/html) to use when sending {@link #getContentForFullResponse()} or
      * chunks (when {@link #isChunkedResponse()} is true). This will be used along with {@link
-     * #getDesiredContentWriterEncoding()} to populate the outgoing {@link HttpHeaders.Names#CONTENT_TYPE} header if
-     * non-null.
+     * #getDesiredContentWriterEncoding()} to populate the outgoing {@link HttpHeaderNames#CONTENT_TYPE} header if
+     * non-null. This may return null - if this returns null then the response sender will use {@link
+     * #DEFAULT_MIME_TYPE} when sending the response.
      * <p/>
      * NOTE: This and {@link #getDesiredContentWriterEncoding()} will be used to override any Content-Type header in
      * {@link #getHeaders()} if non-null, so if you want the Content-Type header from {@link #getHeaders()} to be the
@@ -107,42 +111,43 @@ public interface ResponseInfo<T> {
      * NOTE: This WILL NOT include a charset in this string. The charset is specified via {@link
      * #getDesiredContentWriterEncoding()}.
      */
-    public String getDesiredContentWriterMimeType();
+    @Nullable String getDesiredContentWriterMimeType();
 
     /**
      * Sets the desired content writer mime type. See {@link #getDesiredContentWriterMimeType()} for more information on
      * how this is used.
      */
-    public void setDesiredContentWriterMimeType(String desiredContentWriterMimeType);
+    void setDesiredContentWriterMimeType(@Nullable String desiredContentWriterMimeType);
 
     /**
      * The charset/encoding that should be used when sending {@link #getContentForFullResponse()} or chunks (when {@link
      * #isChunkedResponse()} is true). This will be used to encode the bytes that are sent and will be used along with
-     * {@link #getDesiredContentWriterMimeType()} to populate the outgoing {@link HttpHeaders.Names#CONTENT_TYPE} header
-     * if non-null.
+     * {@link #getDesiredContentWriterMimeType()} to populate the outgoing {@link HttpHeaderNames#CONTENT_TYPE} header
+     * if non-null. This may return null - if this returns null then the response sender will use {@link
+     * #DEFAULT_CONTENT_ENCODING} when sending the response.
      * <p/>
      * NOTE: This and {@link #getDesiredContentWriterMimeType()} will be used to override any Content-Type header in
      * {@link #getHeaders()} if non-null, so if you want the Content-Type header from {@link #getHeaders()} to be the
      * one that is sent to the user (e.g. if you're doing a reverse proxy/edge router/domain router style endpoint) then
      * make sure this is null.
      */
-    public Charset getDesiredContentWriterEncoding();
+    @Nullable Charset getDesiredContentWriterEncoding();
 
     /**
      * Sets the desired content writer encoding. See {@link #getDesiredContentWriterEncoding()} for more information on
      * how this is used.
      */
-    public void setDesiredContentWriterEncoding(Charset desiredContentWriterEncoding);
+    void setDesiredContentWriterEncoding(@Nullable Charset desiredContentWriterEncoding);
 
     /**
      * The cookies to send. If this is null or empty then no cookies will be output to the user.
      */
-    public Set<Cookie> getCookies();
+    @Nullable Set<Cookie> getCookies();
 
     /**
      * Sets the cookies to send. If this is null or empty then no cookies will be output to the user.
      */
-    public void setCookies(Set<Cookie> cookies);
+    void setCookies(@Nullable Set<Cookie> cookies);
 
     /**
      * Returns true if the response to the user should be sent unchanged/uncompressed. If this is false then the
@@ -152,7 +157,7 @@ public interface ResponseInfo<T> {
      * The builder defaults this to false (allowing normal compression rules to apply) - if you want to force a full
      * sized response then set this to true.
      */
-    public boolean isPreventCompressedOutput();
+    boolean isPreventCompressedOutput();
 
     /**
      * Pass in true if the response to the user should be sent unchanged/uncompressed. If this is false then the
@@ -163,7 +168,7 @@ public interface ResponseInfo<T> {
      * sized response then set this to true.
      */
     @SuppressWarnings("unused")
-    public void setPreventCompressedOutput(boolean preventCompressedOutput);
+    void setPreventCompressedOutput(boolean preventCompressedOutput);
 
     /**
      * The *uncompressed* response content length of the content that was sent to the user in bytes - 0 for empty
@@ -182,13 +187,13 @@ public interface ResponseInfo<T> {
      * accurate number until after the last chunk is sent (use {@link #isResponseSendingLastChunkSent()} to verify when
      * it is done).
      */
-    public Long getUncompressedRawContentLength();
+    @Nullable Long getUncompressedRawContentLength();
 
     /**
      * Sets the uncompressed raw content length. See {@link #getUncompressedRawContentLength()} for details on how this
      * is used.
      */
-    public void setUncompressedRawContentLength(Long uncompressedRawContentLength);
+    void setUncompressedRawContentLength(@Nullable Long uncompressedRawContentLength);
 
     /**
      * The *final* response content length of the content that was sent to the user in bytes - 0 for empty responses.
@@ -204,38 +209,38 @@ public interface ResponseInfo<T> {
      * outgoing bytes, and add to or set this value appropriately (you may need to add to this value cumulatively
      * depending on if there are multiple chunks, etc).
      */
-    public Long getFinalContentLength();
+    @Nullable Long getFinalContentLength();
 
     /**
      * Sets the final content length. See {@link #getFinalContentLength()} for details on how this is used.
      */
-    public void setFinalContentLength(Long finalContentLength);
+    void setFinalContentLength(@Nullable Long finalContentLength);
 
     /**
      * Returns true if at least one chunk of the response (the headers chunk) has been sent to the user, false if
      * nothing has been sent to the user yet. This is not a chunked-response only field - it is valid and usable no
      * matter what {@link #isChunkedResponse()} returns.
      */
-    public boolean isResponseSendingStarted();
+    boolean isResponseSendingStarted();
 
     /**
      * The response sender should call this and pass in true when the first header chunk is sent to the user. This is
      * not a chunked-response only field - it is valid and usable no matter what {@link #isChunkedResponse()} returns.
      */
-    public void setResponseSendingStarted(boolean responseSendingStarted);
+    void setResponseSendingStarted(boolean responseSendingStarted);
 
     /**
      * Returns true if the last chunk of the response has been sent to the user and the response sending is therefore
      * complete, false if the response is not fully sent yet. This is not a chunked-response only field - it is valid
      * and usable no matter what {@link #isChunkedResponse()} returns.
      */
-    public boolean isResponseSendingLastChunkSent();
+    boolean isResponseSendingLastChunkSent();
 
     /**
      * The response sender should call this and pass in true when the last chunk is sent to the user. This is not a
      * chunked-response only field - it is valid and usable no matter what {@link #isChunkedResponse()} returns.
      */
-    public void setResponseSendingLastChunkSent(boolean responseSendingLastChunkSent);
+    void setResponseSendingLastChunkSent(boolean responseSendingLastChunkSent);
 
     /**
      * Returns true <b>if and only if</b> this is a "final response" before this connection closes. This should only
@@ -244,13 +249,13 @@ public interface ResponseInfo<T> {
      * com.nike.riposte.server.error.exception.TooManyOpenChannelsException} is thrown. This should default to false in
      * normal implementations.
      */
-    public boolean isForceConnectionCloseAfterResponseSent();
+    boolean isForceConnectionCloseAfterResponseSent();
 
     /**
      * Sets the {@link #isForceConnectionCloseAfterResponseSent()} field - see that method for details on how this is
      * used. This should default to false in normal implementations.
      */
-    public void setForceConnectionCloseAfterResponseSent(boolean forceConnectionCloseAfterResponseSent);
+    void setForceConnectionCloseAfterResponseSent(boolean forceConnectionCloseAfterResponseSent);
 
     /**
      * @return A new blank builder for full responses (not chunked responses). If you know the content you want to
@@ -260,14 +265,14 @@ public interface ResponseInfo<T> {
      * but if you use the other method it would look like: {@code ResponseInfo<String> responseInfo =
      * ResponseInfo.newBuilder("someString").build()}.
      */
-    public static <T> FullResponseInfoBuilder<T> newBuilder() {
+    static <T> @NotNull FullResponseInfoBuilder<T> newBuilder() {
         return new FullResponseInfoBuilder<>();
     }
 
     /**
      * @return A new builder for full responses (not chunked responses) with the given content already populated.
      */
-    public static <T> FullResponseInfoBuilder<T> newBuilder(T content) {
+    static <T> @NotNull FullResponseInfoBuilder<T> newBuilder(@Nullable T content) {
         return new FullResponseInfoBuilder<T>().withContentForFullResponse(content);
     }
 
@@ -277,7 +282,7 @@ public interface ResponseInfo<T> {
      * #newBuilder()} or {@link #newBuilder(Object)}). If you're unsure which one you should be using, chances are it
      * should *not* be this one.
      */
-    public static ChunkedResponseInfoBuilder newChunkedResponseBuilder() {
+    static @NotNull ChunkedResponseInfoBuilder newChunkedResponseBuilder() {
         return new ChunkedResponseInfoBuilder();
     }
 

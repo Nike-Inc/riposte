@@ -7,6 +7,8 @@ import org.junit.Test;
 
 import java.util.concurrent.Callable;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -25,6 +27,17 @@ public class CodahaleMetricsCollectorTest {
     @Before
     public void setUp() throws Exception {
         mc = new CodahaleMetricsCollector();
+    }
+
+    @Test
+    public void constructor_throws_IllegalArgumentException_if_passed_null_MetricRegistry() {
+        // when
+        Throwable ex = catchThrowable(() -> new CodahaleMetricsCollector(null));
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("registry cannot be null.");
     }
 
     /**

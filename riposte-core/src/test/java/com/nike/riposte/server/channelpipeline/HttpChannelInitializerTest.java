@@ -46,6 +46,7 @@ import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
 import org.assertj.core.api.Assertions;
+import org.jetbrains.annotations.NotNull;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -118,7 +119,7 @@ public class HttpChannelInitializerTest {
     private Endpoint<Object> getMockEndpoint(String path, HttpMethod... matchingMethods) {
         return new Endpoint<Object>() {
             @Override
-            public Matcher requestMatcher() {
+            public @NotNull Matcher requestMatcher() {
                 if (matchingMethods == null || matchingMethods.length == 0)
                     return Matcher.match(path);
                 else

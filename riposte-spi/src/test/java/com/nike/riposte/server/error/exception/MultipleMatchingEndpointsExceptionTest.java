@@ -3,6 +3,7 @@ package com.nike.riposte.server.error.exception;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -41,14 +42,14 @@ public class MultipleMatchingEndpointsExceptionTest {
 
     public static class EndpointOne implements Endpoint {
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }
 
     public static class EndpointTwo implements Endpoint {
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }

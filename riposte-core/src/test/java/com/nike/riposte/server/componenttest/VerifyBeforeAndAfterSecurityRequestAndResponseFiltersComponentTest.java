@@ -14,6 +14,8 @@ import com.nike.riposte.util.Matcher;
 
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -159,12 +161,12 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return appEndpoints;
         }
 
         @Override
-        public List<RequestAndResponseFilter> requestAndResponseFilters() {
+        public @Nullable List<@NotNull RequestAndResponseFilter> requestAndResponseFilters() {
             return filters;
         }
 
@@ -174,7 +176,7 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         }
 
         @Override
-        public RequestSecurityValidator requestSecurityValidator() {
+        public @Nullable RequestSecurityValidator requestSecurityValidator() {
             return new TestRequestSecurityValidator(appEndpoints);
         }
     }
@@ -191,7 +193,10 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         }
 
         @Override
-        public void validateSecureRequestForEndpoint(RequestInfo<?> requestInfo, Endpoint<?> endpoint) {
+        public void validateSecureRequestForEndpoint(
+            @NotNull RequestInfo<?> requestInfo,
+            @NotNull Endpoint<?> endpoint
+        ) {
             requestInfo.addRequestAttribute(SECURITY_VALIDATOR_EXECUTED_HEADER_KEY, true);
 
             if ("true".equals(requestInfo.getHeaders().get(FORCE_SECURITY_ERROR_HEADER_KEY))) {
@@ -203,7 +208,7 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         }
 
         @Override
-        public Collection<Endpoint<?>> endpointsToValidate() {
+        public @NotNull Collection<Endpoint<?>> endpointsToValidate() {
             return endpointsToValidate;
         }
     }
@@ -213,12 +218,16 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         public static final String MATCHING_PATH = "/basicEndpoint";
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(ResponseInfo.<Void>newBuilder().build());
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
 
@@ -262,19 +271,27 @@ public class VerifyBeforeAndAfterSecurityRequestAndResponseFiltersComponentTest 
         }
 
         @Override
-        public <T> RequestInfo<T> filterRequestFirstChunkNoPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable RequestInfo<T> filterRequestFirstChunkNoPayload(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
+        ) {
             currentRequestInfo.getRequestAttributes().put(firstChunkReqMethodExecutedKey, true);
             return currentRequestInfo;
         }
 
         @Override
-        public <T> RequestInfo<T> filterRequestLastChunkWithFullPayload(RequestInfo<T> currentRequestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable RequestInfo<T> filterRequestLastChunkWithFullPayload(
+            @NotNull RequestInfo<T> currentRequestInfo, @NotNull ChannelHandlerContext ctx
+        ) {
             currentRequestInfo.getRequestAttributes().put(lastChunkReqMethodExecutedKey, true);
             return currentRequestInfo;
         }
 
         @Override
-        public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> responseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
+        public <T> @Nullable ResponseInfo<T> filterResponse(
+            @NotNull ResponseInfo<T> responseInfo,
+            @NotNull RequestInfo<?> requestInfo,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             // Indicate whether or not the first/last chunk request methods were executed for this filter
             //      so that the caller can assert based on what it expects.
             setHeader(responseInfo,

@@ -5,8 +5,11 @@ dependencies {
             project(":riposte-core"),
             "com.google.inject:guice:$guiceVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "com.nike.backstopper:backstopper-reusable-tests:$backstopperVersion"

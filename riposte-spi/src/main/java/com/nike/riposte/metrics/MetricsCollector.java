@@ -1,5 +1,7 @@
 package com.nike.riposte.metrics;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -26,7 +28,7 @@ public interface MetricsCollector {
      * @param timerName
      *     The name of the timer to update with the measurements
      */
-    void timed(Runnable r, String timerName);
+    void timed(@NotNull Runnable r, @NotNull String timerName);
 
     /**
      * Execute some code and note how long it ran
@@ -38,7 +40,7 @@ public interface MetricsCollector {
      *
      * @return an instance of V
      */
-    <V> V timed(Callable<V> c, String timerName) throws Exception;
+    <V> V timed(@NotNull Callable<V> c, @NotNull String timerName) throws Exception;
 
     /**
      * Execute some code and note how long it ran
@@ -52,7 +54,7 @@ public interface MetricsCollector {
      *
      * @return The results of the function
      */
-    <T, R> R timed(Function<T, R> f, T arg, String timerName);
+    <T, R> R timed(@NotNull Function<T, R> f, T arg, @NotNull String timerName);
 
     /**
      * Execute some code and note how long it ran
@@ -64,7 +66,7 @@ public interface MetricsCollector {
      * @param timerName
      *     The name of the timer to update
      */
-    <T> void timed(Consumer<T> c, T arg, String timerName);
+    <T> void timed(@NotNull Consumer<T> c, T arg, @NotNull String timerName);
 
     /**
      * Execute some code and note how long it ran
@@ -78,7 +80,7 @@ public interface MetricsCollector {
      * @param timerName
      *     The name of the timer to update
      */
-    <T, U> void timed(BiConsumer<T, U> bc, T arg1, U arg2, String timerName);
+    <T, U> void timed(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String timerName);
 
     /**
      * Execute some code and note how long it ran
@@ -94,7 +96,7 @@ public interface MetricsCollector {
      *
      * @return The resutls of processing
      */
-    <T, U, R> R timed(BiFunction<T, U, R> bf, T arg1, U arg2, String timerName);
+    <T, U, R> R timed(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String timerName);
 
     /**
      * Execute some code and update the specified event rate metric.  This invocation represents a single event.
@@ -104,7 +106,7 @@ public interface MetricsCollector {
      * @param meterName
      *     The meter to update
      */
-    default void metered(Runnable r, String meterName) {
+    default void metered(@NotNull Runnable r, @NotNull String meterName) {
         metered(r, meterName, 1L);
     }
 
@@ -118,7 +120,7 @@ public interface MetricsCollector {
      * @param events
      *     The number of events that this invocation represents
      */
-    void metered(Runnable r, String meterName, long events);
+    void metered(@NotNull Runnable r, @NotNull String meterName, long events);
 
     /**
      * Execute some code and update the specified event rate metric
@@ -132,7 +134,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    <V> V metered(Callable<V> c, String meterName, long events) throws Exception;
+    <V> V metered(@NotNull Callable<V> c, @NotNull String meterName, long events) throws Exception;
 
     /**
      * Execute some code and update the specified event rate metric.  This invocation represents a single event
@@ -144,7 +146,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    default <V> V metered(Callable<V> c, String meterName) throws Exception {
+    default <V> V metered(@NotNull Callable<V> c, @NotNull String meterName) throws Exception {
         return metered(c, meterName, 1L);
     }
 
@@ -162,7 +164,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    <T, R> R metered(Function<T, R> f, T arg, String meterName, long events);
+    <T, R> R metered(@NotNull Function<T, R> f, T arg, @NotNull String meterName, long events);
 
     /**
      * Execute some code and update the specified event rate metric.  This invocation represents a single event
@@ -176,7 +178,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    default <T, R> R metered(Function<T, R> f, T arg, String meterName) {
+    default <T, R> R metered(@NotNull Function<T, R> f, T arg, @NotNull String meterName) {
         return metered(f, arg, meterName, 1L);
     }
 
@@ -192,7 +194,7 @@ public interface MetricsCollector {
      * @param events
      *     the number of events this invocation represents
      */
-    <T> void metered(Consumer<T> c, T arg, String meterName, long events);
+    <T> void metered(@NotNull Consumer<T> c, T arg, @NotNull String meterName, long events);
 
     /**
      * Execute some code and update the specified event rate metric.  This invocation represents a single event
@@ -204,7 +206,7 @@ public interface MetricsCollector {
      * @param meterName
      *     The meter to update
      */
-    default <T> void metered(Consumer<T> c, T arg, String meterName) {
+    default <T> void metered(@NotNull Consumer<T> c, T arg, @NotNull String meterName) {
         metered(c, arg, meterName, 1L);
     }
 
@@ -222,7 +224,7 @@ public interface MetricsCollector {
      * @param events
      *     the number of events this invocation represents
      */
-    <T, U> void metered(BiConsumer<T, U> bc, T arg1, U arg2, String meterName, long events);
+    <T, U> void metered(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String meterName, long events);
 
     /**
      * Execute some code and update the specified event rate metric.  This invocation represents a single event
@@ -236,7 +238,7 @@ public interface MetricsCollector {
      * @param meterName
      *     The meter to update
      */
-    default <T, U> void metered(BiConsumer<T, U> bc, T arg1, U arg2, String meterName) {
+    default <T, U> void metered(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String meterName) {
         metered(bc, arg1, arg2, meterName, 1L);
     }
 
@@ -254,7 +256,7 @@ public interface MetricsCollector {
      * @param events
      *     the number of events this invocation represents
      */
-    <T, U, R> R metered(BiFunction<T, U, R> bf, T arg1, U arg2, String meterName, long events);
+    <T, U, R> R metered(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String meterName, long events);
 
     /**
      * Execute some code and update the specified event rate metric.  This invocation represents a single event
@@ -268,7 +270,7 @@ public interface MetricsCollector {
      * @param meterName
      *     The meter to update
      */
-    default <T, U, R> R metered(BiFunction<T, U, R> bf, T arg1, U arg2, String meterName) {
+    default <T, U, R> R metered(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String meterName) {
         return metered(bf, arg1, arg2, meterName, 1L);
     }
 
@@ -280,7 +282,7 @@ public interface MetricsCollector {
      * @param counterName
      *     The name of the counter to update
      */
-    default void counted(Runnable r, String counterName) {
+    default void counted(@NotNull Runnable r, @NotNull String counterName) {
         counted(r, counterName, 1L);
     }
 
@@ -294,7 +296,7 @@ public interface MetricsCollector {
      * @param delta
      *     The amount by which to change the counter
      */
-    void counted(Runnable r, String counterName, long delta);
+    void counted(@NotNull Runnable r, @NotNull String counterName, long delta);
 
     /**
      * Execute some code and upate the specified counter
@@ -308,7 +310,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    <V> V counted(Callable<V> c, String counterName, long delta) throws Exception;
+    <V> V counted(@NotNull Callable<V> c, @NotNull String counterName, long delta) throws Exception;
 
     /**
      * Execute some code and upate the specified counter.  This invocation increments the counter by 1
@@ -320,7 +322,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    default <V> V counted(Callable<V> c, String meterName) throws Exception {
+    default <V> V counted(@NotNull Callable<V> c, @NotNull String meterName) throws Exception {
         return counted(c, meterName, 1L);
     }
 
@@ -338,7 +340,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    <T, R> R counted(Function<T, R> f, T arg, String counterName, long delta);
+    <T, R> R counted(@NotNull Function<T, R> f, T arg, @NotNull String counterName, long delta);
 
     /**
      * Execute some code and update the specified counter.  This invocation increments the counter by 1
@@ -352,7 +354,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    default <T, R> R counted(Function<T, R> f, T arg, String counterName) {
+    default <T, R> R counted(@NotNull Function<T, R> f, T arg, @NotNull String counterName) {
         return counted(f, arg, counterName, 1L);
     }
 
@@ -368,7 +370,7 @@ public interface MetricsCollector {
      * @param delta
      *     the amount by which to udpate the counter
      */
-    <T> void counted(Consumer<T> c, T arg, String counterName, long delta);
+    <T> void counted(@NotNull Consumer<T> c, T arg, @NotNull String counterName, long delta);
 
     /**
      * Execute some code and update the specified counter.  This invocation increments the counter by 1
@@ -380,7 +382,7 @@ public interface MetricsCollector {
      * @param counterName
      *     The name of the counter to update
      */
-    default <T> void counted(Consumer<T> c, T arg, String counterName) {
+    default <T> void counted(@NotNull Consumer<T> c, T arg, @NotNull String counterName) {
         counted(c, arg, counterName, 1L);
     }
 
@@ -398,7 +400,7 @@ public interface MetricsCollector {
      * @param delta
      *     the amount by which to udpate the counter
      */
-    <T, U> void counted(BiConsumer<T, U> bc, T arg1, U arg2, String counterName, long delta);
+    <T, U> void counted(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String counterName, long delta);
 
     /**
      * Execute some code and update the specified counter.  The invocation increments the counter by 1
@@ -412,7 +414,7 @@ public interface MetricsCollector {
      * @param counterName
      *     The name of the counter to update
      */
-    default <T, U> void counted(BiConsumer<T, U> bc, T arg1, U arg2, String counterName) {
+    default <T, U> void counted(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String counterName) {
         counted(bc, arg1, arg2, counterName, 1L);
     }
 
@@ -432,7 +434,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    <T, U, R> R counted(BiFunction<T, U, R> bf, T arg1, U arg2, String counterName, long delta);
+    <T, U, R> R counted(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String counterName, long delta);
 
     /**
      * Execute some code and update the specified counter. This invocation increments the counter by 1
@@ -448,7 +450,7 @@ public interface MetricsCollector {
      *
      * @return The result of processing
      */
-    default <T, U, R> R counted(BiFunction<T, U, R> bf, T arg1, U arg2, String counterName) {
+    default <T, U, R> R counted(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String counterName) {
         return counted(bf, arg1, arg2, counterName, 1L);
     }
 

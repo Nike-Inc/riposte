@@ -47,7 +47,7 @@ public class Server {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    private final ServerConfig serverConfig;
+    private final @NotNull ServerConfig serverConfig;
 
     private final List<EventLoopGroup> eventLoopGroups = new ArrayList<>();
     private final List<Channel> channels = new ArrayList<>();
@@ -57,7 +57,7 @@ public class Server {
     @SuppressWarnings("WeakerAccess")
     public static final String SERVER_BOSS_CHANNEL_DEBUG_LOGGER_NAME = "ServerBossChannelDebugLogger";
 
-    public Server(ServerConfig serverConfig) {
+    public Server(@NotNull ServerConfig serverConfig) {
         this.serverConfig = serverConfig;
     }
 
@@ -155,8 +155,9 @@ public class Server {
          .childHandler(channelInitializer);
 
         // execute pre startup hooks
-        if (serverConfig.preServerStartupHooks() != null) {
-            for (PreServerStartupHook hook : serverConfig.preServerStartupHooks()) {
+        List<@NotNull PreServerStartupHook> preServerStartupHooks = serverConfig.preServerStartupHooks();
+        if (preServerStartupHooks != null) {
+            for (PreServerStartupHook hook : preServerStartupHooks) {
                 hook.executePreServerStartupHook(b);
             }
         }
@@ -170,8 +171,9 @@ public class Server {
                       .channel();
 
         // execute post startup hooks
-        if (serverConfig.postServerStartupHooks() != null) {
-            for (PostServerStartupHook hook : serverConfig.postServerStartupHooks()) {
+        List<@NotNull PostServerStartupHook> postServerStartupHooks = serverConfig.postServerStartupHooks();
+        if (postServerStartupHooks != null) {
+            for (PostServerStartupHook hook : postServerStartupHooks) {
                 hook.executePostServerStartupHook(serverConfig, ch);
             }
         }
@@ -224,8 +226,9 @@ public class Server {
             List<ChannelFuture> channelCloseFutures = new ArrayList<>();
             for (Channel ch : channels) {
                 // execute shutdown hooks
-                if (serverConfig.serverShutdownHooks() != null) {
-                    for (ServerShutdownHook hook : serverConfig.serverShutdownHooks()) {
+                List<@NotNull ServerShutdownHook> serverShutdownHooks = serverConfig.serverShutdownHooks();
+                if (serverShutdownHooks != null) {
+                    for (ServerShutdownHook hook : serverShutdownHooks) {
                         hook.executeServerShutdownHook(serverConfig, ch);
                     }
                 }

@@ -2,10 +2,11 @@ package com.nike.riposte.server.http;
 
 import com.nike.riposte.server.http.ProxyRouterEndpoint.DownstreamRequestFirstChunkInfo;
 import com.nike.riposte.util.Matcher;
+
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpRequest;
+
+import org.jetbrains.annotations.NotNull;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -13,7 +14,11 @@ import org.junit.runner.RunWith;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpRequest;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.mock;
 
 @RunWith(DataProviderRunner.class)
@@ -25,12 +30,16 @@ public class ProxyRouterEndpointTest {
     public void setup() {
         defaultImpl = new ProxyRouterEndpoint() {
             @Override
-            public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+            public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+                @NotNull RequestInfo<?> request,
+                @NotNull Executor longRunningTaskExecutor,
+                @NotNull ChannelHandlerContext ctx
+            ) {
                 return null;
             }
 
             @Override
-            public Matcher requestMatcher() {
+            public @NotNull Matcher requestMatcher() {
                 return null;
             }
         };
@@ -70,6 +79,45 @@ public class ProxyRouterEndpointTest {
     }
 
     @Test
+    public void downstreamRequestFirstChunkInfo_constructor_throws_IllegalArgumentException_if_passed_null_host() {
+        // when
+        Throwable ex = catchThrowable(
+            () -> new DownstreamRequestFirstChunkInfo(null, 8080, true, mock(HttpRequest.class))
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("host cannot be null.");
+    }
+
+    @Test
+    public void downstreamRequestFirstChunkInfo_constructor_throws_IllegalArgumentException_if_passed_null_firstChunk() {
+        // when
+        Throwable ex = catchThrowable(
+            () -> new DownstreamRequestFirstChunkInfo("localhost", 8080, true, null)
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("firstChunk cannot be null.");
+    }
+
+    @Test
+    public void downstreamRequestFirstChunkInfo_defaults_to_empty_optional_if_passed_null_customCircuitBreaker_optional() {
+        // when
+        DownstreamRequestFirstChunkInfo downstreamRequestFirstChunkInfo = new DownstreamRequestFirstChunkInfo(
+            "localhost", 8080, true, mock(HttpRequest.class), null, false
+        );
+
+        // then
+        assertThat(downstreamRequestFirstChunkInfo.customCircuitBreaker)
+            .isNotNull()
+            .isEmpty();
+    }
+
+    @Test
     @DataProvider(value = {
             "true",
             "false"
@@ -77,7 +125,7 @@ public class ProxyRouterEndpointTest {
     public void downstreamRequestFirstChunkInfo_allowsOverrideOfRelaxHttpsValidationFlag(boolean flagValue) {
         // when
         DownstreamRequestFirstChunkInfo downstreamRequestFirstChunkInfo =
-                new DownstreamRequestFirstChunkInfo("localhost", 8080, true, null)
+                new DownstreamRequestFirstChunkInfo("localhost", 8080, true, mock(HttpRequest.class))
                         .withRelaxedHttpsValidation(flagValue);
 
         // then
@@ -92,7 +140,7 @@ public class ProxyRouterEndpointTest {
     public void downstreamRequestFirstChunkInfo_allowsOverrideOfAddTracingFlag(boolean flagValue) {
         // when
         DownstreamRequestFirstChunkInfo downstreamRequestFirstChunkInfo =
-                new DownstreamRequestFirstChunkInfo("localhost", 8080, true, null)
+                new DownstreamRequestFirstChunkInfo("localhost", 8080, true, mock(HttpRequest.class))
                 .withAddTracingHeadersToDownstreamCall(flagValue);
 
         // then
@@ -107,10 +155,46 @@ public class ProxyRouterEndpointTest {
     public void downstreamRequestFirstChunkInfo_allowsOverrideOfPerformSubspanOnDownstreamCall(boolean flagValue) {
         // when
         DownstreamRequestFirstChunkInfo downstreamRequestFirstChunkInfo =
-                new DownstreamRequestFirstChunkInfo("localhost", 8080, true, null)
+                new DownstreamRequestFirstChunkInfo("localhost", 8080, true, mock(HttpRequest.class))
                         .withPerformSubSpanAroundDownstreamCall(flagValue);
 
         // then
         assertThat(downstreamRequestFirstChunkInfo.performSubSpanAroundDownstreamCall).isEqualTo(flagValue);
+    }
+
+    public void downstreamRequestFirstChunkInfo_throws_IllegalArgumentException_if_constructed_with_null_firstChunk() {
+        // when
+        Throwable ex = catchThrowable(
+            () -> new DownstreamRequestFirstChunkInfo("localhost", 8080, true, null)
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("firstChunk cannot be null.");
+    }
+
+    public void downstreamRequestFirstChunkInfo_throws_IllegalArgumentException_if_constructed_with_null_host() {
+        // when
+        Throwable ex = catchThrowable(
+            () -> new DownstreamRequestFirstChunkInfo(null, 8080, true, mock(HttpRequest.class))
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("host cannot be null.");
+    }
+
+    public void downstreamRequestFirstChunkInfo_uses_empty_option_if_constructed_with_null_circuit_breaker() {
+        // when
+        DownstreamRequestFirstChunkInfo instance = new DownstreamRequestFirstChunkInfo(
+            "localhost", 8080, true, mock(HttpRequest.class), null, false
+        );
+
+        // then
+        assertThat(instance.customCircuitBreaker)
+            .isNotNull()
+            .isEmpty();
     }
 }
