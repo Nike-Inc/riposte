@@ -52,6 +52,7 @@ public class Server {
     private final List<EventLoopGroup> eventLoopGroups = new ArrayList<>();
     private final List<Channel> channels = new ArrayList<>();
     private boolean startedUp = false;
+    private boolean hasShutdown = false;
 
     @SuppressWarnings("WeakerAccess")
     public static final String SERVER_BOSS_CHANNEL_DEBUG_LOGGER_NAME = "ServerBossChannelDebugLogger";
@@ -182,19 +183,18 @@ public class Server {
         startedUp = true;
 
         // Add a shutdown hook so we can gracefully stop the server when the JVM is going down
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    shutdown();
-                }
-                catch (Exception e) {
-                    logger.warn("Error shutting down Riposte", e);
-                }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                shutdown();
             }
-        });
+            catch (Exception e) {
+                logger.warn("Error shutting down Riposte", e);
+                throw new RuntimeException(e);
+            }
+        }));
     }
 
+    @SuppressWarnings("WeakerAccess")
     protected @NotNull DistributedTracingConfig<Span> getOrGenerateWingtipsDistributedTracingConfig(
         @NotNull ServerConfig serverConfig
     ) {
@@ -214,7 +214,11 @@ public class Server {
         return (DistributedTracingConfig<Span>) distributedTracingConfigRaw;
     }
 
-    public void shutdown() throws InterruptedException {
+    public synchronized void shutdown() throws InterruptedException {
+        if (hasShutdown) {
+            return;
+        }
+
         try {
             logger.info("Shutting down Riposte...");
             List<ChannelFuture> channelCloseFutures = new ArrayList<>();
@@ -233,6 +237,7 @@ public class Server {
             }
         }
         finally {
+            hasShutdown = true;
             eventLoopGroups.forEach(EventExecutorGroup::shutdownGracefully);
             logger.info("...Riposte shutdown complete");
         }
