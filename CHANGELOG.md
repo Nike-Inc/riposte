@@ -8,6 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.16.x` Releases - [0.16.0](#0160)
 - `0.15.x` Releases - [0.15.0](#0150)
 - `0.14.x` Releases - [0.14.0](#0140)
 - `0.13.x` Releases - [0.13.1](#0131), [0.13.0](#0130)
@@ -16,6 +17,59 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.16.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.16.0)
+
+Released on 2019-03-11.
+
+### Added
+
+- Added `@NotNull` and `@Nullable` nullability annotations to most interfaces and classes that service developers will
+interact with. This significantly improves integration with Kotlin, and gives IDEs the ability to provide warnings
+when you're doing things in your code that are not null-safe.
+    - Added by [Nic Munroe][contrib_nicmunroe] in pull request [#119](https://github.com/Nike-Inc/riposte/pull/119). 
+
+### Fixed
+
+- Fixed Riposte's `Server.shutdown()` method so that it can only be called once. This has very little effect on real
+running services, however it can prevent a bunch of console spam during unit/component tests if your test calls
+`shutdown()` manually and then the JVM shutdown hook calls it again when the JVM is shutting down.
+    - Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#118](https://github.com/Nike-Inc/riposte/pull/118). 
+
+### Potentially breaking changes
+
+The `@NotNull` and `@Nullable` nullability annotation changes significantly improve quality-of-life when using Kotlin
+with Riposte, however they may also introduce some compilation errors if you're already using Kotlin with Riposte and
+you were treating a return type as not-null when it is now marked nullable (for example). These errors should be 
+straightforward to fix.
+
+The nullability annotation changes also include some changes to constructors of various classes so that we can 
+guarantee some of those `@NotNull` return types, and a few other bits of cleanup that were shown to be needed as we 
+looked through the code with an eye towards nullability problems. This shouldn't affect most users, as you're unlikely 
+to be using those constructors directly and/or are unlikely to be sending them invalid arguments. But new exceptions 
+are being thrown where they weren't before, so we're noting them here for completeness. The following 
+constructors/classes are affected:
+
+- `DownstreamRequestFirstChunkInfo` constructor - throws `IllegalArgumentException` if passed null `String host`
+or `HttpRequest firstChunk` arguments.
+- `SimpleProxyRouterEndpoint` constructor - throws `IllegalArgumentException` if passed null 
+`Matcher incomingRequestMatcher`, `String downstreamDestinationHost`, or `String downstreamDestinationUriPath`
+arguments. 
+- `CodahaleMetricsCollector` constructor - throws `IllegalArgumentException` if passed a null `MetricRegistry registry`
+argument.
+- `SignalFxAwareCodahaleMetricsCollector` constructor - throws `IllegalArgumentException` if passed null
+`MetricRegistry metricRegistry`, `MetricMetadata metricMetadata`, `MetricBuilder<Timer> timerBuilder`,
+or `MetricBuilder<Histogram> histogramBuilder` arguments.
+- `ErrorResponseBodyImpl` constructor - throws `IllegalArgumentException` if passed null a `String error_id`
+argument. The copy constructor will similarly throw a `IllegalArgumentException` if passed a null 
+`DefaultErrorContractDTO copy` argument, or if that `copy.error_id` is null.
+- `ErrorResponseInfoImpl` constructor - throws `IllegalArgumentException` if passed a null 
+`ErrorResponseBody errorResponseBody` argument.
+- `AppInfoImpl` constructor - does not throw an exception, but sets any of the given args to `"unknown"` if they are 
+null.
+- `DelegatedErrorResponseBody` constructor - throws `IllegalArgumentException` if passed a null `String errorId`
+argument.
+
 
 ## [0.15.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.15.0)
 
