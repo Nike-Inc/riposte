@@ -4,6 +4,8 @@ import com.nike.internal.util.Pair;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,12 +26,12 @@ import java.util.stream.Collectors;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponse;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.ACCEPT;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
-import static io.netty.handler.codec.http.HttpHeaders.Names.REFERER;
-import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
-import static io.netty.handler.codec.http.HttpHeaders.Names.USER_AGENT;
+import static io.netty.handler.codec.http.HttpHeaderNames.ACCEPT;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpHeaderNames.REFERER;
+import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING;
+import static io.netty.handler.codec.http.HttpHeaderNames.USER_AGENT;
 
 /**
  * This class is responsible for logging an access log message for the given request/response to the SLF4J logger with
@@ -103,15 +105,16 @@ public class AccessLogger {
     public static final String SPAN_ID = "X-B3-SpanId";
     @SuppressWarnings("unused")
     public static final String PARENT_ID = "X-B3-ParentSpanId";
+    @SuppressWarnings("unused")
     public static final String SPAN_NAME = "X-B3-SpanName";
     public static final String TRACE_ENABLED = "X-B3-Sampled";
 
-    private static String cachedLocalIpAddress;
+    private static @Nullable String cachedLocalIpAddress;
     private static long cachedLocalIpAddressLastCheckedTime = 0;
     private static final long LOCAL_IP_ADDRESS_CACHE_CHECK_FREQUENCY_MILLIS = 60 * 1000;
 
-    private final String timezoneString;
-    private final String[] shortMonthNames;
+    private final @NotNull String timezoneString;
+    private final @NotNull String[] shortMonthNames;
     private final CompletableFuture<Void> alreadyCompletedFuture = CompletableFuture.completedFuture(null);
 
     public AccessLogger() {
@@ -119,10 +122,10 @@ public class AccessLogger {
         timezoneString = " " + ZonedDateTime.now().format(DateTimeFormatter.ofPattern("Z"));
         Locale defaultLocale = Locale.getDefault(Locale.Category.FORMAT);
         Map<String, Integer> monthMap =
-            Calendar.getInstance().getDisplayNames(Calendar.MONTH, Calendar.SHORT_FORMAT, defaultLocale);
+            Calendar.getInstance().getDisplayNames(Calendar.MONTH, Calendar.SHORT, defaultLocale);
         int maxMonthIndex = Collections.max(monthMap.values());
         shortMonthNames = new String[maxMonthIndex + 1];
-        monthMap.entrySet().forEach(entry -> shortMonthNames[entry.getValue()] = entry.getKey());
+        monthMap.forEach((key, value) -> shortMonthNames[value] = key);
     }
 
     /**
@@ -153,12 +156,16 @@ public class AccessLogger {
      * @param elapsedTimeMillis
      *     represents time difference from receiving the request to ending the request in milliseconds; may be null
      */
-    public CompletableFuture<Void> log(RequestInfo<?> request,
-                                       HttpResponse finalResponseObject,
-                                       ResponseInfo responseInfo,
-                                       Long elapsedTimeMillis) {
-        if (request == null)
+    public @NotNull CompletableFuture<Void> log(
+        @NotNull RequestInfo<?> request,
+        @Nullable HttpResponse finalResponseObject,
+        @Nullable ResponseInfo responseInfo,
+        @Nullable Long elapsedTimeMillis
+    ) {
+        //noinspection ConstantConditions
+        if (request == null) {
             throw new IllegalArgumentException("request cannot be null");
+        }
 
         if (logAsynchronously()) {
             return CompletableFuture.runAsync(
@@ -207,10 +214,12 @@ public class AccessLogger {
      *
      * @return The final string that will be logged as the full access log message.
      */
-    protected String generateFinalAccessLogMessage(RequestInfo<?> request,
-                                                   HttpResponse finalResponseObject,
-                                                   ResponseInfo responseInfo,
-                                                   Long elapsedTimeMillis) {
+    protected @NotNull String generateFinalAccessLogMessage(
+        @NotNull RequestInfo<?> request,
+        @Nullable HttpResponse finalResponseObject,
+        @Nullable ResponseInfo responseInfo,
+        @Nullable Long elapsedTimeMillis
+    ) {
         String combinedLogString = combinedLogFormatPrefix(request, finalResponseObject, responseInfo);
 
         List<Pair<String, String>> logMessageAdditions = logMessageAdditions(
@@ -238,9 +247,11 @@ public class AccessLogger {
      * @return String representing the NCSA Combined log format for access logs plus the referrer and user agent: %h %l
      * %u [%t] "%r" %s %b "%i{Referer}" "%i{User-Agent}"
      */
-    protected String combinedLogFormatPrefix(RequestInfo<?> request,
-                                             HttpResponse finalResponseObject,
-                                             ResponseInfo responseInfo) {
+    protected @NotNull String combinedLogFormatPrefix(
+        @NotNull RequestInfo<?> request,
+        @Nullable HttpResponse finalResponseObject,
+        @Nullable ResponseInfo responseInfo
+    ) {
         String ipAddress = "<unknown>";
         try {
             ipAddress = getLocalIpAddress();
@@ -251,32 +262,41 @@ public class AccessLogger {
 
         String method = (request.getMethod() == null) ? "-" : String.valueOf(request.getMethod());
         String uriString = request.getUri();
-        if (uriString == null)
+        //noinspection ConstantConditions
+        if (uriString == null) {
             uriString = "-";
-        String protocolVersion =
-            (request.getProtocolVersion() == null) ? "-" : String.valueOf(request.getProtocolVersion());
+        }
+        String protocolVersion = (request.getProtocolVersion() == null)
+                                 ? "-"
+                                 : String.valueOf(request.getProtocolVersion());
         String url = method + " " + uriString + " " + protocolVersion;
 
         String referer = "-";
         String userAgent = "-";
+        //noinspection ConstantConditions
         if (request.getHeaders() != null) {
             referer = request.getHeaders().get(REFERER);
-            if (referer == null)
+            if (referer == null) {
                 referer = "-";
+            }
             userAgent = request.getHeaders().get(USER_AGENT);
-            if (userAgent == null)
+            if (userAgent == null) {
                 userAgent = "-";
+            }
         }
         String httpStatusCode = "-";
-        if (finalResponseObject != null && finalResponseObject.status() != null)
+        if (finalResponseObject != null && finalResponseObject.status() != null) {
             httpStatusCode = String.valueOf(finalResponseObject.status().code());
-        else if (responseInfo != null && responseInfo.getHttpStatusCode() != null)
+        }
+        else if (responseInfo != null && responseInfo.getHttpStatusCode() != null) {
             httpStatusCode = String.valueOf(responseInfo.getHttpStatusCode());
+        }
 
         String contentLength = "-";
         if (responseInfo != null) {
-            if (responseInfo.getFinalContentLength() != null && responseInfo.getFinalContentLength() > 0)
+            if (responseInfo.getFinalContentLength() != null && responseInfo.getFinalContentLength() > 0) {
                 contentLength = String.valueOf(responseInfo.getFinalContentLength());
+            }
         }
 
         return ipAddress +
@@ -308,7 +328,7 @@ public class AccessLogger {
      * @return The given {@link ZonedDateTime} formatted as if it was run through: {@code
      * DateTimeFormatter.ofPattern("dd/MMM/YYYY:HH:mm:ss Z")}.
      */
-    protected String getFormattedDateTimeForNcsaCombinedLog(ZonedDateTime dateTime) {
+    protected @NotNull String getFormattedDateTimeForNcsaCombinedLog(@NotNull ZonedDateTime dateTime) {
         StringBuilder resultString = new StringBuilder(32);
         appendTwoDigitFormattedInt(dateTime.getDayOfMonth(), resultString).append("/");
         resultString.append(shortMonthNames[dateTime.getMonthValue() - 1]).append("/")
@@ -330,16 +350,17 @@ public class AccessLogger {
      * necessary so that the appended value takes up two characters - e.g. passing in an integer value of 3 would cause
      * "03" to be appended to the given string builder.
      */
-    protected StringBuilder appendTwoDigitFormattedInt(int theInt, StringBuilder sb) {
-        if (theInt < 10)
+    protected @NotNull StringBuilder appendTwoDigitFormattedInt(int theInt, @NotNull StringBuilder sb) {
+        if (theInt < 10) {
             sb.append("0");
+        }
         return sb.append(theInt);
     }
 
     /**
      * @return The current local IP address.
      */
-    protected String getLocalIpAddress() throws UnknownHostException {
+    protected @NotNull String getLocalIpAddress() throws UnknownHostException {
         // This is an imperfect solution:
         //      http://stackoverflow.com/questions/9481865/how-to-get-ip-address-of-current-machine-using-java
         long currentTimeMillis = System.currentTimeMillis();
@@ -370,10 +391,12 @@ public class AccessLogger {
      * this method as well as anything returned by {@link #customApplicationLogMessageExtras(RequestInfo, HttpResponse,
      * ResponseInfo, Long)}.
      */
-    protected List<Pair<String, String>> logMessageAdditions(RequestInfo<?> request,
-                                                             HttpResponse finalResponseObject,
-                                                             ResponseInfo responseInfo,
-                                                             Long elapsedTimeMillis) {
+    protected @NotNull List<Pair<String, String>> logMessageAdditions(
+        @NotNull RequestInfo<?> request,
+        @Nullable HttpResponse finalResponseObject,
+        @Nullable ResponseInfo responseInfo,
+        @Nullable Long elapsedTimeMillis
+    ) {
         String httpStatusCode = null;
         String contentLengthResponseHeader = null;
         String transferEncodingResponseHeader = null;
@@ -382,16 +405,20 @@ public class AccessLogger {
         String uncompressedRawContentLength = null;
         String finalContentLength = null;
 
-        if (finalResponseObject != null && finalResponseObject.status() != null)
+        if (finalResponseObject != null && finalResponseObject.status() != null) {
             httpStatusCode = String.valueOf(finalResponseObject.status().code());
-        else if (responseInfo != null && responseInfo.getHttpStatusCode() != null)
+        }
+        else if (responseInfo != null && responseInfo.getHttpStatusCode() != null) {
             httpStatusCode = String.valueOf(responseInfo.getHttpStatusCode());
+        }
 
         HttpHeaders responseHeadersToUse = null;
-        if (finalResponseObject != null && finalResponseObject.headers() != null)
+        if (finalResponseObject != null && finalResponseObject.headers() != null) {
             responseHeadersToUse = finalResponseObject.headers();
-        else if (responseInfo != null)
+        }
+        else if (responseInfo != null) {
             responseHeadersToUse = responseInfo.getHeaders();
+        }
 
         if (responseHeadersToUse != null) {
             contentLengthResponseHeader = responseHeadersToUse.get(CONTENT_LENGTH);
@@ -401,16 +428,16 @@ public class AccessLogger {
         }
 
         if (responseInfo != null) {
-            if (responseInfo.getUncompressedRawContentLength() != null)
+            if (responseInfo.getUncompressedRawContentLength() != null) {
                 uncompressedRawContentLength = String.valueOf(responseInfo.getUncompressedRawContentLength());
+            }
 
-            if (responseInfo.getFinalContentLength() != null)
+            if (responseInfo.getFinalContentLength() != null) {
                 finalContentLength = String.valueOf(responseInfo.getFinalContentLength());
+            }
         }
 
-        List<Pair<String, String>> logMessageAdditions = new ArrayList<>();
-
-        logMessageAdditions.addAll(Arrays.asList(
+        List<Pair<String, String>> logMessageAdditions = new ArrayList<>(Arrays.asList(
             Pair.of("accept-Req", request.getHeaders().get(ACCEPT)),
             Pair.of("content-type-Req", request.getHeaders().get(CONTENT_TYPE)),
             Pair.of("content-length-Res", contentLengthResponseHeader),
@@ -429,8 +456,10 @@ public class AccessLogger {
 
         List<Pair<String, String>> customApplicationLogMessageExtras =
             customApplicationLogMessageExtras(request, finalResponseObject, responseInfo, elapsedTimeMillis);
-        if (customApplicationLogMessageExtras != null)
+
+        if (customApplicationLogMessageExtras != null) {
             logMessageAdditions.addAll(customApplicationLogMessageExtras);
+        }
 
         return logMessageAdditions;
     }
@@ -459,21 +488,24 @@ public class AccessLogger {
      *     Represents time difference from receiving the request to ending the request in milliseconds - may be null in
      *     some circumstances (i.e. an error occurred during request processing).
      */
-    protected List<Pair<String, String>> customApplicationLogMessageExtras(RequestInfo<?> request,
-                                                                           HttpResponse finalResponseObject,
-                                                                           ResponseInfo responseInfo,
-                                                                           Long elapsedTimeMillis) {
+    protected @Nullable List<Pair<String, String>> customApplicationLogMessageExtras(
+        @NotNull RequestInfo<?> request,
+        @Nullable HttpResponse finalResponseObject,
+        @Nullable ResponseInfo responseInfo,
+        @Nullable Long elapsedTimeMillis
+    ) {
         return null;
     }
 
     /**
      * Converts the given list of key/value pairs to a single string. By default this uses {@link
-     * #formatAdditionPairForLogMessage(Pair)} to turn each pair into a string and then joins them all together with a "
-     * " single space as the delimiter.
+     * #formatAdditionPairForLogMessage(Pair)} to turn each pair into a string and then joins them all together with a
+     * " " single space as the delimiter.
      */
-    protected String convertAdditionsToString(List<Pair<String, String>> logMessageAdditions) {
-        if (logMessageAdditions == null)
+    protected @NotNull String convertAdditionsToString(@Nullable List<Pair<String, String>> logMessageAdditions) {
+        if (logMessageAdditions == null) {
             return "-";
+        }
 
         return logMessageAdditions.stream().map(this::formatAdditionPairForLogMessage).collect(Collectors.joining(" "));
     }
@@ -483,18 +515,21 @@ public class AccessLogger {
      * key and value with an equals sign between '='. So for example a key of foo and value of bar would be returned as
      * foo=bar. A key of foo and null value would be returned as foo=-
      */
-    protected String formatAdditionPairForLogMessage(Pair<String, String> pair) {
-        if (pair == null)
+    protected @NotNull String formatAdditionPairForLogMessage(@Nullable Pair<String, String> pair) {
+        if (pair == null) {
             return "-";
+        }
 
         String key = pair.getKey();
         String value = pair.getValue();
 
-        if (key == null)
+        if (key == null) {
             key = "-";
+        }
 
-        if (value == null)
+        if (value == null) {
             value = "-";
+        }
 
         return key + "=" + value;
     }
@@ -503,8 +538,10 @@ public class AccessLogger {
      * Combines the two strings into a single string. By default this just puts a single space " " between the two
      * strings.
      */
-    protected String concatenateCombinedLogAndAdditionStrings(String combinedLogString,
-                                                              String logMessageAdditionsAsString) {
+    protected @NotNull String concatenateCombinedLogAndAdditionStrings(
+        @NotNull String combinedLogString,
+        @NotNull String logMessageAdditionsAsString
+    ) {
         return combinedLogString + " " + logMessageAdditionsAsString;
     }
 }

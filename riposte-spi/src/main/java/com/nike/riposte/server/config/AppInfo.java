@@ -1,5 +1,7 @@
 package com.nike.riposte.server.config;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Interface for app & instance info required for metrics and healthcheck/service registry. See {@link
  * com.nike.riposte.server.config.impl.AppInfoImpl} for a basic DTO style implementation and static helper methods for
@@ -15,25 +17,26 @@ public interface AppInfo {
     String UNKNOWN_VALUE = "unknown";
 
     /**
-     * @return the AppId/name for this service (like activity). This should always be a valid value - never {@link
-     * #UNKNOWN_VALUE}.
+     * @return the AppId/name for this service (like {@code foo-svc}). This should always be a valid value - never
+     * {@link #UNKNOWN_VALUE} if at all possible.
      */
-    String appId();
+    @NotNull String appId();
 
     /**
-     * @return the environment for the AppId (like test or prod). This should always be a valid value - never {@link
-     * #UNKNOWN_VALUE}.
+     * @return the environment for the AppId (like {@code test} or {@code prod}). This should always be a valid
+     * value - never {@link #UNKNOWN_VALUE} if at all possible.
      */
-    String environment();
+    @NotNull String environment();
 
     /**
-     * @return the datacenter/region for the AppId (like us-west-2).
+     * @return the datacenter/region for the AppId (like {@code us-west-2}), or {@link #UNKNOWN_VALUE} if the
+     * datacenter/region could not be determined.
      */
-
-    String dataCenter();
+    @NotNull String dataCenter();
 
     /**
-     * @return the instanceId/ip/hostname of this machine/VM running the AppId.
+     * @return the instanceId/ip/hostname of this machine/VM running the AppId service, or {@link #UNKNOWN_VALUE} if
+     * the instanceId/ip/hostname could not be determined.
      */
-    String instanceId();
+    @NotNull String instanceId();
 }

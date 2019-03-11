@@ -9,6 +9,7 @@ import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.server.testutils.ComponentTestUtils;
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -80,7 +81,7 @@ public class VerifySSLComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -100,12 +101,16 @@ public class VerifySSLComponentTest {
         public static String MATCHING_PATH = "/ssl";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(ResponseInfo.newBuilder(RESPONSE_STRING).build());
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
 

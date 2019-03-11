@@ -3,8 +3,10 @@ package com.nike.riposte.server.error.handler;
 import com.nike.backstopper.handler.riposte.RiposteUnhandledExceptionHandler;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
- * Interface describing a "backstop / last chance" error handler for Netty that is guaranteed to handle the given error
+ * Interface describing a "backstop / last chance" error handler for Riposte that is guaranteed to handle the given error
  * by returning a generic error response.
  * <p/>
  * You can create your own instance of this class, however it's highly recommended that you just use the prebuilt {@link
@@ -26,6 +28,6 @@ public interface RiposteUnhandledErrorHandler {
      * response back to the user. This should never return null. The various arguments should be used to log as much
      * info as possible on the request and the error to make debugging easier.
      */
-    ErrorResponseInfo handleError(Throwable error, RequestInfo<?> requestInfo);
+    @NotNull ErrorResponseInfo handleError(@NotNull Throwable error, @NotNull RequestInfo<?> requestInfo);
 
 }

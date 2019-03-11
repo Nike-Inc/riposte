@@ -32,6 +32,8 @@ import com.nike.riposte.server.error.exception.RequestTooBigException;
 import com.nike.riposte.server.error.exception.TooManyOpenChannelsException;
 import com.nike.riposte.server.error.exception.Unauthorized401Exception;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,22 +64,23 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    public final ApiError CIRCUIT_BREAKER_GENERIC_API_ERROR;
-    public final ApiError CIRCUIT_BREAKER_OPEN_API_ERROR;
-    public final ApiError CIRCUIT_BREAKER_TIMEOUT_API_ERROR;
+    public final @NotNull ApiError CIRCUIT_BREAKER_GENERIC_API_ERROR;
+    public final @NotNull ApiError CIRCUIT_BREAKER_OPEN_API_ERROR;
+    public final @NotNull ApiError CIRCUIT_BREAKER_TIMEOUT_API_ERROR;
 
     protected final String TOO_LONG_FRAME_LINE_METADATA_MESSAGE =
         "The request contained a HTTP line that was longer than the maximum allowed";
     protected final String TOO_LONG_FRAME_HEADER_METADATA_MESSAGE =
         "The combined size of the request's HTTP headers was more than the maximum allowed";
 
-    protected final ApiError TOO_LONG_FRAME_LINE_API_ERROR_BASE;
-    protected final ApiError TOO_LONG_FRAME_HEADER_API_ERROR_BASE;
+    protected final @NotNull ApiError TOO_LONG_FRAME_LINE_API_ERROR_BASE;
+    protected final @NotNull ApiError TOO_LONG_FRAME_HEADER_API_ERROR_BASE;
 
-    protected final ProjectApiErrors projectApiErrors;
+    protected final @NotNull ProjectApiErrors projectApiErrors;
 
     @Inject
-    public BackstopperRiposteFrameworkErrorHandlerListener(ProjectApiErrors projectApiErrors) {
+    public BackstopperRiposteFrameworkErrorHandlerListener(@NotNull ProjectApiErrors projectApiErrors) {
+        //noinspection ConstantConditions
         if (projectApiErrors == null)
             throw new IllegalArgumentException("ProjectApiErrors cannot be null");
 
@@ -336,8 +339,8 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
     }
 
     @SafeVarargs
-    protected final List<Pair<String, String>> withBaseExceptionMessage(
-        Throwable ex, Pair<String, String>... extraLogMessages
+    protected final @NotNull List<Pair<String, String>> withBaseExceptionMessage(
+        @NotNull Throwable ex, @Nullable Pair<String, String>... extraLogMessages
     ) {
         List<Pair<String, String>> logPairs = new ArrayList<>();
         ApiExceptionHandlerUtils.DEFAULT_IMPL.addBaseExceptionMessageToExtraDetailsForLogging(ex, logPairs);
@@ -347,14 +350,14 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
         return logPairs;
     }
 
-    protected final Pair<String, String> causeDetailsForLogs(Throwable orig) {
+    protected final @NotNull Pair<String, String> causeDetailsForLogs(@NotNull Throwable orig) {
         Throwable cause = orig.getCause();
         String causeDetails = (cause == null) ? "NO_CAUSE" : cause.toString();
         return Pair.of("exception_cause_details",
                        ApiExceptionHandlerUtils.DEFAULT_IMPL.quotesToApostrophes(causeDetails));
     }
 
-    protected ApiError generateTooLongFrameApiError(TooLongFrameException ex) {
+    protected @NotNull ApiError generateTooLongFrameApiError(@NotNull TooLongFrameException ex) {
         String exMessage = String.valueOf(ex.getMessage());
         Integer tooLongFrameMaxSize = extractTooLongFrameMaxSizeFromExceptionMessage(ex);
         Map<String, Object> maxSizeMetadata = new HashMap<>();
@@ -379,7 +382,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
         );
     }
 
-    private Integer extractTooLongFrameMaxSizeFromExceptionMessage(TooLongFrameException ex) {
+    private @Nullable Integer extractTooLongFrameMaxSizeFromExceptionMessage(@NotNull TooLongFrameException ex) {
         String exMessage = ex.getMessage();
         
         if (exMessage == null || !exMessage.endsWith(" bytes.")) {
@@ -399,11 +402,11 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
         }
     }
 
-    protected SortedApiErrorSet singletonError(ApiError apiError) {
+    protected @NotNull SortedApiErrorSet singletonError(@NotNull ApiError apiError) {
         return new SortedApiErrorSet(Collections.singleton(apiError));
     }
 
-    protected ApiError getApiErrorForCircuitBreakerException(CircuitBreakerException cbe) {
+    protected @NotNull ApiError getApiErrorForCircuitBreakerException(@NotNull CircuitBreakerException cbe) {
         if (cbe instanceof CircuitBreakerOpenException)
             return CIRCUIT_BREAKER_OPEN_API_ERROR;
         else if (cbe instanceof CircuitBreakerTimeoutException)

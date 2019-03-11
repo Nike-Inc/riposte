@@ -18,6 +18,8 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -324,7 +326,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -351,7 +353,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -397,7 +399,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final String MATCHING_PATH = "/bytes";
 
         @Override
-        public CompletableFuture<ResponseInfo<byte[]>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<byte[]>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             byte[] responsePayload = generateRandomBytes(15000);
             String responsePayloadHash = getHashForPayload(responsePayload);
             return CompletableFuture.completedFuture(
@@ -408,7 +414,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
     }
@@ -418,7 +424,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final String MATCHING_PATH = "/charSequence";
 
         @Override
-        public CompletableFuture<ResponseInfo<CharSequence>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<CharSequence>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             CharSequence responsePayload = new StringBuilder(UUID.randomUUID().toString());
             String responsePayloadHash = getHashForPayload(responsePayload.toString().getBytes(CharsetUtil.UTF_8));
             return CompletableFuture.completedFuture(
@@ -429,7 +439,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
     }
@@ -454,7 +464,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final ObjectMapper jsonSerializer = new ObjectMapper();
 
         @Override
-        public CompletableFuture<ResponseInfo<SerializableObject>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<SerializableObject>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             SerializableObject responsePayload = new SerializableObject(UUID.randomUUID().toString(), generateRandomBytes(32));
             try {
                 String responsePayloadAsJson = jsonSerializer.writeValueAsString(responsePayload);
@@ -470,7 +484,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 
@@ -501,7 +515,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final String MATCHING_PATH = "/voidDeserializer";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             if (request.getContent() != null)
                 throw new IllegalStateException("Since the deserialized type is Void, getContent() should return null. Instead it returned: " + request.getContent());
 
@@ -511,7 +529,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -521,7 +539,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final String MATCHING_PATH = "/stringDeserializer";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             if (!request.getContent().equals(request.getRawContent())) {
                 throw new IllegalStateException(
                     "Since the deserialized type is String, getContent() should return the same thing as getRawContent(). getContent(): " + request
@@ -534,7 +556,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -544,7 +566,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final String MATCHING_PATH = "/byteArrayDeserializer";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<byte[]> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<byte[]> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             if (!request.getContent().equals(request.getRawContentBytes())) {
                 throw new IllegalStateException(
                     "Since the deserialized type is byte[], getContent() should return the same thing as "
@@ -558,7 +584,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -568,7 +594,11 @@ public class VerifyPayloadHandlingComponentTest {
         public static final String MATCHING_PATH = "/widgetDeserializer";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<SerializableObject> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<SerializableObject> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             if (request.getContent() == null) {
                 throw new IllegalStateException(
                     "getContent() should return a non-null value for deserializable content. getRawContent(): " + request.getRawContent());
@@ -595,7 +625,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -610,9 +640,11 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                 new DownstreamRequestFirstChunkInfo(
                     "127.0.0.1", downstreamPort, false,
@@ -622,7 +654,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -637,9 +669,11 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                 new DownstreamRequestFirstChunkInfo(
                     "127.0.0.1", downstreamPort, true,
@@ -649,7 +683,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -663,7 +697,7 @@ public class VerifyPayloadHandlingComponentTest {
         }
 
         @Override
-        public TypeReference<SerializableObject> requestContentType() {
+        public @Nullable TypeReference<SerializableObject> requestContentType() {
             return new TypeReference<SerializableObject>() {};
         }
 

@@ -2,6 +2,8 @@ package com.nike.riposte.util;
 
 import com.nike.internal.util.Pair;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,10 +88,11 @@ public class MainClassUtils {
      * link - we're just reusing the concept. If appId or environment cannot be extracted from the System properties
      * then a {@link IllegalStateException} will be thrown.
      */
-    public static Pair<String, String> getAppIdAndEnvironmentFromSystemProperties() {
+    public static @NotNull Pair<String, String> getAppIdAndEnvironmentFromSystemProperties() {
         String appIdToUse = System.getProperty("@appId");
-        if (appIdToUse == null)
+        if (appIdToUse == null) {
             appIdToUse = System.getProperty("archaius.deployment.applicationId");
+        }
 
         if (appIdToUse == null) {
             throw new IllegalStateException(
@@ -100,8 +103,9 @@ public class MainClassUtils {
         }
 
         String environmentToUse = System.getProperty("@environment");
-        if (environmentToUse == null)
+        if (environmentToUse == null) {
             environmentToUse = System.getProperty("archaius.deployment.environment");
+        }
 
         if (environmentToUse == null) {
             throw new IllegalStateException(
@@ -142,21 +146,25 @@ public class MainClassUtils {
      *     A function that accepts a property key as an argument and returns the property value as a string. The {@code
      *     hasPropertyFunction} arg will be used to guarantee the property exists before this function is called.
      */
-    public static void setupNettyLeakDetectionLevel(Function<String, Boolean> hasPropertyFunction,
-                                                    Function<String, String> propertyExtractionFunction) {
+    public static void setupNettyLeakDetectionLevel(
+        @NotNull Function<String, Boolean> hasPropertyFunction,
+        @NotNull Function<String, String> propertyExtractionFunction
+    ) {
         String nettyLeakDetectionLevel = System.getProperty(NETTY_LEAK_DETECTION_LEVEL_SYSTEM_PROP_KEY);
         if (nettyLeakDetectionLevel == null) {
             // No system property. See if it's specified in the app properties.
-            if (hasPropertyFunction.apply(NETTY_LEAK_DETECTION_LEVEL_SYSTEM_PROP_KEY))
+            if (hasPropertyFunction.apply(NETTY_LEAK_DETECTION_LEVEL_SYSTEM_PROP_KEY)) {
                 nettyLeakDetectionLevel = propertyExtractionFunction.apply(NETTY_LEAK_DETECTION_LEVEL_SYSTEM_PROP_KEY);
-            else if (hasPropertyFunction.apply(NETTY_LEAK_DETECTION_LEVEL_APP_PROP_KEY))
+            }
+            else if (hasPropertyFunction.apply(NETTY_LEAK_DETECTION_LEVEL_APP_PROP_KEY)) {
                 nettyLeakDetectionLevel = propertyExtractionFunction.apply(NETTY_LEAK_DETECTION_LEVEL_APP_PROP_KEY);
+            }
         }
 
         if (nettyLeakDetectionLevel == null) {
             logger.info("No netty leak detection level specified in System or application properties. "
                         + "The default Netty behavior will be used. netty_leak_detection_level_used={}",
-                        String.valueOf(ResourceLeakDetector.getLevel())
+                        ResourceLeakDetector.getLevel()
             );
         }
         else {
@@ -182,10 +190,12 @@ public class MainClassUtils {
      * @param applicationPropertyNames
      *     The collection of property names for all the properties associated with this application.
      */
-    public static void logApplicationPropertiesIfDebugActionsEnabled(Function<String, Boolean> hasPropertyFunction,
-                                                                     Function<String, String> propertyExtractionFunction,
-                                                                     Collection<String> applicationPropertyNames,
-                                                                     boolean forceLogging) {
+    public static void logApplicationPropertiesIfDebugActionsEnabled(
+        @NotNull Function<String, Boolean> hasPropertyFunction,
+        @NotNull Function<String, String> propertyExtractionFunction,
+        @NotNull Collection<String> applicationPropertyNames,
+        boolean forceLogging
+    ) {
         boolean debugActionsEnabledInAppProps =
             (hasPropertyFunction.apply(DEBUG_ACTIONS_ENABLED_PROP_KEY)
             && Boolean.valueOf(propertyExtractionFunction.apply(DEBUG_ACTIONS_ENABLED_PROP_KEY)));
@@ -216,9 +226,10 @@ public class MainClassUtils {
      * <p/>
      * See http://www.slf4j.org/codes.html#replay for more info.
      */
-    public static <T> T executeCallableWithLoggingReplayProtection(Callable<T> callable,
-                                                                   long delayInMillisIfExceptionOccurs)
-        throws Exception {
+    public static <T> T executeCallableWithLoggingReplayProtection(
+        @NotNull Callable<T> callable,
+        long delayInMillisIfExceptionOccurs
+    ) throws Exception {
         try {
             return callable.call();
         }
@@ -270,7 +281,7 @@ public class MainClassUtils {
      * <p>This method will use the {@link #DEFAULT_CRASH_DELAY_MILLIS} as the crash delay value. If you want to specify
      * a different value you can call {@link #executeCallableWithLoggingReplayProtection(Callable, long)} instead.
      */
-    public static <T> T executeCallableWithLoggingReplayProtection(Callable<T> callable) throws Exception {
+    public static <T> T executeCallableWithLoggingReplayProtection(@NotNull Callable<T> callable) throws Exception {
         return executeCallableWithLoggingReplayProtection(callable, DEFAULT_CRASH_DELAY_MILLIS);
     }
 
@@ -279,10 +290,16 @@ public class MainClassUtils {
      * to both {@code System.err} and the given logger. If the given exception is not null then its stack trace will be
      * included in any output.
      */
-    private static void outputExceptionalShutdownMessage(String message, Throwable ex, Logger logger) {
+    @SuppressWarnings("SameParameterValue")
+    private static void outputExceptionalShutdownMessage(
+        @NotNull String message,
+        @Nullable Throwable ex,
+        @NotNull Logger logger
+    ) {
         System.err.println("STARTUP ERROR: " + message);
-        if (ex != null)
+        if (ex != null) {
             ex.printStackTrace();
+        }
         logger.error(message, ex);
     }
 }

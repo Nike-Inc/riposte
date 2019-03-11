@@ -18,6 +18,8 @@ import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientReque
 import com.nike.riposte.server.testutils.ComponentTestUtils.NettyHttpClientResponse;
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -174,9 +176,11 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                 new DownstreamRequestFirstChunkInfo(
                     "127.0.0.1", downstreamPort, false,
@@ -186,7 +190,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -219,14 +223,16 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new ApiException(FAIL_FAST_API_ERROR);
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -237,14 +243,16 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         public static final String RESPONSE_PAYLOAD = "delay-endpoint-" + UUID.randomUUID().toString();
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
-                                                               Executor longRunningTaskExecutor,
-                                                               ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     Thread.sleep(DELAY_MILLIS);
@@ -263,14 +271,16 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         public static final String RESPONSE_PAYLOAD = "longer-delay-endpoint-" + UUID.randomUUID().toString();
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
-                                                               Executor longRunningTaskExecutor,
-                                                               ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     Thread.sleep(DELAY_MILLIS);
@@ -298,7 +308,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -325,7 +335,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -335,7 +345,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
 
         @Override
-        public List<PipelineCreateHook> pipelineCreateHooks() {
+        public @Nullable List<@NotNull PipelineCreateHook> pipelineCreateHooks() {
             return singletonList(new ProxyRouterExplosionPipelineHook());
         }
 
@@ -343,7 +353,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
 
     public static class ProxyRouterExplosionPipelineHook implements PipelineCreateHook {
         @Override
-        public void executePipelineCreateHook(ChannelPipeline pipeline) {
+        public void executePipelineCreateHook(@NotNull ChannelPipeline pipeline) {
             pipeline.addBefore(PROXY_ROUTER_ENDPOINT_EXECUTION_HANDLER_NAME,
                                "intentionalExplosionHandler",
                                new IntentionalExplosionHandler());

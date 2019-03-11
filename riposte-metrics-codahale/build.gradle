@@ -7,10 +7,13 @@ dependencies {
             "io.dropwizard.metrics:metrics-jvm:$codahaleMetricsVersion",
             "io.dropwizard.metrics:metrics-graphite:$codahaleMetricsVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
             project(":riposte-guice"),
             project(":riposte-core").sourceSets.test.output,
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
             "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
             "junit:junit:$junitVersion",

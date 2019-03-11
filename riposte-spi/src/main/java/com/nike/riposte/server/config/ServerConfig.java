@@ -25,6 +25,9 @@ import com.nike.riposte.server.logging.AccessLogger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.security.cert.CertificateException;
 import java.util.Collection;
 import java.util.List;
@@ -85,7 +88,7 @@ public interface ServerConfig {
     /**
      * @return The {@link Endpoint}s that should be registered for this application.
      */
-    Collection<Endpoint<?>> appEndpoints();
+    @NotNull Collection<@NotNull Endpoint<?>> appEndpoints();
 
     /**
      * @return The list of {@link RequestAndResponseFilter}s that should be applied to requests for this application.
@@ -96,7 +99,7 @@ public interface ServerConfig {
      * information on what these filters can do and how to use them. This method can safely return null if you have no
      * filters for your application.
      */
-    default List<RequestAndResponseFilter> requestAndResponseFilters() {
+    default @Nullable List<@NotNull RequestAndResponseFilter> requestAndResponseFilters() {
         return null;
     }
 
@@ -111,7 +114,7 @@ public interface ServerConfig {
      * app. In practice this usually means copy/pasting this method and simply supplying the correct {@link
      * ProjectApiErrors} for the app. The rest is usually fine for defaults.
      */
-    default RiposteErrorHandler riposteErrorHandler() {
+    default @NotNull RiposteErrorHandler riposteErrorHandler() {
         ProjectApiErrors projectApiErrors = new SampleProjectApiErrorsBase() {
             @Override
             protected List<ApiError> getProjectSpecificApiErrors() {
@@ -138,7 +141,7 @@ public interface ServerConfig {
      * app. In practice this usually means copy/pasting this method and simply supplying the correct {@link
      * ProjectApiErrors} for the app. The rest is usually fine for defaults.
      */
-    default RiposteUnhandledErrorHandler riposteUnhandledErrorHandler() {
+    default @NotNull RiposteUnhandledErrorHandler riposteUnhandledErrorHandler() {
         ProjectApiErrors projectApiErrors = new SampleProjectApiErrorsBase() {
             @Override
             protected List<ApiError> getProjectSpecificApiErrors() {
@@ -160,19 +163,21 @@ public interface ServerConfig {
      * to the caller. This can safely be null - if this is null then a default serializer will be chosen for you, but if
      * you want custom serialization you can override this method and return whatever you want.
      */
-    default ErrorResponseBodySerializer errorResponseBodySerializer() {
+    default @Nullable ErrorResponseBodySerializer errorResponseBodySerializer() {
         return null;
     }
 
     /**
-     * @return A new self-signed SSL certificate.
+     * @return A new self-signed SSL certificate by default. Override this to use a custom SSL/TLS context.
+     * NOTE: In order for Riposte to use this, {@link #isEndpointsUseSsl()} must return true. If you don't need
+     * SSL/TLS support, then this method can safely return null.
      *
      * @throws SSLException
      *     if there is a problem creating the {@link SslContext}.
      * @throws CertificateException
      *     if there is a problem creating the certificate used by {@link SslContext}.
      */
-    default SslContext createSslContext() throws SSLException, CertificateException {
+    default @Nullable SslContext createSslContext() throws SSLException, CertificateException {
         SelfSignedCertificate ssc = new SelfSignedCertificate("localhost");
         return SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
     }
@@ -192,7 +197,7 @@ public interface ServerConfig {
      * You'll need to have a JSR 303 validator implementation in your classpath (e.g. the
      * org.hibernate:hibernate-validator library, which is the reference impl for JSR 303) for that code to work.
      */
-    default RequestValidator requestContentValidationService() {
+    default @Nullable RequestValidator requestContentValidationService() {
         return null;
     }
 
@@ -200,7 +205,7 @@ public interface ServerConfig {
      * @return The default deserializer for incoming request content. This can safely be null - if this is null then a
      * blank empty-constructor {@link ObjectMapper#ObjectMapper()} will be used.
      */
-    default ObjectMapper defaultRequestContentDeserializer() {
+    default @Nullable ObjectMapper defaultRequestContentDeserializer() {
         return null;
     }
 
@@ -208,7 +213,7 @@ public interface ServerConfig {
      * @return The default serializer for outgoing response content. This can safely be null - if this is null then a
      * blank empty-constructor {@link ObjectMapper#ObjectMapper()} will be used.
      */
-    default ObjectMapper defaultResponseContentSerializer() {
+    default @Nullable ObjectMapper defaultResponseContentSerializer() {
         return null;
     }
 
@@ -275,7 +280,7 @@ public interface ServerConfig {
      * return null if you want to use the default. Default is recommended unless you have a good reason to override and
      * know what you're doing.
      */
-    default ThreadFactory bossThreadFactory() {
+    default @Nullable ThreadFactory bossThreadFactory() {
         return null;
     }
 
@@ -292,7 +297,7 @@ public interface ServerConfig {
      * return null if you want to use the default. Default is recommended unless you have a good reason to override and
      * know what you're doing.
      */
-    default ThreadFactory workerThreadFactory() {
+    default @Nullable ThreadFactory workerThreadFactory() {
         return null;
     }
 
@@ -426,7 +431,7 @@ public interface ServerConfig {
      * downstream calls, and many databases have non-blocking drivers that work asynchronously via futures. If you want
      * the maximum scalability for your app then this executor (or the default if this is null) should *NEVER* be used.
      */
-    default Executor longRunningTaskExecutor() {
+    default @Nullable Executor longRunningTaskExecutor() {
         return null;
     }
 
@@ -434,7 +439,7 @@ public interface ServerConfig {
      * @return The {@link MetricsListener} that should be used for collecting and reporting Riposte server metrics. This
      * can be null - if it is null then no Riposte server metrics will be collected.
      */
-    default MetricsListener metricsListener() {
+    default @Nullable MetricsListener metricsListener() {
         return null;
     }
 
@@ -443,7 +448,7 @@ public interface ServerConfig {
      * then no access logging will be performed. The default {@link AccessLogger} is fairly robust and extensible, so
      * this method can simply {@code return new AccessLogger();} for many applications.
      */
-    default AccessLogger accessLogger() {
+    default @Nullable AccessLogger accessLogger() {
         return null;
     }
 
@@ -464,7 +469,7 @@ public interface ServerConfig {
      * for creating "local" instances of the {@link AppInfo} interface if you're never going to be deployed in a cloud
      * environment.</b>
      */
-    default CompletableFuture<AppInfo> appInfo() {
+    default @Nullable CompletableFuture<@Nullable AppInfo> appInfo() {
         return null;
     }
 
@@ -472,7 +477,7 @@ public interface ServerConfig {
      * @return The list of {@link PostServerStartupHook} that allows you to implement logic that is automatically
      * executed after the Riposte server is launched. Null is allowed if you have no hooks to execute.
      */
-    default List<PostServerStartupHook> postServerStartupHooks() {
+    default @Nullable List<@NotNull PostServerStartupHook> postServerStartupHooks() {
         return null;
     }
 
@@ -480,7 +485,7 @@ public interface ServerConfig {
      * @return The list of {@link PreServerStartupHook} that allows you to implement logic that is automatically
      * executed before the Riposte server is launched. Null is allowed if you have no hooks to execute.
      */
-    default List<PreServerStartupHook> preServerStartupHooks() {
+    default @Nullable List<@NotNull PreServerStartupHook> preServerStartupHooks() {
         return null;
     }
 
@@ -488,7 +493,7 @@ public interface ServerConfig {
      * @return The list of {@link ServerShutdownHook} that allows you to implement logic that is automatically executed
      * when the Riposte server is shutdown. Null is allowed if you have no hooks to execute.
      */
-    default List<ServerShutdownHook> serverShutdownHooks() {
+    default @Nullable List<@NotNull ServerShutdownHook> serverShutdownHooks() {
         return null;
     }
 
@@ -496,7 +501,7 @@ public interface ServerConfig {
      * @return The list of {@link PipelineCreateHook} that allows you to modify the channel pipeline created by Riposte
      * for handling new channels. Null is allowed if you have no hooks to execute.
      */
-    default List<PipelineCreateHook> pipelineCreateHooks() {
+    default @Nullable List<@NotNull PipelineCreateHook> pipelineCreateHooks() {
         return null;
     }
 
@@ -505,7 +510,7 @@ public interface ServerConfig {
      * want to use the default. Most of the time the default is fine - only override this if you're sure you know what
      * you want.
      */
-    default ChannelInitializer<SocketChannel> customChannelInitializer() {
+    default @Nullable ChannelInitializer<SocketChannel> customChannelInitializer() {
         return null;
     }
 
@@ -513,7 +518,7 @@ public interface ServerConfig {
      * @return The request security validator that should be used before allowing endpoints to execute, or null if you
      * have no security validation to do.
      */
-    default RequestSecurityValidator requestSecurityValidator() {
+    default @Nullable RequestSecurityValidator requestSecurityValidator() {
         return null;
     }
 
@@ -522,7 +527,7 @@ public interface ServerConfig {
      * tracing, or null if you don't have any user ID header keys. Headers are searched in the given list order, with
      * the first one found winning (in the case where more than one user ID header key was passed at the same time).
      */
-    default List<String> userIdHeaderKeys() {
+    default @Nullable List<@NotNull String> userIdHeaderKeys() {
         return null;
     }
 
@@ -537,7 +542,7 @@ public interface ServerConfig {
      * <p>The default values are 4096 bytes for max initial line length, 8192 bytes for max combined header line length,
      * and 8192 max chunk size. See the javadocs for {@link HttpRequestDecoderConfig} and its methods for more details.
      */
-    default HttpRequestDecoderConfig httpRequestDecoderConfig() {
+    default @Nullable HttpRequestDecoderConfig httpRequestDecoderConfig() {
         return null;
     }
 
@@ -554,7 +559,7 @@ public interface ServerConfig {
      * check for this and fail to startup otherwise. See the javadocs for {@link DistributedTracingConfig} for more
      * details.
      */
-    default DistributedTracingConfig<?> distributedTracingConfig() {
+    default @Nullable DistributedTracingConfig<?> distributedTracingConfig() {
         return null;
     }
 
@@ -575,7 +580,7 @@ public interface ServerConfig {
          * Statically accessible implementation of the {@link HttpRequestDecoderConfig} interface that returns the
          * default values.
          */
-        HttpRequestDecoderConfig DEFAULT_IMPL = new HttpRequestDecoderConfig() {};
+        @NotNull HttpRequestDecoderConfig DEFAULT_IMPL = new HttpRequestDecoderConfig() {};
 
         /**
          * Defaults to 4096. Please see the javadocs on {@link io.netty.handler.codec.http.HttpRequestDecoder} for full

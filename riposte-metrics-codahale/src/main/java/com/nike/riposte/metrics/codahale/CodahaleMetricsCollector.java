@@ -11,6 +11,8 @@ import com.codahale.metrics.MetricSet;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.Timer.Context;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
@@ -29,21 +31,26 @@ import java.util.function.Function;
 @SuppressWarnings("WeakerAccess")
 public class CodahaleMetricsCollector implements MetricsCollector {
 
-    protected final MetricRegistry metricRegistry;
+    protected final @NotNull MetricRegistry metricRegistry;
 
     public CodahaleMetricsCollector() {
         this(new MetricRegistry());
     }
 
-    public CodahaleMetricsCollector(MetricRegistry registry) {
+    public CodahaleMetricsCollector(@NotNull MetricRegistry registry) {
+        //noinspection ConstantConditions
+        if (registry == null) {
+            throw new IllegalArgumentException("registry cannot be null.");
+        }
         this.metricRegistry = registry;
     }
 
-    public MetricRegistry getMetricRegistry() {
+    public @NotNull MetricRegistry getMetricRegistry() {
         return metricRegistry;
     }
 
-    public CodahaleMetricsCollector registerAll(String prefix, MetricSet metricSet) {
+    @SuppressWarnings("UnusedReturnValue")
+    public @NotNull CodahaleMetricsCollector registerAll(String prefix, @NotNull MetricSet metricSet) {
         for (Map.Entry<String, Metric> entry : metricSet.getMetrics().entrySet()) {
             if (entry.getValue() instanceof MetricSet) {
                 registerAll(prefix + "." + entry.getKey(), (MetricSet) entry.getValue());
@@ -55,28 +62,28 @@ public class CodahaleMetricsCollector implements MetricsCollector {
         return this;
     }
 
-    public Timer getNamedTimer(String timerName) {
+    public @NotNull Timer getNamedTimer(@NotNull String timerName) {
         return metricRegistry.timer(timerName);
     }
 
-    public Meter getNamedMeter(String meterName) {
+    public @NotNull Meter getNamedMeter(@NotNull String meterName) {
         return metricRegistry.meter(meterName);
     }
 
-    public Counter getNamedCounter(String counterName) {
+    public @NotNull Counter getNamedCounter(@NotNull String counterName) {
         return metricRegistry.counter(counterName);
     }
 
-    public Histogram getNamedHistogram(String histogramName) {
+    public @NotNull Histogram getNamedHistogram(@NotNull String histogramName) {
         return metricRegistry.histogram(histogramName);
     }
 
-    public <M extends Metric> M registerNamedMetric(String metricName, M metric) {
+    public <M extends Metric> @NotNull M registerNamedMetric(@NotNull String metricName, @NotNull M metric) {
         return metricRegistry.register(metricName, metric);
     }
 
     @Override
-    public <T, R> R timed(Function<T, R> f, T arg, String timerName) {
+    public <T, R> R timed(@NotNull Function<T, R> f, T arg, @NotNull String timerName) {
         final Context context = getNamedTimer(timerName).time();
         try {
             return f.apply(arg);
@@ -88,7 +95,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public void timed(Runnable r, String timerName) {
+    public void timed(@NotNull Runnable r, @NotNull String timerName) {
         final Context context = getNamedTimer(timerName).time();
         try {
             r.run();
@@ -99,7 +106,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <V> V timed(Callable<V> c, String timerName) throws Exception {
+    public <V> V timed(@NotNull Callable<V> c, @NotNull String timerName) throws Exception {
         final Context context = getNamedTimer(timerName).time();
         try {
             return c.call();
@@ -110,7 +117,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T> void timed(Consumer<T> c, T arg, String timerName) {
+    public <T> void timed(@NotNull Consumer<T> c, T arg, @NotNull String timerName) {
         final Context context = getNamedTimer(timerName).time();
         try {
             c.accept(arg);
@@ -121,7 +128,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, U> void timed(BiConsumer<T, U> bc, T arg1, U arg2, String timerName) {
+    public <T, U> void timed(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String timerName) {
         final Context context = getNamedTimer(timerName).time();
         try {
             bc.accept(arg1, arg2);
@@ -132,7 +139,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, U, R> R timed(BiFunction<T, U, R> bf, T arg1, U arg2, String timerName) {
+    public <T, U, R> R timed(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String timerName) {
         final Context context = getNamedTimer(timerName).time();
         try {
             return bf.apply(arg1, arg2);
@@ -144,7 +151,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public void metered(Runnable r, String meterName, long events) {
+    public void metered(@NotNull Runnable r, @NotNull String meterName, long events) {
         final Meter meter = getNamedMeter(meterName);
         try {
             r.run();
@@ -155,7 +162,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <V> V metered(Callable<V> c, String meterName, long events) throws Exception {
+    public <V> V metered(@NotNull Callable<V> c, @NotNull String meterName, long events) throws Exception {
         final Meter meter = getNamedMeter(meterName);
         try {
             return c.call();
@@ -166,7 +173,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, R> R metered(Function<T, R> f, T arg, String meterName, long events) {
+    public <T, R> R metered(@NotNull Function<T, R> f, T arg, @NotNull String meterName, long events) {
         final Meter meter = getNamedMeter(meterName);
         try {
             return f.apply(arg);
@@ -177,7 +184,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T> void metered(Consumer<T> c, T arg, String meterName, long events) {
+    public <T> void metered(@NotNull Consumer<T> c, T arg, @NotNull String meterName, long events) {
         final Meter meter = getNamedMeter(meterName);
         try {
             c.accept(arg);
@@ -188,7 +195,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, U> void metered(BiConsumer<T, U> bc, T arg1, U arg2, String meterName, long events) {
+    public <T, U> void metered(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String meterName, long events) {
         final Meter meter = getNamedMeter(meterName);
         try {
             bc.accept(arg1, arg2);
@@ -199,7 +206,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, U, R> R metered(BiFunction<T, U, R> bf, T arg1, U arg2, String meterName, long events) {
+    public <T, U, R> R metered(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String meterName, long events) {
         final Meter meter = getNamedMeter(meterName);
         try {
             return bf.apply(arg1, arg2);
@@ -210,7 +217,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public void counted(Runnable r, String counterName, long delta) {
+    public void counted(@NotNull Runnable r, @NotNull String counterName, long delta) {
         final Counter counter = getNamedCounter(counterName);
         try {
             r.run();
@@ -221,7 +228,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <V> V counted(Callable<V> c, String counterName, long delta) throws Exception {
+    public <V> V counted(@NotNull Callable<V> c, @NotNull String counterName, long delta) throws Exception {
         final Counter counter = getNamedCounter(counterName);
         try {
             return c.call();
@@ -232,7 +239,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, R> R counted(Function<T, R> f, T arg, String counterName, long delta) {
+    public <T, R> R counted(@NotNull Function<T, R> f, T arg, @NotNull String counterName, long delta) {
         final Counter counter = getNamedCounter(counterName);
         try {
             return f.apply(arg);
@@ -243,7 +250,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T> void counted(Consumer<T> c, T arg, String counterName, long delta) {
+    public <T> void counted(@NotNull Consumer<T> c, T arg, @NotNull String counterName, long delta) {
         final Counter counter = getNamedCounter(counterName);
         try {
             c.accept(arg);
@@ -255,7 +262,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, U> void counted(BiConsumer<T, U> bc, T arg1, U arg2, String counterName, long delta) {
+    public <T, U> void counted(@NotNull BiConsumer<T, U> bc, T arg1, U arg2, @NotNull String counterName, long delta) {
         final Counter counter = getNamedCounter(counterName);
         try {
             bc.accept(arg1, arg2);
@@ -266,7 +273,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
     }
 
     @Override
-    public <T, U, R> R counted(BiFunction<T, U, R> bf, T arg1, U arg2, String counterName, long delta) {
+    public <T, U, R> R counted(@NotNull BiFunction<T, U, R> bf, T arg1, U arg2, @NotNull String counterName, long delta) {
         final Counter counter = getNamedCounter(counterName);
         try {
             return bf.apply(arg1, arg2);
@@ -276,7 +283,7 @@ public class CodahaleMetricsCollector implements MetricsCollector {
         }
     }
 
-    protected static void processCounter(Counter counter, long delta) {
+    protected static void processCounter(@NotNull Counter counter, long delta) {
         if (delta > 0) {
             counter.inc(delta);
         }

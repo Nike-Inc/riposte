@@ -7,7 +7,8 @@ import com.nike.riposte.util.HttpUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.netty.handler.codec.http.HttpUtil;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +30,7 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.QueryStringDecoder;
@@ -49,54 +51,67 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
 
     private static final Logger logger = LoggerFactory.getLogger(RequestInfoImpl.class);
 
-    protected final String uri;
-    protected final String path;
-    protected final HttpMethod method;
-    protected final HttpHeaders headers;
-    protected HttpHeaders trailingHeaders;
-    protected final QueryStringDecoder queryParams;
-    protected final Set<Cookie> cookies;
-    protected String pathTemplate;
-    protected Map<String, String> pathParams;
-    protected final Map<String, Object> attributes = new HashMap<>();
+    protected final @NotNull String uri;
+    protected final @NotNull String path;
+    protected final @Nullable HttpMethod method;
+    protected final @NotNull HttpHeaders headers;
+    protected @NotNull HttpHeaders trailingHeaders;
+    protected @NotNull final QueryStringDecoder queryParams;
+    protected final @NotNull Set<Cookie> cookies;
+    protected @Nullable String pathTemplate;
+    protected @NotNull Map<String, String> pathParams = Collections.emptyMap();
+    protected final @NotNull Map<String, Object> attributes = new HashMap<>();
     protected int rawContentLengthInBytes;
-    protected byte[] rawContentBytes;
-    protected String rawContent;
-    protected T content;
-    protected final Charset contentCharset;
-    protected final HttpVersion protocolVersion;
+    protected @Nullable byte[] rawContentBytes;
+    protected @Nullable String rawContent;
+    protected @Nullable T content;
+    protected final @NotNull Charset contentCharset;
+    protected final @Nullable HttpVersion protocolVersion;
     protected final boolean keepAliveRequested;
-    protected final List<HttpContent> contentChunks = new ArrayList<>();
+    protected final @NotNull List<HttpContent> contentChunks = new ArrayList<>();
     protected boolean isCompleteRequestWithAllChunks;
     protected final boolean isMultipart;
     protected boolean multipartDataIsDestroyed = false;
-    protected HttpPostMultipartRequestDecoder multipartData;
+    protected @Nullable HttpPostMultipartRequestDecoder multipartData;
 
-    protected ObjectMapper contentDeserializer;
-    protected TypeReference<T> contentDeserializerTypeReference;
+    protected @Nullable ObjectMapper contentDeserializer;
+    protected @Nullable TypeReference<T> contentDeserializerTypeReference;
 
     protected boolean contentChunksWillBeReleasedExternally = false;
 
-    public RequestInfoImpl(String uri, HttpMethod method, HttpHeaders headers, HttpHeaders trailingHeaders,
-                           QueryStringDecoder queryParams,
-                           Set<Cookie> cookies, Map<String, String> pathParams, List<HttpContent> contentChunks,
-                           HttpVersion protocolVersion,
-                           boolean keepAliveRequested, boolean isCompleteRequestWithAllChunks, boolean isMultipart) {
-
-        if (uri == null)
+    public RequestInfoImpl(
+        @Nullable String uri,
+        @Nullable HttpMethod method,
+        @Nullable HttpHeaders headers,
+        @Nullable HttpHeaders trailingHeaders,
+        @Nullable QueryStringDecoder queryParams,
+        @Nullable Set<Cookie> cookies,
+        @Nullable Map<String, String> pathParams,
+        @Nullable List<@NotNull HttpContent> contentChunks,
+        @Nullable HttpVersion protocolVersion,
+        boolean keepAliveRequested,
+        boolean isCompleteRequestWithAllChunks,
+        boolean isMultipart
+    ) {
+        if (uri == null) {
             uri = "";
+        }
 
-        if (headers == null)
+        if (headers == null) {
             headers = new DefaultHttpHeaders();
+        }
 
-        if (trailingHeaders == null)
+        if (trailingHeaders == null) {
             trailingHeaders = new DefaultHttpHeaders();
+        }
 
-        if (queryParams == null)
+        if (queryParams == null) {
             queryParams = new QueryStringDecoder(uri);
+        }
 
-        if (cookies == null)
+        if (cookies == null) {
             cookies = new HashSet<>();
+        }
 
         this.uri = uri;
         this.path = QueryStringDecoder.decodeComponent(HttpUtils.extractPath(uri));
@@ -116,12 +131,21 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
         this.isMultipart = isMultipart;
     }
 
-    public RequestInfoImpl(HttpRequest request) {
-        this(request.uri(), request.method(), request.headers(),
-             HttpUtils.extractTrailingHeadersIfPossible(request), null, HttpUtils.extractCookies(request), null,
-             HttpUtils.extractContentChunks(request), request.protocolVersion(), HttpUtil.isKeepAlive(request),
-             (request instanceof FullHttpRequest),
-             HttpPostRequestDecoder.isMultipart(request));
+    public RequestInfoImpl(@NotNull HttpRequest request) {
+        this(
+            request.uri(),
+            request.method(),
+            request.headers(),
+            HttpUtils.extractTrailingHeadersIfPossible(request),
+            null,
+            HttpUtils.extractCookies(request),
+            null,
+            HttpUtils.extractContentChunks(request),
+            request.protocolVersion(),
+            HttpUtil.isKeepAlive(request),
+            (request instanceof FullHttpRequest),
+            HttpPostRequestDecoder.isMultipart(request)
+        );
     }
 
     /**
@@ -141,7 +165,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public String getUri() {
+    public @NotNull String getUri() {
         return uri;
     }
 
@@ -149,7 +173,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public String getPath() {
+    public @NotNull String getPath() {
         return path;
     }
 
@@ -157,7 +181,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public HttpMethod getMethod() {
+    public @Nullable HttpMethod getMethod() {
         return method;
     }
 
@@ -165,7 +189,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public HttpHeaders getHeaders() {
+    public @NotNull HttpHeaders getHeaders() {
         return headers;
     }
 
@@ -173,7 +197,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public QueryStringDecoder getQueryParams() {
+    public @NotNull QueryStringDecoder getQueryParams() {
         return queryParams;
     }
 
@@ -181,7 +205,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public Set<Cookie> getCookies() {
+    public @NotNull Set<Cookie> getCookies() {
         return cookies;
     }
 
@@ -189,7 +213,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public Charset getContentCharset() {
+    public @NotNull Charset getContentCharset() {
         return contentCharset;
     }
 
@@ -197,7 +221,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public HttpVersion getProtocolVersion() {
+    public @Nullable HttpVersion getProtocolVersion() {
         return protocolVersion;
     }
 
@@ -224,7 +248,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public synchronized byte[] getRawContentBytes() {
+    public synchronized @Nullable byte[] getRawContentBytes() {
         if (!isCompleteRequestWithAllChunks)
             return null;
 
@@ -240,7 +264,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public synchronized String getRawContent() {
+    public synchronized @Nullable String getRawContent() {
         if (!isCompleteRequestWithAllChunks)
             return null;
 
@@ -257,7 +281,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public synchronized T getContent() {
+    public synchronized @Nullable T getContent() {
         if (!isCompleteRequestWithAllChunks)
             return null;
 
@@ -279,16 +303,31 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public synchronized List<InterfaceHttpData> getMultipartParts() {
+    public synchronized @Nullable List<InterfaceHttpData> getMultipartParts() {
         if (!isMultipartRequest() || !isCompleteRequestWithAllChunks())
             return null;
 
         if (multipartData == null) {
             byte[] contentBytes = getRawContentBytes();
+            HttpVersion httpVersion = getProtocolVersion();
+            HttpMethod httpMethod = getMethod();
+            // HttpVersion and HttpMethod cannot be null because DefaultFullHttpRequest doesn't allow them to be
+            //      null, but our getProtocolVersion() and getMethod() methods might return null (i.e. due to an
+            //      invalid request). They shouldn't be null in practice by the time this getMultipartParts() method
+            //      is called, but since they don't seem to be used by the Netty code we delegate to, we can just
+            //      default them to something if null somehow slips through.
+            if (httpVersion == null) {
+                httpVersion = HttpVersion.HTTP_1_0;
+            }
+
+            if (httpMethod == null) {
+                httpMethod = HttpMethod.POST;
+            }
+
             HttpRequest fullHttpRequestForMultipartDecoder =
                 (contentBytes == null)
-                ? new DefaultFullHttpRequest(getProtocolVersion(), getMethod(), getUri())
-                : new DefaultFullHttpRequest(getProtocolVersion(), getMethod(), getUri(),
+                ? new DefaultFullHttpRequest(httpVersion, httpMethod, getUri())
+                : new DefaultFullHttpRequest(httpVersion, httpMethod, getUri(),
                                              Unpooled.wrappedBuffer(contentBytes));
 
             fullHttpRequestForMultipartDecoder.headers().add(getHeaders());
@@ -305,10 +344,12 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
         // TODO: We could conceivably have a case where contentDeserializerTypeReference is a string/charsequence,
         //       but contentDeserializer is null. In that case we should not return null, because getRawContent() is a
         //       valid return value. Can probably fix this by making isContentDeserializerSetup() smarter.
-        if (!isContentDeserializerSetup())
+        if (!isContentDeserializerSetup()) {
             return null;
+        }
 
         try {
+            @SuppressWarnings("ConstantConditions") // isContentDeserializerSetup() verifies contentDeserializerTypeReference is non-null.
             Type inputType = contentDeserializerTypeReference.getType();
             if (inputType instanceof Class) {
                 Class inputTypeClass = (Class) inputType;
@@ -326,10 +367,12 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
 
             // Not a String or CharSequence. Do our best to deserialize.
             byte[] bytes = getRawContentBytes();
+            //noinspection ConstantConditions - isContentDeserializerSetup() verifies contentDeserializer is non-null.
             return (bytes == null) ? null : contentDeserializer.readValue(bytes, contentDeserializerTypeReference);
         }
         catch (Throwable e) {
             // Something went wrong during deserialization. Throw an appropriate error.
+            //noinspection ConstantConditions - isContentDeserializerSetup() verifies contentDeserializerTypeReference is non-null.
             logger.info("Unable to deserialize request content to desired object type - {}: {}",
                         contentDeserializerTypeReference.getType().toString(), e.getMessage());
             throw new RequestContentDeserializationException(
@@ -343,7 +386,10 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public RequestInfo<T> setupContentDeserializer(ObjectMapper deserializer, TypeReference<T> typeReference) {
+    public @NotNull RequestInfo<T> setupContentDeserializer(
+        @NotNull ObjectMapper deserializer,
+        @NotNull TypeReference<T> typeReference
+    ) {
         this.contentDeserializer = deserializer;
         this.contentDeserializerTypeReference = typeReference;
         return this;
@@ -361,7 +407,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public HttpHeaders getTrailingHeaders() {
+    public @NotNull HttpHeaders getTrailingHeaders() {
         return trailingHeaders;
     }
 
@@ -369,7 +415,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public RequestInfo<T> setPathParamsBasedOnPathTemplate(String pathTemplate) {
+    public @NotNull RequestInfo<T> setPathParamsBasedOnPathTemplate(@NotNull String pathTemplate) {
         this.pathTemplate = pathTemplate;
         setPathParams(HttpUtils.decodePathParams(pathTemplate, getPath()));
         return this;
@@ -379,11 +425,11 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public Map<String, String> getPathParams() {
+    public @NotNull Map<String, String> getPathParams() {
         return pathParams;
     }
 
-    protected void setPathParams(Map<String, String> pathParams) {
+    protected void setPathParams(@Nullable Map<String, String> pathParams) {
         if (pathParams == null)
             pathParams = Collections.emptyMap();
 
@@ -406,7 +452,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public int addContentChunk(HttpContent chunk) {
+    public int addContentChunk(@NotNull HttpContent chunk) {
         if (isCompleteRequestWithAllChunks) {
             throw new IllegalStateException("Cannot add new content chunk - this RequestInfo is already marked as "
                                             + "representing the complete request with all chunks");
@@ -492,14 +538,14 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
     /**
      * {@inheritDoc}
      */
-    public void addRequestAttribute(String attributeName, Object attributeValue) {
+    public void addRequestAttribute(@NotNull String attributeName, @NotNull Object attributeValue) {
         attributes.put(attributeName, attributeValue);
     }
 
     /**
      * {@inheritDoc}
      */
-    public Map<String, Object> getRequestAttributes() {
+    public @NotNull Map<String, Object> getRequestAttributes() {
         return attributes;
     }
 
@@ -507,7 +553,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
      * {@inheritDoc}
      */
     @Override
-    public String getPathTemplate() {
+    public @NotNull String getPathTemplate() {
         return this.pathTemplate == null ? "" : this.pathTemplate;
     }
 

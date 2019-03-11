@@ -12,6 +12,7 @@ import com.nike.riposte.util.Matcher;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +54,7 @@ public class TypesafeConfigServerTest {
             protected ServerConfig getServerConfig(Config appConfig) {
                 return new ServerConfig() {
                     @Override
-                    public Collection<Endpoint<?>> appEndpoints() {
+                    public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
                         return Collections.singleton(new SomeEndpoint(appConfig));
                     }
 
@@ -151,14 +152,16 @@ public class TypesafeConfigServerTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request,
-                                                               Executor longRunningTaskExecutor,
-                                                               ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             String value = appConfig.getString("typesafeConfigServer.foo");
             return CompletableFuture.completedFuture(
                 ResponseInfo.newBuilder(value).build()

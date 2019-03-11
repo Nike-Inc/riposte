@@ -3,6 +3,9 @@ package com.nike.riposte.server.http;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
@@ -33,11 +36,10 @@ import io.netty.util.ReferenceCountUtil;
  *
  * @author Nic Munroe
  */
-@SuppressWarnings("UnnecessaryInterfaceModifier")
 public interface RequestInfo<T> {
 
-    public static final String NONE_OR_UNKNOWN_TAG = "none_or_unknown";
-    public static final Charset DEFAULT_CONTENT_CHARSET = CharsetUtil.UTF_8;
+    String NONE_OR_UNKNOWN_TAG = "none_or_unknown";
+    Charset DEFAULT_CONTENT_CHARSET = CharsetUtil.UTF_8;
 
     /**
      * The full URI associated with this request. This will be the raw, potentially encoded, value sent to the server.
@@ -47,7 +49,7 @@ public interface RequestInfo<T> {
      *
      * Will never be null - the empty string will be used if no URI information was provided.
      */
-    public String getUri();
+    @NotNull String getUri();
 
     /**
      * The path-only portion of the URI. Will *not* include the query string (use {@link #getUri()} if you want the
@@ -59,19 +61,20 @@ public interface RequestInfo<T> {
      *
      * Will never be null - the empty string will be used if no path information could be extracted.
      */
-    public String getPath();
+    @NotNull String getPath();
 
     /**
-     * The method associated with this request, or null if no method was provided.
+     * The method associated with this request. This may be null if some issue prevented a real HTTP method from being
+     * determined (i.e. due to an invalid request).
      */
-    public HttpMethod getMethod();
+    @Nullable HttpMethod getMethod();
 
     /**
      * The headers associated with this request. There may or may not be {@link #getTrailingHeaders()} associated with
      * this request as well. Will never be null - an empty {@link DefaultHttpHeaders} will be used if no headers were
      * provided.
      */
-    public HttpHeaders getHeaders();
+    @NotNull HttpHeaders getHeaders();
 
     /**
      * The trailing headers associated with this request. This will be empty if {@link #isCompleteRequestWithAllChunks}
@@ -80,20 +83,21 @@ public interface RequestInfo<T> {
      * #isCompleteRequestWithAllChunks()} to determine whether this field is empty because we're waiting on all the
      * content to finish arriving or because the request has no trailing headers associated with it.
      */
-    public HttpHeaders getTrailingHeaders();
+    @NotNull HttpHeaders getTrailingHeaders();
 
     /**
      * The {@link QueryStringDecoder} containing the query parameters associated with this request. Will never be null -
      * if no {@link QueryStringDecoder} was provided then one will be created based on {@link #getUri()}.
      */
-    public QueryStringDecoder getQueryParams();
+    @NotNull QueryStringDecoder getQueryParams();
 
     /**
      * Helper method for extracting the single query parameter value for the given key from {@link #getQueryParams()},
      * or null if no such query parameter is available. If the value for the given key is a multi-value list, then only
      * the first item in the multi-value list will be returned.
      */
-    public default String getQueryParamSingle(String key) {
+    default @Nullable String getQueryParamSingle(@NotNull String key) {
+        //noinspection ConstantConditions
         if (getQueryParams() == null || getQueryParams().parameters() == null)
             return null;
 
@@ -116,13 +120,13 @@ public interface RequestInfo<T> {
      * <p/>
      * Will never be null - an empty map will be used if no path parameters could be determined.
      */
-    public Map<String, String> getPathParams();
+    @NotNull Map<String, String> getPathParams();
 
     /**
      * Helper method that is a shortcut for calling {@code getPathParams().get(key)}. Will return null if there's no
      * path parameter mapping for the given key.
      */
-    public default String getPathParam(String key) {
+    default @Nullable String getPathParam(@NotNull String key) {
         return getPathParams().get(key);
     }
 
@@ -136,8 +140,10 @@ public interface RequestInfo<T> {
      * For example, if the passed-in path template was "/app/{appId}/user/{userId}" and the actual {@link #getPath()}
      * for this request was "/app/foo/user/bar", then this method would populate the path parameter map with the
      * mappings "appId"->"foo", "userId"->"bar", which you could retrieve by calling {@link #getPathParams()}.
+     *
+     * @return this instance.
      */
-    public RequestInfo<T> setPathParamsBasedOnPathTemplate(String pathTemplate);
+    @NotNull RequestInfo<T> setPathParamsBasedOnPathTemplate(@NotNull String pathTemplate);
 
     /**
      * Returns the total size of the raw content in bytes. This will be 0 until {@link #addContentChunk(HttpContent)}
@@ -146,7 +152,7 @@ public interface RequestInfo<T> {
      * is returning 0 because we're waiting on all the content to finish arriving or because the request has no content
      * associated with it.
      */
-    public int getRawContentLengthInBytes();
+    int getRawContentLengthInBytes();
 
     /**
      * Returns the raw content associated with this request as a byte array. This will be null until {@link
@@ -160,7 +166,7 @@ public interface RequestInfo<T> {
      * conversion process should only happen once, and when it is done this method should call {@link
      * #releaseContentChunks()} before returning.
      */
-    public byte[] getRawContentBytes();
+    @Nullable byte[] getRawContentBytes();
 
     /**
      * Returns the raw content associated with this request (as retrieved from {@link #getRawContentBytes()}) as a
@@ -181,7 +187,7 @@ public interface RequestInfo<T> {
      * {@link #getMultipartParts()} (if that method was called to lazy-load multipart processing). Therefore you should
      * only call this method if absolutely necessary in order to keep memory pressure as low as possible.
      */
-    public String getRawContent();
+    @Nullable String getRawContent();
 
     /**
      * <b>IMPORTANT NOTE: THIS WILL RETURN NULL UNTIL {@link #setupContentDeserializer(ObjectMapper, TypeReference)} IS
@@ -200,7 +206,7 @@ public interface RequestInfo<T> {
      * provided. This will be null until {@link #setupContentDeserializer(ObjectMapper, TypeReference)} is called and
      * {@link #getRawContentBytes()} is non-null.
      */
-    public T getContent();
+    @Nullable T getContent();
 
     /**
      * Returns true if this request is a multipart request, false otherwise. If this is true and {@link
@@ -208,7 +214,7 @@ public interface RequestInfo<T> {
      * io.netty.handler.codec.http.multipart.HttpPostRequestDecoder#isMultipart(HttpRequest)} for details on what
      * constitutes a multipart request.
      */
-    public boolean isMultipartRequest();
+    boolean isMultipartRequest();
 
     /**
      * Returns the list of multipart data objects if and only if {@link #isMultipartRequest()} is true and {@link
@@ -235,7 +241,7 @@ public interface RequestInfo<T> {
      *         io.netty.handler.codec.http.multipart.FileUpload}
      *     </li>
      *     <li>
-     *         {@link InterfaceHttpData.HttpDataType#InternalAttribute}: You can cast the object to a {@link
+     *         {@link InterfaceHttpData.HttpDataType#InternalAttribute}: You can cast the object to a {@code
      *         io.netty.handler.codec.http.multipart.InternalAttribute}, however <b>this should never happen in reality
      *         as this class is for internal use only</b>.
      *     </li>
@@ -253,47 +259,53 @@ public interface RequestInfo<T> {
      * prevent memory leaks.</b> The pipeline will handle this for you automatically, however you can call it yourself
      * in endpoint code if you know you will never need it again and want to aggressively release resources.
      */
-    public List<InterfaceHttpData> getMultipartParts();
+    @Nullable List<InterfaceHttpData> getMultipartParts();
 
     /**
      * Keeps track of the passed-in deserializer and type reference for the purpose of deserializing {@link
      * #getRawContentBytes()} into the desired object type when {@link #getContent()} is called. This method is called
      * as part of the default pipeline, so individual endpoints should never need to worry about this, however it's
      * important to note that this method must be called for {@link #getContent()} to have any shot at deserializing.
+     *
+     * @return this instance.
      */
-    public RequestInfo<T> setupContentDeserializer(ObjectMapper deserializer, TypeReference<T> typeReference);
+    @NotNull RequestInfo<T> setupContentDeserializer(
+        @NotNull ObjectMapper deserializer,
+        @NotNull TypeReference<T> typeReference
+    );
 
     /**
      * @return true if {@link #setupContentDeserializer(ObjectMapper, TypeReference)} was called and passed valid
      * deserialization info such that content can be deserialized and returned properly from {@link #getContent()},
      * false otherwise. Individual endpoints should never need to worry about this.
      */
-    public boolean isContentDeserializerSetup();
+    boolean isContentDeserializerSetup();
 
     /**
      * The cookies associated with this request. Will never be null - an empty set will be used if no cookie information
      * was provided.
      */
-    public Set<Cookie> getCookies();
+    @NotNull Set<Cookie> getCookies();
 
     /**
      * The charset used to convert the content chunks (added via {@link #addContentChunk(HttpContent)}) into {@link
      * #getRawContent()}. This will never be null - {@link #DEFAULT_CONTENT_CHARSET} will be used if a charset could not
      * be determined from the headers.
      */
-    public Charset getContentCharset();
+    @NotNull Charset getContentCharset();
 
     /**
-     * The protocol version associated with this request, or null if this information was not provided.
+     * The protocol version associated with this request. This may be null if some issue prevented a real protocol
+     * version from being determined (i.e. due to an invalid request).
      */
-    public HttpVersion getProtocolVersion();
+    @Nullable HttpVersion getProtocolVersion();
 
     /**
      * Whether or not the request is eligible for a keep-alive connection. This is calculated based on HTTP standards
      * and is related to both the Connection header and the {@link #getProtocolVersion()}. See {@link
      * HttpHeaders#isKeepAlive(HttpMessage)} for an example of the logic that is used.
      */
-    public boolean isKeepAliveRequested();
+    boolean isKeepAliveRequested();
 
     /**
      * Adds the given content chunk to the list of chunks this instance is tracking and returns current request size
@@ -324,31 +336,33 @@ public interface RequestInfo<T> {
      * final chunk being added or in the case that the request never causes {@link #getRawContentBytes()} to be called.
      * Individual endpoints do not need to worry about this issue - it's a problem for the server to solve.
      */
-    public int addContentChunk(HttpContent chunk);
+    int addContentChunk(@NotNull HttpContent chunk);
 
     /**
      * Returns true if this request represents a 100% complete request with all chunks and trailing headers populated,
      * or false if this is a partial request and we're still waiting for more chunks.
      */
-    public boolean isCompleteRequestWithAllChunks();
+    boolean isCompleteRequestWithAllChunks();
 
     /**
      * Method to add any object as an attribute (state) for the RequestInfo object. The attributes will have the same
-     * lifespan as the RequestInfo object.
+     * lifespan as the RequestInfo object. Do not pass null for either the attribute name or value - if you need
+     * to clear an attribute, call {@link #getRequestAttributes()} to get the attribute map directly, and then
+     * call {@link Map#remove(Object)} on the attribute map.
      *
      * @param attributeName
      *     name for the object
      * @param attributeValue
      *     object set as an attribute
      */
-    public void addRequestAttribute(String attributeName, Object attributeValue);
+    void addRequestAttribute(@NotNull String attributeName, @NotNull Object attributeValue);
 
     /**
      * The map of request attributes for this request info.
      *
      * @return The map of attributes, or an empty map when no attributes are set (will never return null).
      */
-    public Map<String, Object> getRequestAttributes();
+    @NotNull Map<String, Object> getRequestAttributes();
 
     /**
      * Calls {@link #releaseContentChunks()}, {@link #releaseMultipartData()}, and releases any other resources held by
@@ -357,7 +371,7 @@ public interface RequestInfo<T> {
      * automatically released without any further code changes. Individual endpoints do not need to worry about this
      * issue - it's a problem for the server to solve.
      */
-    public void releaseAllResources();
+    void releaseAllResources();
 
     /**
      * Calls {@link ReferenceCountUtil#release(Object)} on all the items in the content chunk list to release any
@@ -373,7 +387,7 @@ public interface RequestInfo<T> {
      * before the final chunk being added or in the case that the request never causes {@link #getRawContentBytes()} to
      * be called. Individual endpoints do not need to worry about this issue - it's a problem for the server to solve.
      */
-    public void releaseContentChunks();
+    void releaseContentChunks();
 
     /**
      * Calls {@link io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder#destroy()} on the cached
@@ -387,7 +401,7 @@ public interface RequestInfo<T> {
      * application wants to aggressively release resources before the request is fully processed. Individual endpoints
      * do not need to worry about this issue - it's a problem for the server to solve.
      */
-    public void releaseMultipartData();
+    void releaseMultipartData();
 
     /**
      * This will return the path template set by {@link #setPathParamsBasedOnPathTemplate(String)},
@@ -400,6 +414,6 @@ public interface RequestInfo<T> {
      * <p>Will never be null - an empty string will be used if {@link #setPathParamsBasedOnPathTemplate(String)}
      * was never called (should only happen in error cases where an endpoint was not called).
      */
-    public String getPathTemplate();
+    @NotNull String getPathTemplate();
 
 }

@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Tests the functionality of {@link DelegatedErrorResponseBody}.
@@ -27,6 +28,17 @@ public class DelegatedErrorResponseBodyTest {
         assertThat(impl.errorId()).isEqualTo(errorId);
         assertThat(impl.bodyToSerialize).isSameAs(someObject);
         assertThat(impl.bodyToSerialize()).isSameAs(someObject);
+    }
+
+    @Test
+    public void constructor_throws_IllegalArgumentException_if_passed_null_errorId() {
+        // when
+        Throwable ex = catchThrowable(() -> new DelegatedErrorResponseBody(null, new Object()));
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("errorId cannot be null.");
     }
 
 }

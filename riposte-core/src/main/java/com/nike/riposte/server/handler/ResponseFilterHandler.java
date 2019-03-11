@@ -76,7 +76,9 @@ public class ResponseFilterHandler extends BaseInboundHandlerWithTracingAndMdcSu
             if (state.isResponseSendingStarted())
                 return;
 
-            // RequestHasBeenHandledVerificationHandler should have made sure that state.getResponseInfo() is not null.
+            // RequestHasBeenHandledVerificationHandler should have made sure that state.getResponseInfo() is not null,
+            //      and ExceptionHandlingHandler should have made sure that state.getRequestInfo() is not null
+            //      (even if no exception has occurred).
             ResponseInfo<?> currentResponseInfo = state.getResponseInfo();
             for (RequestAndResponseFilter filter : filtersInResponseProcessingOrder) {
                 try {

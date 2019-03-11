@@ -5,13 +5,16 @@ import com.nike.backstopper.apierror.testutil.BarebonesCoreApiErrorForTesting;
 import com.nike.backstopper.model.DefaultErrorContractDTO;
 import com.nike.backstopper.model.DefaultErrorDTO;
 
+import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -73,4 +76,51 @@ public class ErrorResponseBodyImplTest {
         ErrorResponseBodyImpl adapter = new ErrorResponseBodyImpl(errorContract);
         verifyAdapter(adapter, errorUuid, errorsList);
     }
+
+    @Test
+    public void copy_constructor_throws_IllegalArgumentException_when_passed_null_DTO() {
+        // when
+        Throwable ex = catchThrowable(() -> new ErrorResponseBodyImpl(null));
+
+        // then
+        Assertions.assertThat(ex)
+                  .isInstanceOf(IllegalArgumentException.class)
+                  .hasMessage("The DefaultErrorContractDTO copy arg cannot be null.");
+    }
+
+    @Test
+    public void copy_constructor_throws_IllegalArgumentException_when_passed_DTO_with_null_errorId() {
+        // when
+        Throwable ex = catchThrowable(() -> new ErrorResponseBodyImpl(
+            new DefaultErrorContractDTO(null, Collections.emptyList())
+        ));
+
+        // then
+        Assertions.assertThat(ex)
+                  .isInstanceOf(IllegalArgumentException.class)
+                  .hasMessage("The DefaultErrorContractDTO.error_id value cannot be null.");
+    }
+
+    @Test
+    public void double_arg_constructor_throws_IllegalArgumentException_when_passed_null_errorId() {
+        // when
+        Throwable ex = catchThrowable(() -> new ErrorResponseBodyImpl(null, Collections.emptyList()));
+
+        // then
+        Assertions.assertThat(ex)
+                  .isInstanceOf(IllegalArgumentException.class)
+                  .hasMessage("error_id cannot be null.");
+    }
+
+    @Test
+    public void triple_arg_constructor_throws_IllegalArgumentException_when_passed_null_errorId() {
+        // when
+        Throwable ex = catchThrowable(() -> new ErrorResponseBodyImpl(null, Collections.emptyList(), null));
+
+        // then
+        Assertions.assertThat(ex)
+                  .isInstanceOf(IllegalArgumentException.class)
+                  .hasMessage("error_id cannot be null.");
+    }
+
 }

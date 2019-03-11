@@ -3,6 +3,9 @@ package com.nike.backstopper.model.riposte;
 import com.nike.riposte.server.error.handler.ErrorResponseBody;
 import com.nike.riposte.server.error.handler.ErrorResponseInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +21,7 @@ public class ErrorResponseInfoImpl implements ErrorResponseInfo {
     /**
      * The response body content for the error that should be sent to the user.
      */
-    public final ErrorResponseBody errorResponseBody;
+    public final @NotNull ErrorResponseBody errorResponseBody;
     /**
      * The HTTP status code that should be returned in the response to the user. This is not automatically registered on
      * the framework's response - you should set this yourself on the response after you call an error handler.
@@ -30,10 +33,15 @@ public class ErrorResponseInfoImpl implements ErrorResponseInfo {
      * these yourself on the response after you call an error handler. This will never be null - it will be an empty map
      * if there are no headers to add.
      */
-    public final Map<String, List<String>> headersToAddToResponse = new HashMap<>();
+    public final @Nullable Map<String, List<String>> headersToAddToResponse = new HashMap<>();
 
-    public ErrorResponseInfoImpl(ErrorResponseBody errorResponseBody, int httpStatusCode,
-                                 Map<String, List<String>> headersToAddToResponse) {
+    public ErrorResponseInfoImpl(@NotNull ErrorResponseBody errorResponseBody,
+                                 int httpStatusCode,
+                                 @Nullable Map<String, List<String>> headersToAddToResponse) {
+        //noinspection ConstantConditions
+        if (errorResponseBody == null) {
+            throw new IllegalArgumentException("errorResponseBody cannot be null.");
+        }
         this.errorResponseBody = errorResponseBody;
         this.httpStatusCode = httpStatusCode;
         if (headersToAddToResponse != null)
@@ -41,13 +49,14 @@ public class ErrorResponseInfoImpl implements ErrorResponseInfo {
     }
 
     public ErrorResponseInfoImpl(
-        com.nike.backstopper.handler.ErrorResponseInfo<ErrorResponseBody> backstopperErrorResponseInfo) {
+        @NotNull com.nike.backstopper.handler.ErrorResponseInfo<ErrorResponseBody> backstopperErrorResponseInfo
+    ) {
         this(backstopperErrorResponseInfo.frameworkRepresentationObj, backstopperErrorResponseInfo.httpStatusCode,
              backstopperErrorResponseInfo.headersToAddToResponse);
     }
 
     @Override
-    public ErrorResponseBody getErrorResponseBody() {
+    public @NotNull ErrorResponseBody getErrorResponseBody() {
         return errorResponseBody;
     }
 
@@ -57,7 +66,7 @@ public class ErrorResponseInfoImpl implements ErrorResponseInfo {
     }
 
     @Override
-    public Map<String, List<String>> getExtraHeadersToAddToResponse() {
+    public @Nullable Map<String, List<String>> getExtraHeadersToAddToResponse() {
         return headersToAddToResponse;
     }
 }

@@ -9,6 +9,8 @@ import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -100,7 +102,11 @@ public class RequestContentValidationHandler extends BaseInboundHandlerWithTraci
     }
 
     @SuppressWarnings("WeakerAccess")
-    protected void executeValidation(RequestInfo<?> requestInfo, Endpoint<?> endpoint, ChannelHandlerContext ctx) {
+    protected void executeValidation(
+        @NotNull RequestInfo<?> requestInfo,
+        @NotNull Endpoint<?> endpoint,
+        ChannelHandlerContext ctx
+    ) {
         runnableWithTracingAndMdc(() -> {
             // NOTE: The requestInfo.getContent() call should be here in this method because this is the first time
             //      getContent() is called and will deserialize the payload here. For very large payloads it may take a

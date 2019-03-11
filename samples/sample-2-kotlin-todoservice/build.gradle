@@ -36,13 +36,12 @@ dependencies {
             "ch.qos.logback:logback-classic:$logbackVersion",
             "ch.qos.logback:logback-core:$logbackVersion",
             "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion",
-            "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$jacksonVersion"
+            "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$jacksonVersion",
+            "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version",
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-
-    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-
     testCompile (
-            //"junit:junit:$junitVersion",
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",
             "io.kotlintest:kotlintest:$kotlinTestVersion",
             "com.google.truth:truth:${googleTruthVersion}"

@@ -2,6 +2,7 @@ package com.nike.riposte.server.config;
 
 import com.nike.riposte.server.http.Endpoint;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
 import java.security.cert.CertificateException;
@@ -22,7 +23,7 @@ public class ServerConfigTest {
         @SuppressWarnings("Convert2Lambda") 
         ServerConfig defaultImpl = new ServerConfig() {
             @Override
-            public Collection<Endpoint<?>> appEndpoints() {
+            public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
                 return null;
             }
         };

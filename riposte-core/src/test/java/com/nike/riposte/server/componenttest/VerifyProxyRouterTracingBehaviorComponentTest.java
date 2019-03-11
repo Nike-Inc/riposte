@@ -19,6 +19,7 @@ import com.nike.wingtips.lifecyclelistener.SpanLifecycleListener;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -268,7 +269,11 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         public static final String RECEIVED_SAMPLED_HEADER_KEY = "received-sampled";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             HttpHeaders reqHeaders = request.getHeaders();
             return CompletableFuture.completedFuture(
                 ResponseInfo.newBuilder(RESPONSE_PAYLOAD)
@@ -284,7 +289,7 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -301,10 +306,11 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
-
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             DownstreamRequestFirstChunkInfo target = new DownstreamRequestFirstChunkInfo(
                 "127.0.0.1", downstreamPort, false,
                 generateSimplePassthroughRequest(request, DownstreamEndpoint.MATCHING_PATH, request.getMethod(), ctx)
@@ -325,7 +331,7 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -345,7 +351,7 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -370,7 +376,7 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 

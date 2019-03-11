@@ -18,6 +18,7 @@ import com.nike.riposte.util.MultiMatcher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -281,7 +282,7 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -298,12 +299,16 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         public static String body = UUID.randomUUID().toString();
 
         @Override
-        public CompletableFuture<ResponseInfo<Object>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Object>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(ResponseInfo.newBuilder().withContentForFullResponse(body).build());
         }
 
         @Override
-        public Matcher requestMatcher() { return MultiMatcher.match(Arrays.asList(INTERNAL_MATCHING_PATH, EXTERNAL_MATCHING_PATH)); }
+        public @NotNull Matcher requestMatcher() { return MultiMatcher.match(Arrays.asList(INTERNAL_MATCHING_PATH, EXTERNAL_MATCHING_PATH)); }
     }
 
     public static class OrderMattersMultiMatcherEndpoint extends StandardEndpoint<Void, Object> {
@@ -311,7 +316,11 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         public static final String NON_INTERNAL_MATCHING_PATH = "/om/*/{importantPathParam}/**";
 
         @Override
-        public CompletableFuture<ResponseInfo<Object>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Object>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                 ResponseInfo.newBuilder()
                             .withContentForFullResponse(generateResponseBodyForImportantPathParam(request.getPathParam("importantPathParam")))
@@ -320,7 +329,7 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() { return MultiMatcher.match(Arrays.asList(INTERNAL_MATCHING_PATH, NON_INTERNAL_MATCHING_PATH)); }
+        public @NotNull Matcher requestMatcher() { return MultiMatcher.match(Arrays.asList(INTERNAL_MATCHING_PATH, NON_INTERNAL_MATCHING_PATH)); }
 
         public static String generateResponseBodyForImportantPathParam(String importantPathParam) {
             return "The path param from the request was: " + importantPathParam;
@@ -333,7 +342,7 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
 
         // Reverse the ordering from OrderMattersMultiMatcherEndpoint. This should make it so that INTERNAL_MATCHING_PATH is *never* reachable.
         @Override
-        public Matcher requestMatcher() { return MultiMatcher.match(Arrays.asList(NON_INTERNAL_MATCHING_PATH, INTERNAL_MATCHING_PATH)); }
+        public @NotNull Matcher requestMatcher() { return MultiMatcher.match(Arrays.asList(NON_INTERNAL_MATCHING_PATH, INTERNAL_MATCHING_PATH)); }
     }
 
     public static class EmptyMetadataErrorThrower extends StandardEndpoint<Void, Void> {
@@ -342,12 +351,16 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         public static final ApiError ERROR_NO_METADATA = new ApiErrorBase("NO_METADATA", 90000, "Blowup no MD", 400, null);
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new ApiException(ERROR_NO_METADATA);
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -359,12 +372,16 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
                                                                             ImmutableMap.of("foo", "bar"));
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             throw new ApiException(ERROR_WITH_METADATA);
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }
@@ -382,9 +399,11 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                 new DownstreamRequestFirstChunkInfo(
                     "127.0.0.1", port, false,
@@ -394,14 +413,17 @@ public class VerifyMiscellaneousFunctionalityComponentTest {
         }
 
         @Override
-        public void handleDownstreamResponseFirstChunk(HttpResponse downstreamResponseFirstChunk, RequestInfo<?> origRequestInfo) {
+        public void handleDownstreamResponseFirstChunk(
+            @NotNull HttpResponse downstreamResponseFirstChunk,
+            @NotNull RequestInfo<?> origRequestInfo
+        ) {
             downstreamResponseFirstChunk.headers().set(ORIG_HTTP_STATUS_CODE_RESPONSE_HEADER_KEY,
                                                        String.valueOf(downstreamResponseFirstChunk.status().code()));
             downstreamResponseFirstChunk.setStatus(new HttpResponseStatus(MODIFIED_HTTP_STATUS_RESPONSE_CODE, "junk status code"));
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.GET);
         }
     }

@@ -18,6 +18,8 @@ import com.nike.riposte.util.Matcher;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -647,9 +649,11 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     new DownstreamRequestFirstChunkInfo(
                             "127.0.0.1", downstreamPort, false,
@@ -659,7 +663,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -679,21 +683,23 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
             //      We still have to have a non-empty collection though or Riposte won't start up.
             endpoints = singleton(new StandardEndpoint<Void, Void>() {
                 @Override
-                public Matcher requestMatcher() {
+                public @NotNull Matcher requestMatcher() {
                     return Matcher.match("/should/never/match/anything/" + UUID.randomUUID().toString());
                 }
 
                 @Override
-                public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
-                                                                     Executor longRunningTaskExecutor,
-                                                                     ChannelHandlerContext ctx) {
+                public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+                    @NotNull RequestInfo<Void> request,
+                    @NotNull Executor longRunningTaskExecutor,
+                    @NotNull ChannelHandlerContext ctx
+                ) {
                     throw new UnsupportedOperationException("Should never reach here");
                 }
             });
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -703,7 +709,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
 
         @Override
-        public List<PipelineCreateHook> pipelineCreateHooks() {
+        public @Nullable List<@NotNull PipelineCreateHook> pipelineCreateHooks() {
             return singletonList(pipeline -> {
                 try {
                     // Clear out the entire pipeline. We're going to build one from scratch.
@@ -738,7 +744,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -748,7 +754,7 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         }
 
         @Override
-        public List<PipelineCreateHook> pipelineCreateHooks() {
+        public @Nullable List<@NotNull PipelineCreateHook> pipelineCreateHooks() {
             return singletonList(pipeline -> {
                 pipeline.addFirst("recordProxyInboundRequest", new RecordProxyServerInboundRequest());
                 pipeline.addFirst("recordProxyOutboundResponse", new RecordProxyServerOutboundResponse());

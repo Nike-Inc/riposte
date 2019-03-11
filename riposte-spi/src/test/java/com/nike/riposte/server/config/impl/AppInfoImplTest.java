@@ -1,7 +1,5 @@
 package com.nike.riposte.server.config.impl;
 
-import com.nike.riposte.server.config.AppInfo;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -10,6 +8,7 @@ import org.mockito.internal.util.reflection.Whitebox;
 import java.net.UnknownHostException;
 import java.util.UUID;
 
+import static com.nike.riposte.server.config.AppInfo.UNKNOWN_VALUE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.doThrow;
@@ -78,15 +77,27 @@ public class AppInfoImplTest {
     }
 
     @Test
-    public void deserialization_constructor_sets_everything_to_null() {
+    public void constructor_sets_fields_to_unknown_when_passed_null() {
+        // when
+        AppInfoImpl appInfoImpl = new AppInfoImpl(null, null, null, null);
+
+        // then
+        assertThat(appInfoImpl.appId).isEqualTo(appInfoImpl.appId()).isEqualTo(UNKNOWN_VALUE);
+        assertThat(appInfoImpl.environment).isEqualTo(appInfoImpl.environment()).isEqualTo(UNKNOWN_VALUE);
+        assertThat(appInfoImpl.dataCenter).isEqualTo(appInfoImpl.dataCenter()).isEqualTo(UNKNOWN_VALUE);
+        assertThat(appInfoImpl.instanceId).isEqualTo(appInfoImpl.instanceId()).isEqualTo(UNKNOWN_VALUE);
+    }
+
+    @Test
+    public void deserialization_constructor_sets_everything_to_unknown() {
         // when
         AppInfoImpl appInfoImpl = new AppInfoImpl();
 
         // then
-        assertThat(appInfoImpl.appId).isEqualTo(appInfoImpl.appId()).isNull();
-        assertThat(appInfoImpl.environment).isEqualTo(appInfoImpl.environment()).isNull();
-        assertThat(appInfoImpl.dataCenter).isEqualTo(appInfoImpl.dataCenter()).isNull();
-        assertThat(appInfoImpl.instanceId).isEqualTo(appInfoImpl.instanceId()).isNull();
+        assertThat(appInfoImpl.appId).isEqualTo(appInfoImpl.appId()).isEqualTo(UNKNOWN_VALUE);
+        assertThat(appInfoImpl.environment).isEqualTo(appInfoImpl.environment()).isEqualTo(UNKNOWN_VALUE);
+        assertThat(appInfoImpl.dataCenter).isEqualTo(appInfoImpl.dataCenter()).isEqualTo(UNKNOWN_VALUE);
+        assertThat(appInfoImpl.instanceId).isEqualTo(appInfoImpl.instanceId()).isEqualTo(UNKNOWN_VALUE);
     }
 
     private void setAppIdSystemProps(String atAppId, String archaiusDeploymentAppId, String eurekaName) {
@@ -208,7 +219,7 @@ public class AppInfoImplTest {
             assertThat(localInstance.appId).isEqualTo(appId);
             assertThat(localInstance.environment).isEqualTo("local");
             assertThat(localInstance.dataCenter).isEqualTo("local");
-            assertThat(localInstance.instanceId).isEqualTo(AppInfo.UNKNOWN_VALUE);
+            assertThat(localInstance.instanceId).isEqualTo(UNKNOWN_VALUE);
         }
         finally {
             Whitebox.setInternalState(instanceForStaticVariableReflectionJunk, localHostnameGetterStaticVariableName, existingLocalHostnameGetter);

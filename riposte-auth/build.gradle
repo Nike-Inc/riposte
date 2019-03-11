@@ -5,8 +5,11 @@ dependencies {
             project(":riposte-spi"),
             project(":riposte-core")
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",

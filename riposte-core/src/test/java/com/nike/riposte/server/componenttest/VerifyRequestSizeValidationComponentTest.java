@@ -14,6 +14,8 @@ import com.nike.riposte.util.Matcher;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -259,14 +261,18 @@ public class VerifyRequestSizeValidationComponentTest {
         public static final String RESPONSE_PAYLOAD = "basic-endpoint-" + UUID.randomUUID().toString();
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build()
             );
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
     }
@@ -278,19 +284,23 @@ public class VerifyRequestSizeValidationComponentTest {
         public static Integer MAX_REQUEST_SIZE = 10;
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build()
             );
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 
         @Override
-        public Integer maxRequestSizeInBytesOverride() {
+        public @Nullable Integer maxRequestSizeInBytesOverride() {
             return MAX_REQUEST_SIZE;
         }
     }
@@ -302,19 +312,23 @@ public class VerifyRequestSizeValidationComponentTest {
         public static Integer MAX_REQUEST_SIZE = 0;
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     ResponseInfo.newBuilder(RESPONSE_PAYLOAD).build()
             );
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 
         @Override
-        public Integer maxRequestSizeInBytesOverride() {
+        public @Nullable Integer maxRequestSizeInBytesOverride() {
             return MAX_REQUEST_SIZE;
         }
     }
@@ -341,7 +355,7 @@ public class VerifyRequestSizeValidationComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 

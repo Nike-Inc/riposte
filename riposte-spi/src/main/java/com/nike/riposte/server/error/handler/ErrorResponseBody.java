@@ -2,6 +2,9 @@ package com.nike.riposte.server.error.handler;
 
 import com.nike.backstopper.model.riposte.ErrorResponseBodyImpl;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Represents the response body content for an error response. The only thing strictly required is {@link #errorId()},
  * although it's recommended that you have a consistent error contract for all errors. {@link #errorId()} will be
@@ -22,15 +25,15 @@ public interface ErrorResponseBody {
 
     /**
      * @return The unique ID associated with this error. This is usually just the string value of a {@link
-     * java.util.UUID}.
+     * java.util.UUID}. Should never be null.
      */
-    String errorId();
+    @NotNull String errorId();
 
     /**
      * @return The object that should be serialized into the response body payload, or null if you want a blank/empty
      * response body payload.
      */
-    default Object bodyToSerialize() {
+    default @Nullable Object bodyToSerialize() {
         return this;
     }
 }

@@ -6,6 +6,9 @@ import com.nike.riposte.server.config.ServerConfig;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.logging.AccessLogger;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Collection;
 import java.util.Collections;
 
@@ -20,12 +23,12 @@ public class Main {
         private final AccessLogger accessLogger = new AccessLogger();
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
         @Override
-        public AccessLogger accessLogger() {
+        public @Nullable AccessLogger accessLogger() {
             return accessLogger;
         }
     }

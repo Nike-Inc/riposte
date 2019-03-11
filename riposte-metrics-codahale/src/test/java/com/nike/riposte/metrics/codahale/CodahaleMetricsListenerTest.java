@@ -26,6 +26,7 @@ import com.codahale.metrics.Timer;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -118,7 +119,7 @@ public class CodahaleMetricsListenerTest {
             );
 
             @Override
-            public Collection<Endpoint<?>> appEndpoints() {
+            public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
                 return endpoints;
             }
 
@@ -965,14 +966,16 @@ public class CodahaleMetricsListenerTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return matcher;
         }
 
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request,
-                                                             Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return null;
         }
     }

@@ -4,12 +4,11 @@ import com.nike.internal.util.Pair;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.ResponseInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
 
-import java.security.cert.CertificateException;
 import java.util.Optional;
-
-import javax.net.ssl.SSLException;
 
 import io.netty.channel.ChannelHandlerContext;
 
@@ -25,24 +24,31 @@ import static org.mockito.Mockito.mock;
 public class ShortCircuitingRequestAndResponseFilterTest {
 
     @Test
-    public void default_method_implementations_behave_as_expected() throws CertificateException, SSLException {
+    public void default_method_implementations_behave_as_expected() {
         // given
         ShortCircuitingRequestAndResponseFilter defaultImpl = new ShortCircuitingRequestAndResponseFilter() {
             @Override
-            public <T> ResponseInfo<T> filterResponse(ResponseInfo<T> currentResponseInfo, RequestInfo<?> requestInfo, ChannelHandlerContext ctx) {
+            public <T> @Nullable ResponseInfo<T> filterResponse(
+                @NotNull ResponseInfo<T> currentResponseInfo,
+                @NotNull RequestInfo<?> requestInfo,
+                @NotNull ChannelHandlerContext ctx
+            ) {
                 return null;
             }
 
             @Override
-            public <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
-                RequestInfo<T> currentRequestInfo,
-                ChannelHandlerContext ctx) {
+            public <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestFirstChunkWithOptionalShortCircuitResponse(
+                @NotNull RequestInfo<T> currentRequestInfo,
+                @NotNull ChannelHandlerContext ctx
+            ) {
                 return null;
             }
 
             @Override
-            public <T> Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(RequestInfo<T> currentRequestInfo,
-                                                                                                                              ChannelHandlerContext ctx) {
+            public <T> @Nullable Pair<RequestInfo<T>, Optional<ResponseInfo<?>>> filterRequestLastChunkWithOptionalShortCircuitResponse(
+                @NotNull RequestInfo<T> currentRequestInfo,
+                @NotNull ChannelHandlerContext ctx
+            ) {
                 return null;
             }
         };

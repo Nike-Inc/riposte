@@ -2,6 +2,7 @@ package com.nike.riposte.server.http;
 
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
@@ -25,14 +26,16 @@ public class NonblockingEndpointTest {
         // given
         NonblockingEndpoint<?, ?> defaultImpl = new NonblockingEndpoint<Object, Object>() {
             @Override
-            public CompletableFuture<ResponseInfo<Object>> execute(RequestInfo<Object> request,
-                                                                   Executor longRunningTaskExecutor,
-                                                                   ChannelHandlerContext ctx) {
+            public @NotNull CompletableFuture<ResponseInfo<Object>> execute(
+                @NotNull RequestInfo<Object> request,
+                @NotNull Executor longRunningTaskExecutor,
+                @NotNull ChannelHandlerContext ctx
+            ) {
                 return null;
             }
 
             @Override
-            public Matcher requestMatcher() {
+            public @NotNull Matcher requestMatcher() {
                 return null;
             }
         };

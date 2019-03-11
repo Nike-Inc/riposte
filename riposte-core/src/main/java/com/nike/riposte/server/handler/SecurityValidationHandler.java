@@ -59,7 +59,7 @@ public class SecurityValidationHandler extends BaseInboundHandlerWithTracingAndM
     }
 
     @Override
-    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (shouldHandleDoChannelReadMessage(msg)) {
             HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             if (httpProcessingState != null) {

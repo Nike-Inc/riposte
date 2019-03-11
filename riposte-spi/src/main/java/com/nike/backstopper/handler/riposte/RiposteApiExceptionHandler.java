@@ -16,6 +16,9 @@ import com.nike.riposte.server.error.handler.ErrorResponseInfo;
 import com.nike.riposte.server.error.handler.RiposteErrorHandler;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Collection;
 import java.util.List;
 
@@ -32,14 +35,14 @@ public class RiposteApiExceptionHandler extends ApiExceptionHandlerBase<ErrorRes
     implements RiposteErrorHandler {
 
     @Inject
-    public RiposteApiExceptionHandler(ProjectApiErrors projectApiErrors,
-                                      List<ApiExceptionHandlerListener> apiExceptionHandlerListenerList,
-                                      ApiExceptionHandlerUtils utils) {
+    public RiposteApiExceptionHandler(@NotNull ProjectApiErrors projectApiErrors,
+                                      @NotNull List<ApiExceptionHandlerListener> apiExceptionHandlerListenerList,
+                                      @NotNull ApiExceptionHandlerUtils utils) {
         super(projectApiErrors, apiExceptionHandlerListenerList, utils);
     }
 
     @Override
-    public ErrorResponseInfo maybeHandleError(Throwable error, RequestInfo<?> requestInfo)
+    public @Nullable ErrorResponseInfo maybeHandleError(@NotNull Throwable error, @NotNull RequestInfo<?> requestInfo)
         throws UnexpectedMajorErrorHandlingError {
         try {
             com.nike.backstopper.handler.ErrorResponseInfo<ErrorResponseBody> backstopperErrorResponseInfo =
@@ -56,11 +59,13 @@ public class RiposteApiExceptionHandler extends ApiExceptionHandlerBase<ErrorRes
     }
 
     @Override
-    protected ErrorResponseBody prepareFrameworkRepresentation(DefaultErrorContractDTO errorContractDTO,
-                                                               int httpStatusCode,
-                                                               Collection<ApiError> rawFilteredApiErrors,
-                                                               Throwable originalException,
-                                                               RequestInfoForLogging request) {
+    protected @NotNull ErrorResponseBody prepareFrameworkRepresentation(
+        @NotNull DefaultErrorContractDTO errorContractDTO,
+        int httpStatusCode,
+        @NotNull Collection<ApiError> rawFilteredApiErrors,
+        @NotNull Throwable originalException,
+        @NotNull RequestInfoForLogging request
+    ) {
         return new ErrorResponseBodyImpl(errorContractDTO);
     }
 

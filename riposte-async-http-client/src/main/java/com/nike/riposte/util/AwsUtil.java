@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ning.http.client.Response;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +83,9 @@ public class AwsUtil {
      * completes successfully). If an error occurs retrieving the region from AWS then the error will be logged and
      * {@link AppInfo#UNKNOWN_VALUE} returned as the value.
      */
-    public static CompletableFuture<String> getAwsRegion(AsyncHttpClientHelper asyncHttpClientHelper) {
+    public static @NotNull CompletableFuture<@NotNull String> getAwsRegion(
+        @NotNull AsyncHttpClientHelper asyncHttpClientHelper
+    ) {
         return asyncHttpClientHelper.executeAsyncHttpRequest(
             asyncHttpClientHelper.getRequestBuilder(AMAZON_METADATA_DOCUMENT_URL, HttpMethod.GET),
             response -> {
@@ -127,7 +130,9 @@ public class AwsUtil {
      * completes successfully). If an error occurs retrieving the instance ID from AWS then the error will be logged and
      * {@link AppInfo#UNKNOWN_VALUE} returned as the value.
      */
-    public static CompletableFuture<String> getAwsInstanceId(AsyncHttpClientHelper asyncHttpClientHelper) {
+    public static @NotNull CompletableFuture<@NotNull String> getAwsInstanceId(
+        @NotNull AsyncHttpClientHelper asyncHttpClientHelper
+    ) {
         return asyncHttpClientHelper.executeAsyncHttpRequest(
             asyncHttpClientHelper.getRequestBuilder(AMAZON_METADATA_INSTANCE_ID_URL, HttpMethod.GET),
             Response::getResponseBody
@@ -157,7 +162,9 @@ public class AwsUtil {
      * See {@link #getAppInfoFutureWithAwsInfo(String, String, AsyncHttpClientHelper)} for more details on how the
      * {@link AppInfo} returned by the {@link CompletableFuture} will be structured.
      */
-    public static CompletableFuture<AppInfo> getAppInfoFutureWithAwsInfo(AsyncHttpClientHelper asyncHttpClientHelper) {
+    public static @NotNull CompletableFuture<@NotNull AppInfo> getAppInfoFutureWithAwsInfo(
+        @NotNull AsyncHttpClientHelper asyncHttpClientHelper
+    ) {
         String appId = AppInfoImpl.detectAppId();
         if (appId == null)
             throw new IllegalStateException(
@@ -187,8 +194,11 @@ public class AwsUtil {
      * services will be used to determine {@link AppInfo#dataCenter()} and {@link AppInfo#instanceId()}. If those AWS
      * metadata calls fail for any reason then {@link AppInfo#UNKNOWN_VALUE} will be used instead.
      */
-    public static CompletableFuture<AppInfo> getAppInfoFutureWithAwsInfo(String appId, String environment,
-                                                                         AsyncHttpClientHelper asyncHttpClientHelper) {
+    public static @NotNull CompletableFuture<@NotNull AppInfo> getAppInfoFutureWithAwsInfo(
+        @NotNull String appId,
+        @NotNull String environment,
+        @NotNull AsyncHttpClientHelper asyncHttpClientHelper
+    ) {
         if ("local".equalsIgnoreCase(environment) || "compiletimetest".equalsIgnoreCase(environment)) {
             AppInfo localAppInfo = AppInfoImpl.createLocalInstance(appId);
 
@@ -202,8 +212,8 @@ public class AwsUtil {
         }
 
         // Not local, so assume AWS.
-        CompletableFuture<String> dataCenterFuture = getAwsRegion(asyncHttpClientHelper);
-        CompletableFuture<String> instanceIdFuture = getAwsInstanceId(asyncHttpClientHelper);
+        CompletableFuture<@NotNull String> dataCenterFuture = getAwsRegion(asyncHttpClientHelper);
+        CompletableFuture<@NotNull String> instanceIdFuture = getAwsInstanceId(asyncHttpClientHelper);
 
         return CompletableFuture.allOf(dataCenterFuture, instanceIdFuture).thenApply((aVoid) -> {
 

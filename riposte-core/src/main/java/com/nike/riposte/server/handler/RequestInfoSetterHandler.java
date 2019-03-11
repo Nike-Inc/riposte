@@ -34,6 +34,7 @@ import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled
  *
  * @author Nic Munroe
  */
+@SuppressWarnings("WeakerAccess")
 public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
     private static final Logger logger = LoggerFactory.getLogger(RequestInfoSetterHandler.class);

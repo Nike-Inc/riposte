@@ -3,6 +3,8 @@ package com.nike.riposte.server.http;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
 
 import java.nio.charset.Charset;
@@ -14,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
@@ -140,43 +143,43 @@ public class RequestInfoTest {
     private static class RequestInfoForTesting<T> implements RequestInfo<T> {
 
         @Override
-        public String getUri() {
-            return null;
+        public @NotNull String getUri() {
+            return "fooUri";
         }
 
         @Override
-        public String getPath() {
-            return null;
+        public @NotNull String getPath() {
+            return "/fooPath";
         }
 
         @Override
-        public HttpMethod getMethod() {
-            return null;
+        public @Nullable HttpMethod getMethod() {
+            return HttpMethod.GET;
         }
 
         @Override
-        public HttpHeaders getHeaders() {
-            return null;
+        public @NotNull HttpHeaders getHeaders() {
+            return new DefaultHttpHeaders();
         }
 
         @Override
-        public HttpHeaders getTrailingHeaders() {
-            return null;
+        public @NotNull HttpHeaders getTrailingHeaders() {
+            return new DefaultHttpHeaders();
         }
 
         @Override
-        public QueryStringDecoder getQueryParams() {
-            return null;
+        public @NotNull QueryStringDecoder getQueryParams() {
+            return new QueryStringDecoder(getUri());
         }
 
         @Override
-        public Map<String, String> getPathParams() {
-            return null;
+        public @NotNull Map<String, String> getPathParams() {
+            return Collections.emptyMap();
         }
 
         @Override
-        public RequestInfo<T> setPathParamsBasedOnPathTemplate(String pathTemplate) {
-            return null;
+        public @NotNull RequestInfo<T> setPathParamsBasedOnPathTemplate(@NotNull String pathTemplate) {
+            return this;
         }
 
         @Override
@@ -185,17 +188,17 @@ public class RequestInfoTest {
         }
 
         @Override
-        public byte[] getRawContentBytes() {
+        public @Nullable byte[] getRawContentBytes() {
             return null;
         }
 
         @Override
-        public String getRawContent() {
+        public @Nullable String getRawContent() {
             return null;
         }
 
         @Override
-        public T getContent() {
+        public @Nullable T getContent() {
             return null;
         }
 
@@ -205,13 +208,15 @@ public class RequestInfoTest {
         }
 
         @Override
-        public List<InterfaceHttpData> getMultipartParts() {
+        public @Nullable List<InterfaceHttpData> getMultipartParts() {
             return null;
         }
 
         @Override
-        public RequestInfo<T> setupContentDeserializer(ObjectMapper deserializer, TypeReference<T> typeReference) {
-            return null;
+        public @NotNull RequestInfo<T> setupContentDeserializer(
+            @NotNull ObjectMapper deserializer, @NotNull TypeReference<T> typeReference
+        ) {
+            return this;
         }
 
         @Override
@@ -220,17 +225,17 @@ public class RequestInfoTest {
         }
 
         @Override
-        public Set<Cookie> getCookies() {
-            return null;
+        public @NotNull Set<Cookie> getCookies() {
+            return Collections.emptySet();
         }
 
         @Override
-        public Charset getContentCharset() {
-            return null;
+        public @NotNull Charset getContentCharset() {
+            return DEFAULT_CONTENT_CHARSET;
         }
 
         @Override
-        public HttpVersion getProtocolVersion() {
+        public @Nullable HttpVersion getProtocolVersion() {
             return null;
         }
 
@@ -240,7 +245,7 @@ public class RequestInfoTest {
         }
 
         @Override
-        public int addContentChunk(HttpContent chunk) {
+        public int addContentChunk(@NotNull HttpContent chunk) {
             return 0;
         }
 
@@ -250,33 +255,29 @@ public class RequestInfoTest {
         }
 
         @Override
-        public void releaseAllResources() {
+        public void addRequestAttribute(@NotNull String attributeName, @NotNull Object attributeValue) {
+        }
 
+        @Override
+        public @NotNull Map<String, Object> getRequestAttributes() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public void releaseAllResources() {
         }
 
         @Override
         public void releaseContentChunks() {
-
         }
 
         @Override
         public void releaseMultipartData() {
-
         }
 
         @Override
-        public String getPathTemplate() {
-            return null;
-        }
-
-        @Override
-        public void addRequestAttribute(String attributeName, Object attributeValue) {
-
-        }
-
-        @Override
-        public Map<String, Object> getRequestAttributes() {
-            return null;
+        public @NotNull String getPathTemplate() {
+            return "";
         }
     }
 }

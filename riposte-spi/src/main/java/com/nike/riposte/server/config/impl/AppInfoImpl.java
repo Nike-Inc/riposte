@@ -2,6 +2,8 @@ package com.nike.riposte.server.config.impl;
 
 import com.nike.riposte.server.config.AppInfo;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,17 +23,51 @@ public class AppInfoImpl implements AppInfo {
     // NOTE: Can't be final - would break the ability to do exception unit testing
     private static LocalHostnameGetter LOCAL_HOSTNAME_GETTER = new LocalHostnameGetter();
 
-    public final String appId;
-    public final String environment;
-    public final String dataCenter;
-    public final String instanceId;
+    public final @NotNull String appId;
+    public final @NotNull String environment;
+    public final @NotNull String dataCenter;
+    public final @NotNull String instanceId;
 
     // Intentionally protected - this is here for deserialization support only.
     protected AppInfoImpl() {
-        this(null, null, null, null);
+        this(UNKNOWN_VALUE, UNKNOWN_VALUE, UNKNOWN_VALUE, UNKNOWN_VALUE);
     }
 
-    public AppInfoImpl(String appId, String environment, String dataCenter, String instanceId) {
+    /**
+     * Creates a new instance with the given values.
+     *
+     * @param appId The AppId/name for this service (like {@code foo-svc}). As per the javadocs for {@link
+     * AppInfo#appId()} - this should never be null, and should never be {@link #UNKNOWN_VALUE}.
+     * @param environment The environment for the AppId (like {@code test} or {@code prod}). As per the javadocs for
+     * {@link AppInfo#environment()} - this should never be null, and should never be {@link #UNKNOWN_VALUE}.
+     * @param dataCenter The datacenter/region for the AppId (like {@code us-west-2}). You can safely pass null if you
+     * can't determine this information, and this will default to {@link #UNKNOWN_VALUE}.
+     * @param instanceId Te instanceId/ip/hostname of this machine/VM running the AppId service. You can safely pass
+     * null if you can't determine this information, and this will default to {@link #UNKNOWN_VALUE}.
+     */
+    @SuppressWarnings("ConstantConditions")
+    public AppInfoImpl(
+        @NotNull String appId,
+        @NotNull String environment,
+        @Nullable String dataCenter,
+        @Nullable String instanceId
+    ) {
+        if (appId == null) {
+            appId = UNKNOWN_VALUE;
+        }
+
+        if (environment == null) {
+            environment = UNKNOWN_VALUE;
+        }
+
+        if (dataCenter == null) {
+            dataCenter = UNKNOWN_VALUE;
+        }
+
+        if (instanceId == null) {
+            instanceId = UNKNOWN_VALUE;
+        }
+
         this.appId = appId;
         this.environment = environment;
         this.dataCenter = dataCenter;
@@ -39,22 +75,22 @@ public class AppInfoImpl implements AppInfo {
     }
 
     @Override
-    public String appId() {
+    public @NotNull String appId() {
         return appId;
     }
 
     @Override
-    public String environment() {
+    public @NotNull String environment() {
         return environment;
     }
 
     @Override
-    public String dataCenter() {
+    public @NotNull String dataCenter() {
         return dataCenter;
     }
 
     @Override
-    public String instanceId() {
+    public @NotNull String instanceId() {
         return instanceId;
     }
 
@@ -66,7 +102,7 @@ public class AppInfoImpl implements AppInfo {
      * ID a different way and call {@link #createLocalInstance(String)} instead, because if {@link #detectAppId()}
      * returns null then this method will throw an {@link IllegalStateException}.
      */
-    public static AppInfoImpl createLocalInstance() {
+    public static @NotNull AppInfoImpl createLocalInstance() {
         String appId = detectAppId();
         if (appId == null) {
             throw new IllegalStateException("Unable to autodetect app ID. Please call createLocalInstance(String) "
@@ -92,7 +128,7 @@ public class AppInfoImpl implements AppInfo {
      * using {@code InetAddress.getLocalHost().getHostName()} (or {@link AppInfo#UNKNOWN_VALUE} if that threw an
      * error).
      */
-    public static AppInfoImpl createLocalInstance(String appId) {
+    public static @NotNull AppInfoImpl createLocalInstance(@NotNull String appId) {
         String environment = "local";
         String datacenter = "local";
 
@@ -117,7 +153,7 @@ public class AppInfoImpl implements AppInfo {
      * <li>archaius.deployment.applicationId</li> <li>eureka.name</li> </ol> NOTE: A return value of null does not
      * necessarily mean there is no appId, it just means this code doesn't know how to extract it.
      */
-    public static String detectAppId() {
+    public static @Nullable String detectAppId() {
         // Attempt to get it from @appId or archaius.deployment.applicationId System properties first - used by Archaius
         //      or any Riposte app that follows the Archaius conventions.
         String appId = System.getProperty("@appId");
@@ -145,7 +181,7 @@ public class AppInfoImpl implements AppInfo {
      * of null does not necessarily mean there is no environment, it just means this code doesn't know how to extract
      * it.
      */
-    public static String detectEnvironment() {
+    public static @Nullable String detectEnvironment() {
         // Attempt to get it from @environment or archaius.deployment.environment System properties first - used by
         //      Archaius or any Riposte app that follows the Archaius conventions.
         String environment = System.getProperty("@environment");

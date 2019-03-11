@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -36,12 +38,12 @@ public class ErrorContractSerializerHelperTest {
         NULL_INSTANCE(() -> null),
         NULL_BODY_TO_SERIALIZE(() -> new ErrorResponseBody() {
             @Override
-            public String errorId() {
-                return null;
+            public @NotNull String errorId() {
+                return "doesnotmatter";
             }
 
             @Override
-            public Object bodyToSerialize() {
+            public @Nullable Object bodyToSerialize() {
                 return null;
             }
         });

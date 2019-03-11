@@ -6,11 +6,14 @@ import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.util.HttpUtils;
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 
 /**
@@ -20,16 +23,16 @@ import io.netty.handler.codec.http.HttpResponse;
  *
  * @author Nic Munroe
  */
-@SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+@SuppressWarnings({"OptionalUsedAsFieldOrParameterType", "WeakerAccess"})
 public class SimpleProxyRouterEndpoint extends ProxyRouterEndpoint {
 
-    private final Matcher incomingRequestMatcher;
-    private final String downstreamDestinationHost;
-    private final int downstreamDestinationPort;
-    private final String downstreamDestinationUriPath;
-    private final boolean isDownstreamCallHttps;
-    private final Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker;
-    private final boolean disableCircuitBreaker;
+    protected final @NotNull Matcher incomingRequestMatcher;
+    protected final @NotNull String downstreamDestinationHost;
+    protected final int downstreamDestinationPort;
+    protected final @NotNull String downstreamDestinationUriPath;
+    protected final boolean isDownstreamCallHttps;
+    protected final @NotNull Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker;
+    protected final boolean disableCircuitBreaker;
 
     /**
      * Creates a new instance with the given arguments.
@@ -55,13 +58,31 @@ public class SimpleProxyRouterEndpoint extends ProxyRouterEndpoint {
      *     Set this to true if you don't want *any* circuit breaker to be used - if this is false then {@link
      *     #customCircuitBreaker} will be used to determine which circuit breaker to use (custom vs. default).
      */
-    public SimpleProxyRouterEndpoint(Matcher incomingRequestMatcher,
-                                     String downstreamDestinationHost,
+    @SuppressWarnings("ConstantConditions")
+    public SimpleProxyRouterEndpoint(@NotNull Matcher incomingRequestMatcher,
+                                     @NotNull String downstreamDestinationHost,
                                      int downstreamDestinationPort,
-                                     String downstreamDestinationUriPath,
+                                     @NotNull String downstreamDestinationUriPath,
                                      boolean isDownstreamCallHttps,
-                                     Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker,
+                                     @NotNull Optional<CircuitBreaker<HttpResponse>> customCircuitBreaker,
                                      boolean disableCircuitBreaker) {
+        if (incomingRequestMatcher == null) {
+            throw new IllegalArgumentException("incomingRequestMatcher cannot be null.");
+        }
+
+        if (downstreamDestinationHost == null) {
+            throw new IllegalArgumentException("downstreamDestinationHost cannot be null.");
+        }
+
+        if (downstreamDestinationUriPath == null) {
+            throw new IllegalArgumentException("downstreamDestinationUriPath cannot be null.");
+        }
+
+        //noinspection OptionalAssignedToNull
+        if (customCircuitBreaker == null) {
+            customCircuitBreaker = Optional.empty();
+        }
+
         this.incomingRequestMatcher = incomingRequestMatcher;
         this.downstreamDestinationHost = downstreamDestinationHost;
         this.downstreamDestinationPort = downstreamDestinationPort;
@@ -98,14 +119,25 @@ public class SimpleProxyRouterEndpoint extends ProxyRouterEndpoint {
     }
 
     @Override
-    public Matcher requestMatcher() {
+    public @NotNull Matcher requestMatcher() {
         return incomingRequestMatcher;
     }
 
     @Override
-    public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
-        RequestInfo<?> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx
+    public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+        @NotNull RequestInfo<?> request, @NotNull Executor longRunningTaskExecutor, @NotNull ChannelHandlerContext ctx
     ) {
+        HttpMethod method = request.getMethod();
+        if (method == null) {
+            CompletableFuture<DownstreamRequestFirstChunkInfo> errorResult = new CompletableFuture<>();
+            errorResult.completeExceptionally(
+                new IllegalArgumentException(
+                    "Received a request with null request.getMethod(). This should never happen."
+                )
+            );
+            return errorResult;
+        }
+
         return CompletableFuture.completedFuture(
             new DownstreamRequestFirstChunkInfo(
                 downstreamDestinationHost,
@@ -113,7 +145,7 @@ public class SimpleProxyRouterEndpoint extends ProxyRouterEndpoint {
                 isDownstreamCallHttps,
                 generateSimplePassthroughRequest(
                     request, HttpUtils.replaceUriPathVariables(request, downstreamDestinationUriPath),
-                    request.getMethod(), ctx
+                    method, ctx
                 ),
                 customCircuitBreaker,
                 disableCircuitBreaker

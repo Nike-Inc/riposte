@@ -7,6 +7,8 @@ import com.nike.riposte.util.Matcher;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import io.netty.handler.codec.http.HttpMethod;
+
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -90,7 +92,7 @@ public class MissingRequiredContentExceptionTest {
     class TestEndpoint implements Endpoint<String> {
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }

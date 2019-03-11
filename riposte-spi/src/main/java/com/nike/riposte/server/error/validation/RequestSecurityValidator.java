@@ -3,6 +3,8 @@ package com.nike.riposte.server.error.validation;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Collection;
 
 /**
@@ -32,14 +34,17 @@ public interface RequestSecurityValidator {
     String REQUEST_SECURITY_ATTRIBUTE_KEY = "REQUEST_SECURITY_ATTRIBUTE";
 
     /**
-     * Performs security validation on the given request {@link RequestInfo}, for the given {@link Endpoint}.
+     * Performs security validation on the given request {@link RequestInfo}, for the given {@link Endpoint}. The
+     * given {@link Endpoint} will always be found in {@link #endpointsToValidate()}.
      */
-    void validateSecureRequestForEndpoint(RequestInfo<?> requestInfo, Endpoint<?> endpoint);
+    void validateSecureRequestForEndpoint(@NotNull RequestInfo<?> requestInfo, @NotNull Endpoint<?> endpoint);
 
     /**
-     * The collection of endpoints that should be run through this security validator.
+     * The collection of endpoints that should be run through this security validator. This should never return null -
+     * use an empty collection if you have no endpoints to validate (although in that case {@link
+     * #validateSecureRequestForEndpoint(RequestInfo, Endpoint)} would never be called).
      */
-    Collection<Endpoint<?>> endpointsToValidate();
+    @NotNull Collection<Endpoint<?>> endpointsToValidate();
 
     /**
      * @return true if this security validator is fast enough that {@link #validateSecureRequestForEndpoint(RequestInfo,

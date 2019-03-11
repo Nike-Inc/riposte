@@ -6,6 +6,7 @@ import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.util.AsyncNettyHelper;
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,8 @@ public class HelloWorldEndpoint extends StandardEndpoint<Void,String> {
     /**
      * @return The {@link Matcher} that maps incoming requests to this endpoint.
      */
-    public Matcher requestMatcher() {
+    @Override
+    public @NotNull Matcher requestMatcher() {
         return matcher;
     }
 
@@ -50,7 +52,11 @@ public class HelloWorldEndpoint extends StandardEndpoint<Void,String> {
      * incoming request.
      */
     @Override
-    public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+    public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+        @NotNull RequestInfo<Void> request,
+        @NotNull Executor longRunningTaskExecutor,
+        @NotNull ChannelHandlerContext ctx
+    ) {
         return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(
             () -> {
                 logger.debug("Processing Request...");

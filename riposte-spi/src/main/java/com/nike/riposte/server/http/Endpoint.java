@@ -7,6 +7,9 @@ import com.nike.riposte.util.Matcher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Interface for an endpoint. Concrete implementations must implement {@link #requestMatcher()} to define what requests
  * they want to handle. If your endpoint expects request body content (e.g. POST or PUT requests) then you'll probably
@@ -29,16 +32,16 @@ public interface Endpoint<I> {
      * @return The {@link Matcher} for determining whether this endpoint should be called for a given request. Concrete
      * implementations will usually just call and return {@link Matcher#match(String,
      * io.netty.handler.codec.http.HttpMethod...)} or one of the other common static construction helper methods in
-     * {@link Matcher}, although you can do whatever you want if you have custom requirements.
+     * {@link Matcher}, although you can do whatever you want if you have custom requirements. This cannot return null.
      */
-    Matcher requestMatcher();
+    @NotNull Matcher requestMatcher();
 
     /**
      * @return The overall timeout value in milliseconds that you want for this specific endpoint, or null if you want
      * to use the app-wide default timeout returned by {@link
      * ServerConfig#defaultCompletableFutureTimeoutInMillisForNonblockingEndpoints()}.
      */
-    default Long completableFutureTimeoutOverrideMillis() {
+    default @Nullable Long completableFutureTimeoutOverrideMillis() {
         // Return null by default so that the app-wide timeout value will be used unless you override this method.
         return null;
     }
@@ -61,7 +64,7 @@ public interface Endpoint<I> {
      * itself works - see the source code of the {@link TypeReference#TypeReference()} constructor for details ({@code
      * StandardEndpoint} does this if you want a more direct example).
      */
-    default TypeReference<I> requestContentType() {
+    default @Nullable TypeReference<I> requestContentType() {
         return null;
     }
 
@@ -71,7 +74,7 @@ public interface Endpoint<I> {
      * method must return true *and* {@link #requestContentType()} must return a non-null value (in order for the
      * content to be deserialized) if you want validation done on the content.
      */
-    default boolean isValidateRequestContent(@SuppressWarnings("UnusedParameters") RequestInfo<?> request) {
+    default boolean isValidateRequestContent(@NotNull RequestInfo<?> request) {
         return true;
     }
 
@@ -98,7 +101,7 @@ public interface Endpoint<I> {
      * should performance test your system to make sure this default will work for your payloads, and adjust what this
      * method returns if needed.
      */
-    default boolean shouldValidateAsynchronously(RequestInfo<?> request) {
+    default boolean shouldValidateAsynchronously(@NotNull RequestInfo<?> request) {
         return request.getRawContentLengthInBytes() > 50000;
     }
 
@@ -107,7 +110,8 @@ public interface Endpoint<I> {
      * endpoint, or null if you just want to use the default validation group. This is primarily used for validating the
      * same object type in different ways in different situations (e.g. JSR 303 validation groups).
      */
-    default Class<?>[] validationGroups(@SuppressWarnings("UnusedParameters") RequestInfo<?> request) {
+    @SuppressWarnings("unused")
+    default @Nullable Class<?>[] validationGroups(@NotNull RequestInfo<?> request) {
         return null;
     }
 
@@ -117,8 +121,7 @@ public interface Endpoint<I> {
      * this returns null then the {@link ServerConfig#defaultRequestContentDeserializer()}
      * will be used.
      */
-    default ObjectMapper customRequestContentDeserializer(
-        @SuppressWarnings("UnusedParameters") RequestInfo<?> request) {
+    default @Nullable ObjectMapper customRequestContentDeserializer(@NotNull RequestInfo<?> request) {
         return null;
     }
 
@@ -127,7 +130,8 @@ public interface Endpoint<I> {
      * can safely return null - if this returns null then the {@link ServerConfig#defaultResponseContentSerializer()}
      * will be used.
      */
-    default ObjectMapper customResponseContentSerializer(@SuppressWarnings("UnusedParameters") RequestInfo<?> request) {
+    @SuppressWarnings("unused")
+    default @Nullable ObjectMapper customResponseContentSerializer(@NotNull RequestInfo<?> request) {
         return null;
     }
 
@@ -135,11 +139,11 @@ public interface Endpoint<I> {
      * @return The max request size in bytes that you want to allow for this specific endpoint, or null if you want to
      * use the app-wide default max request size returned by {@link ServerConfig#maxRequestSizeInBytes()}.
      *
-     * If you would like to disable validation on this endpoint, return 0 or less.
+     * If you would like to disable max-size validation on this endpoint, return 0 or less.
      *
      * If you would like to default to the global configured limit, return null.
      */
-    default Integer maxRequestSizeInBytesOverride() {
+    default @Nullable Integer maxRequestSizeInBytesOverride() {
         // Return null by default so that the app-wide max request size will be used unless you override this method.
         return null;
     }
@@ -152,7 +156,7 @@ public interface Endpoint<I> {
      * RequestInfo#isCompleteRequestWithAllChunks()} will return false for the given request and all of the
      * get-content-related methods in the request will return null.
      */
-    default boolean isDecompressRequestPayloadAllowed(@SuppressWarnings("unused") RequestInfo<?> request) {
+    default boolean isDecompressRequestPayloadAllowed(@NotNull RequestInfo<?> request) {
         return true;
     }
 }

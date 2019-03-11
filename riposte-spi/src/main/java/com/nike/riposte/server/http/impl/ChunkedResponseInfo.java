@@ -1,5 +1,8 @@
 package com.nike.riposte.server.http.impl;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.charset.Charset;
 import java.util.Set;
 
@@ -20,12 +23,14 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
      * The "populate everything" constructor. It's recommended that you use the {@link ChunkedResponseInfoBuilder}
      * instead.
      */
-    public ChunkedResponseInfo(Integer httpStatusCode, HttpHeaders headers,
-                               String desiredContentWriterMimeType,
-                               Charset desiredContentWriterEncoding,
-                               Set<Cookie> cookies,
-                               boolean preventCompressedOutput) {
-
+    public ChunkedResponseInfo(
+        @Nullable Integer httpStatusCode,
+        @Nullable HttpHeaders headers,
+        @Nullable String desiredContentWriterMimeType,
+        @Nullable Charset desiredContentWriterEncoding,
+        @Nullable Set<Cookie> cookies,
+        boolean preventCompressedOutput
+    ) {
         super(httpStatusCode, headers, desiredContentWriterMimeType, desiredContentWriterEncoding, cookies,
               preventCompressedOutput);
     }
@@ -45,7 +50,7 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
     }
 
     @Override
-    public Void getContentForFullResponse() {
+    public @Nullable Void getContentForFullResponse() {
         throw new IllegalStateException(
             "Attempted to call getContentForFullResponse() when isChunkedResponse() is true. Always verify that "
             + "isChunkedResponse() returns false before calling this method."
@@ -53,7 +58,7 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
     }
 
     @Override
-    public void setContentForFullResponse(Void contentForFullResponse) {
+    public void setContentForFullResponse(@Nullable Void contentForFullResponse) {
         throw new IllegalStateException("isChunkedResponse() is true. You cannot add full response content to a "
                                         + "chunked response.");
     }
@@ -68,37 +73,41 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
         }
 
         @Override
-        public ChunkedResponseInfoBuilder withHttpStatusCode(Integer httpStatusCode) {
+        public @NotNull ChunkedResponseInfoBuilder withHttpStatusCode(@Nullable Integer httpStatusCode) {
             super.withHttpStatusCode(httpStatusCode);
             return this;
         }
 
         @Override
-        public ChunkedResponseInfoBuilder withHeaders(HttpHeaders headers) {
+        public @NotNull ChunkedResponseInfoBuilder withHeaders(@Nullable HttpHeaders headers) {
             super.withHeaders(headers);
             return this;
         }
 
         @Override
-        public ChunkedResponseInfoBuilder withDesiredContentWriterMimeType(String desiredContentWriterMimeType) {
+        public @NotNull ChunkedResponseInfoBuilder withDesiredContentWriterMimeType(
+            @Nullable String desiredContentWriterMimeType
+        ) {
             super.withDesiredContentWriterMimeType(desiredContentWriterMimeType);
             return this;
         }
 
         @Override
-        public ChunkedResponseInfoBuilder withDesiredContentWriterEncoding(Charset desiredContentWriterEncoding) {
+        public @NotNull ChunkedResponseInfoBuilder withDesiredContentWriterEncoding(
+            @Nullable Charset desiredContentWriterEncoding
+        ) {
             super.withDesiredContentWriterEncoding(desiredContentWriterEncoding);
             return this;
         }
 
         @Override
-        public ChunkedResponseInfoBuilder withCookies(Set<Cookie> cookies) {
+        public @NotNull ChunkedResponseInfoBuilder withCookies(@Nullable Set<Cookie> cookies) {
             super.withCookies(cookies);
             return this;
         }
 
         @Override
-        public ChunkedResponseInfoBuilder withPreventCompressedOutput(boolean preventCompressedOutput) {
+        public @NotNull ChunkedResponseInfoBuilder withPreventCompressedOutput(boolean preventCompressedOutput) {
             super.withPreventCompressedOutput(preventCompressedOutput);
             return this;
         }
@@ -106,7 +115,7 @@ public class ChunkedResponseInfo extends BaseResponseInfo<Void> {
         /**
          * @return A {@link ChunkedResponseInfo} setup with all the values contained in this builder.
          */
-        public ChunkedResponseInfo build() {
+        public @NotNull ChunkedResponseInfo build() {
             return new ChunkedResponseInfo(
                 getHttpStatusCode(),
                 getHeaders(),

@@ -21,6 +21,8 @@ import com.nike.riposte.util.Matcher;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -303,7 +305,11 @@ public class VerifyDecoderFailedResultIsHandledTest {
         public static final String RESPONSE_PAYLOAD = "basic-endpoint-" + UUID.randomUUID().toString();
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             //need to do some work in a future to force the DecoderException to bubble up and return a 400
             return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(() -> {
                 try {
@@ -315,7 +321,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -326,7 +332,11 @@ public class VerifyDecoderFailedResultIsHandledTest {
         public static final String RESPONSE_PAYLOAD = "downstream-endpoint-" + UUID.randomUUID().toString();
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             //need to do some work in a future to force the DecoderException to bubble up and return a 400
             return CompletableFuture.supplyAsync(supplierWithTracingAndMdc(() -> {
                 try {
@@ -338,7 +348,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -354,9 +364,11 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(RequestInfo<?> request,
-                                                                                                     Executor longRunningTaskExecutor,
-                                                                                                     ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<DownstreamRequestFirstChunkInfo> getDownstreamRequestFirstChunkInfo(
+            @NotNull RequestInfo<?> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     new DownstreamRequestFirstChunkInfo(
                             "127.0.0.1", downstreamPort, false,
@@ -366,7 +378,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH);
         }
     }
@@ -386,7 +398,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -396,7 +408,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public HttpRequestDecoderConfig httpRequestDecoderConfig() {
+        public @Nullable HttpRequestDecoderConfig httpRequestDecoderConfig() {
             return CUSTOM_REQUEST_DECODER_CONFIG;
         }
     }
@@ -416,7 +428,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -441,7 +453,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -451,7 +463,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
         }
 
         @Override
-        public HttpRequestDecoderConfig httpRequestDecoderConfig() {
+        public @Nullable HttpRequestDecoderConfig httpRequestDecoderConfig() {
             return CUSTOM_REQUEST_DECODER_CONFIG;
         }
     }

@@ -2,6 +2,7 @@ package com.nike.riposte.server.http;
 
 import com.nike.riposte.util.Matcher;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -28,12 +29,16 @@ public class StandardEndpointTest {
         // given
         StandardEndpoint<Void, String> defaultInstance = new StandardEndpoint<Void, String>() {
             @Override
-            public Matcher requestMatcher() {
+            public @NotNull Matcher requestMatcher() {
                 return null;
             }
 
             @Override
-            public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+            public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+                @NotNull RequestInfo<Void> request,
+                @NotNull Executor longRunningTaskExecutor,
+                @NotNull ChannelHandlerContext ctx
+            ) {
                 return null;
             }
         };
@@ -49,13 +54,16 @@ public class StandardEndpointTest {
         List<StandardEndpoint<String, ?>> stringInputInstances = Arrays.asList(
             new StandardEndpoint<String, String>() {
                 @Override
-                public Matcher requestMatcher() {
+                public @NotNull Matcher requestMatcher() {
                     return null;
                 }
 
                 @Override
-                public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor,
-                                                                       ChannelHandlerContext ctx) {
+                public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+                    @NotNull RequestInfo<String> request,
+                    @NotNull Executor longRunningTaskExecutor,
+                    @NotNull ChannelHandlerContext ctx
+                ) {
                     return null;
                 }
             },
@@ -78,13 +86,16 @@ public class StandardEndpointTest {
         List<StandardEndpoint<FooObject, ?>> fooObjectInputInstances = Arrays.asList(
             new StandardEndpoint<FooObject, String>() {
                 @Override
-                public Matcher requestMatcher() {
+                public @NotNull Matcher requestMatcher() {
                     return null;
                 }
 
                 @Override
-                public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<FooObject> request, Executor longRunningTaskExecutor,
-                                                                       ChannelHandlerContext ctx) {
+                public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+                    @NotNull RequestInfo<FooObject> request,
+                    @NotNull Executor longRunningTaskExecutor,
+                    @NotNull ChannelHandlerContext ctx
+                ) {
                     return null;
                 }
             },
@@ -107,13 +118,16 @@ public class StandardEndpointTest {
         List<StandardEndpoint<Void, ?>> voidInputInstances = Arrays.asList(
             new StandardEndpoint<Void, String>() {
                 @Override
-                public Matcher requestMatcher() {
+                public @NotNull Matcher requestMatcher() {
                     return null;
                 }
 
                 @Override
-                public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor,
-                                                                       ChannelHandlerContext ctx) {
+                public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+                    @NotNull RequestInfo<Void> request,
+                    @NotNull Executor longRunningTaskExecutor,
+                    @NotNull ChannelHandlerContext ctx
+                ) {
                     return null;
                 }
             },
@@ -136,13 +150,16 @@ public class StandardEndpointTest {
         List<StandardEndpoint> voidInputInstances = Arrays.asList(
             new StandardEndpoint() {
                 @Override
-                public Matcher requestMatcher() {
+                public @NotNull Matcher requestMatcher() {
                     return null;
                 }
 
                 @Override
-                public CompletableFuture<ResponseInfo> execute(RequestInfo request, Executor longRunningTaskExecutor,
-                                                                       ChannelHandlerContext ctx) {
+                public @NotNull CompletableFuture<ResponseInfo> execute(
+                    @NotNull RequestInfo request,
+                    @NotNull Executor longRunningTaskExecutor,
+                    @NotNull ChannelHandlerContext ctx
+                ) {
                     return null;
                 }
             },
@@ -183,64 +200,80 @@ public class StandardEndpointTest {
 
     private static class BasicGenericImpl<I, O> extends StandardEndpoint<I, O> {
         @Override
-        public CompletableFuture<ResponseInfo<O>> execute(RequestInfo<I> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<O>> execute(
+            @NotNull RequestInfo<I> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return null;
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }
 
     private static class BasicHardcodedFooImpl extends StandardEndpoint<FooObject, Void> {
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<FooObject> request, Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<FooObject> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return null;
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }
 
     private static class BasicHardcodedStringImpl extends StandardEndpoint<String, Void> {
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<String> request, Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<String> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return null;
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }
 
     private static class BasicHardcodedVoidImpl extends StandardEndpoint<Void, Void> {
         @Override
-        public CompletableFuture<ResponseInfo<Void>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Void>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return null;
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }
 
     private static class BasicHardcodedRawTypeImpl extends StandardEndpoint {
         @Override
-        public CompletableFuture<ResponseInfo> execute(RequestInfo request, Executor longRunningTaskExecutor,
-                                                             ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo> execute(
+            @NotNull RequestInfo request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return null;
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return null;
         }
     }

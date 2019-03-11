@@ -6,8 +6,11 @@ dependencies {
             "ch.qos.logback:logback-classic:$logbackVersion",
             "ch.qos.logback:logback-core:$logbackVersion"
     )
-
+    compileOnly(
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+    )
     testCompile (
+            "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion"

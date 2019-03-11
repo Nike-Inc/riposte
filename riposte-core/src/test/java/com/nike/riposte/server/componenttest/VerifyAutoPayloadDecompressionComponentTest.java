@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -289,7 +290,11 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         public static final String RESPONSE_PAYLOAD = "basic-endpoint-decompression-enabled-" + UUID.randomUUID().toString();
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                     ResponseInfo.newBuilder(RESPONSE_PAYLOAD)
                                 .withHeaders(generateDefaultResponseHeaders(request))
@@ -298,7 +303,7 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 
@@ -321,7 +326,11 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         public static final String RESPONSE_PAYLOAD = "basic-endpoint-decompression-disabled-" + UUID.randomUUID().toString();
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(RequestInfo<Void> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<Void> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             return CompletableFuture.completedFuture(
                 ResponseInfo.newBuilder(RESPONSE_PAYLOAD)
                             .withHeaders(generateDefaultResponseHeaders(request))
@@ -330,12 +339,12 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 
         @Override
-        public boolean isDecompressRequestPayloadAllowed(RequestInfo<?> request) {
+        public boolean isDecompressRequestPayloadAllowed(@NotNull RequestInfo<?> request) {
             return false;
         }
     }
@@ -347,8 +356,10 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         public static final String SOME_OBJ_FIELD_VALUE_HEADER_KEY = "some-obj-field-value";
 
         @Override
-        public CompletableFuture<ResponseInfo<String>> execute(
-            RequestInfo<SomeObj> request, Executor longRunningTaskExecutor, ChannelHandlerContext ctx
+        public @NotNull CompletableFuture<ResponseInfo<String>> execute(
+            @NotNull RequestInfo<SomeObj> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
         ) {
             return CompletableFuture.completedFuture(
                 ResponseInfo.newBuilder(RESPONSE_PAYLOAD)
@@ -361,7 +372,7 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(MATCHING_PATH, HttpMethod.POST);
         }
 
@@ -398,7 +409,7 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         }
 
         @Override
-        public boolean isDecompressRequestPayloadAllowed(RequestInfo request) {
+        public boolean isDecompressRequestPayloadAllowed(@NotNull RequestInfo request) {
             return true;
         }
     }
@@ -432,7 +443,7 @@ public class VerifyAutoPayloadDecompressionComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 

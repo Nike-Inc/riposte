@@ -1,11 +1,12 @@
 package com.nike.backstopper.handler.riposte;
 
-import com.nike.backstopper.handler.RequestInfoForLogging;
+import com.nike.backstopper.handler.RequestInfoForLogging.GetBodyException;
 import com.nike.internal.util.MapBuilder;
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
 
+import org.assertj.core.api.Assertions;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.internal.util.reflection.Whitebox;
@@ -21,12 +22,14 @@ import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -148,7 +151,7 @@ public class RequestInfoForLoggingRiposteAdapterTest {
     }
 
     @Test
-    public void getBody_delegates_to_request_getRawContent() throws RequestInfoForLogging.GetBodyException {
+    public void getBody_delegates_to_request_getRawContent() throws GetBodyException {
         // given
         String content = UUID.randomUUID().toString();
         doReturn(content).when(requestInfoSpy).getRawContent();
@@ -159,5 +162,36 @@ public class RequestInfoForLoggingRiposteAdapterTest {
         // then
         verify(requestInfoSpy).getRawContent();
         assertThat(result, is(content));
+    }
+
+    @Test
+    public void getBody_returns_empty_string_if_request_getRawContent_returns_null() throws GetBodyException {
+        // given
+        doReturn(null).when(requestInfoSpy).getRawContent();
+
+        // when
+        String result = adapter.getBody();
+
+        // then
+        verify(requestInfoSpy).getRawContent();
+        Assertions.assertThat(result)
+                  .isNotNull()
+                  .isEmpty();
+    }
+
+    @Test
+    public void getBody_throws_GetBodyException_if_request_getRawContent_throws_exception() {
+        // given
+        RuntimeException expectedCause = new RuntimeException("intentional test exception");
+        doThrow(expectedCause).when(requestInfoSpy).getRawContent();
+
+        // when
+        Throwable ex = catchThrowable(() -> adapter.getBody());
+
+        // then
+        verify(requestInfoSpy).getRawContent();
+        Assertions.assertThat(ex)
+                  .isInstanceOf(GetBodyException.class)
+                  .hasCause(expectedCause);
     }
 }

@@ -1,5 +1,8 @@
 package com.nike.riposte.server.http;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -101,8 +104,11 @@ public interface NonblockingEndpoint<I, O> extends Endpoint<I> {
      * pipeline manipulation. Just make sure you know *EXACTLY* what you're doing when you use it, otherwise you could
      * break your application in subtle ways without even realizing it.
      */
-    CompletableFuture<ResponseInfo<O>> execute(RequestInfo<I> request, Executor longRunningTaskExecutor,
-                                               ChannelHandlerContext ctx);
+    @NotNull CompletableFuture<ResponseInfo<O>> execute(
+        @NotNull RequestInfo<I> request,
+        @NotNull Executor longRunningTaskExecutor,
+        @NotNull ChannelHandlerContext ctx
+    );
 
     /**
      * @param request
@@ -116,7 +122,10 @@ public interface NonblockingEndpoint<I, O> extends Endpoint<I> {
      * special info based on the request you can do so.
      */
     @SuppressWarnings("UnusedParameters")
-    default Throwable getCustomTimeoutExceptionCause(RequestInfo<I> request, ChannelHandlerContext ctx) {
+    default @Nullable Throwable getCustomTimeoutExceptionCause(
+        @NotNull RequestInfo<I> request,
+        @NotNull ChannelHandlerContext ctx
+    ) {
         return null;
     }
 }

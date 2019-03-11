@@ -20,6 +20,8 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -343,7 +345,7 @@ public class MetricsComponentTest {
         }
 
         @Override
-        public Collection<Endpoint<?>> appEndpoints() {
+        public @NotNull Collection<@NotNull Endpoint<?>> appEndpoints() {
             return endpoints;
         }
 
@@ -353,13 +355,13 @@ public class MetricsComponentTest {
         }
 
         @Override
-        public CompletableFuture<AppInfo> appInfo() {
+        public @Nullable CompletableFuture<@Nullable AppInfo> appInfo() {
             return CompletableFuture
                 .completedFuture(new AppInfoImpl("someappid", "someenvironment", "us-west-2", "jenkins"));
         }
 
         @Override
-        public MetricsListener metricsListener() {
+        public @Nullable MetricsListener metricsListener() {
             return metricsListener;
         }
     }
@@ -389,9 +391,11 @@ public class MetricsComponentTest {
         private ExecutorService executor = Executors.newCachedThreadPool();
 
         @Override
-        public CompletableFuture<ResponseInfo<Map<String, String>>> execute(final RequestInfo<Object> request,
-                                                                            Executor longRunningTaskExecutor,
-                                                                            ChannelHandlerContext ctx) {
+        public @NotNull CompletableFuture<ResponseInfo<Map<String, String>>> execute(
+            @NotNull final RequestInfo<Object> request,
+            @NotNull Executor longRunningTaskExecutor,
+            @NotNull ChannelHandlerContext ctx
+        ) {
             String nettyWorkerThreadName = Thread.currentThread().getName();
             //nettyWorkerThreadsUsed.add(nettyWorkerThreadName);
             CompletableFuture<ResponseInfo<Map<String, String>>> result =
@@ -400,7 +404,7 @@ public class MetricsComponentTest {
         }
 
         @Override
-        public Matcher requestMatcher() {
+        public @NotNull Matcher requestMatcher() {
             return Matcher.match(NON_BLOCKING_MATCHING_PATH);
         }
 

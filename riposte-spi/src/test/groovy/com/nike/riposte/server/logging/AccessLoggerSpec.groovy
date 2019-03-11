@@ -5,6 +5,8 @@ import com.nike.riposte.server.http.RequestInfo
 import com.nike.riposte.server.http.ResponseInfo
 import com.nike.riposte.server.http.impl.FullResponseInfo
 import io.netty.handler.codec.http.*
+import org.jetbrains.annotations.NotNull
+import org.jetbrains.annotations.Nullable
 import spock.lang.Specification
 import spock.lang.Unroll
 import uk.org.lidalia.slf4jext.Level
@@ -14,8 +16,12 @@ import uk.org.lidalia.slf4jtest.TestLoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH
-import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING
+import static io.netty.handler.codec.http.HttpHeaderNames.ACCEPT
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE
+import static io.netty.handler.codec.http.HttpHeaderNames.REFERER
+import static io.netty.handler.codec.http.HttpHeaderNames.USER_AGENT
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH
+import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING
 
 class AccessLoggerSpec extends Specification {
 
@@ -27,8 +33,8 @@ class AccessLoggerSpec extends Specification {
     and: "we've mocked the request object"
       RequestInfo requestMock = Mock(RequestInfo)
       requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-      requestMock.getHeaders().get("Referer") >> "myReferer"
-      requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+      requestMock.getHeaders().get(REFERER) >> "myReferer"
+      requestMock.getHeaders().get(USER_AGENT) >> "myUserAgent"
       requestMock.getMethod() >> HttpMethod.GET
       requestMock.getUri() >> "/test"
       requestMock.getProtocolVersion() >> HttpVersion.HTTP_1_1
@@ -64,8 +70,8 @@ class AccessLoggerSpec extends Specification {
         and: "we've mocked the request object"
             RequestInfo requestMock = Mock(RequestInfo)
             requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-            requestMock.getHeaders().get("Referer") >> "myReferer"
-            requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+            requestMock.getHeaders().get(REFERER) >> "myReferer"
+            requestMock.getHeaders().get(USER_AGENT) >> "myUserAgent"
             requestMock.getMethod() >> HttpMethod.GET
             requestMock.getUri() >> "/test"
             requestMock.getProtocolVersion() >> HttpVersion.HTTP_1_1
@@ -83,15 +89,20 @@ class AccessLoggerSpec extends Specification {
     given: "the AccessLogger object that also returns some custom log message extras"
       AccessLogger accessLogger = new AccessLogger() {
           @Override
-          protected List<Pair<String, String>> customApplicationLogMessageExtras(RequestInfo<?> request, HttpResponse finalResponseObject, ResponseInfo responseInfo, Long elapsedTimeMillis) {
+          protected @Nullable List<Pair<String, String>> customApplicationLogMessageExtras(
+                  @NotNull RequestInfo<?> request,
+                  @Nullable HttpResponse finalResponseObject,
+                  @Nullable ResponseInfo responseInfo,
+                  @Nullable Long elapsedTimeMillis
+          ) {
               return Arrays.asList(Pair.of("foo", "bar"), Pair.of("whee", "yay"))
           }
       }
     and: "we've mocked the request object"
       HttpHeaders headersMock = Mock(DefaultHttpHeaders)
-      headersMock.get("Accept") >> "application/json"
-      headersMock.get("Content-Type") >> "application/json;charset=utf-8"
-      headersMock.get("Referer") >> "test"
+      headersMock.get(ACCEPT) >> "application/json"
+      headersMock.get(CONTENT_TYPE) >> "application/json;charset=utf-8"
+      headersMock.get(REFERER) >> "test"
       headersMock.get("X-B3-Sampled") >> "X-B3-SampledMock"
       headersMock.get("X-B3-SpanId") >> "X-B3-SpanIdMock"
       headersMock.get("X-B3-SpanName") >> "X-B3-SpanNameMock"
@@ -103,8 +114,8 @@ class AccessLoggerSpec extends Specification {
       requestMock.getRawContentLengthInBytes() >> 19
     and: "we've mocked the response object"
       HttpHeaders responseHeadersMock = Mock(HttpHeaders)
-      responseHeadersMock.get("Content-Length") >> "Content-LengthMock"
-      responseHeadersMock.get("Transfer-Encoding") >> "Transfer-EncodingMock"
+      responseHeadersMock.get(CONTENT_LENGTH) >> "Content-LengthMock"
+      responseHeadersMock.get(TRANSFER_ENCODING) >> "Transfer-EncodingMock"
       responseHeadersMock.get("X-B3-TraceId") >> "X-B3-TraceId-ResMock"
       responseHeadersMock.get("error_uid") >> "error_uidMock"
       ResponseInfo responseMock = new FullResponseInfo(null, 210, responseHeadersMock, null, null, null, false)
@@ -308,8 +319,8 @@ class AccessLoggerSpec extends Specification {
     and: "we've mocked the request object"
       RequestInfo requestMock = Mock(RequestInfo)
       requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-      requestMock.getHeaders().get("Referer") >> "myReferer"
-      requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+      requestMock.getHeaders().get(REFERER) >> "myReferer"
+      requestMock.getHeaders().get(USER_AGENT) >> "myUserAgent"
       requestMock.getMethod() >> HttpMethod.GET
       requestMock.getUri() >> "/test"
       requestMock.getProtocolVersion() >> HttpVersion.HTTP_1_1
@@ -329,8 +340,8 @@ class AccessLoggerSpec extends Specification {
     and: "we've mocked the request object"
       RequestInfo requestMock = Mock(RequestInfo)
       requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-      requestMock.getHeaders().get("Referer") >> "myReferer"
-      requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+      requestMock.getHeaders().get(REFERER) >> "myReferer"
+      requestMock.getHeaders().get(USER_AGENT) >> "myUserAgent"
       requestMock.getMethod() >> HttpMethod.GET
       requestMock.getUri() >> "/test"
       requestMock.getProtocolVersion() >> HttpVersion.HTTP_1_1
@@ -347,8 +358,8 @@ class AccessLoggerSpec extends Specification {
     and: "we've mocked the request object"
       RequestInfo requestMock = Mock(RequestInfo)
       requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-      requestMock.getHeaders().get("Referer") >> "myReferer"
-      requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+      requestMock.getHeaders().get(REFERER) >> "myReferer"
+      requestMock.getHeaders().get(USER_AGENT) >> "myUserAgent"
       requestMock.getMethod() >> null
       requestMock.getUri() >> "/test"
       requestMock.getProtocolVersion() >> HttpVersion.HTTP_1_1
@@ -367,8 +378,8 @@ class AccessLoggerSpec extends Specification {
     and: "we've mocked the request object"
       RequestInfo requestMock = Mock(RequestInfo)
       requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-      requestMock.getHeaders().get("Referer") >> "myReferer"
-      requestMock.getHeaders().get("User-Agent") >> "myUserAgent"
+      requestMock.getHeaders().get(REFERER) >> "myReferer"
+      requestMock.getHeaders().get(USER_AGENT) >> "myUserAgent"
       requestMock.getMethod() >> HttpMethod.GET
       requestMock.getUri() >> "/test"
       requestMock.getProtocolVersion() >> null
@@ -404,8 +415,8 @@ class AccessLoggerSpec extends Specification {
             AccessLogger accessLogger = new AccessLogger()
             RequestInfo requestMock = Mock(RequestInfo)
             requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-            requestMock.getHeaders().get("Referer") >> null
-            requestMock.getHeaders().get("User-Agent") >> null
+            requestMock.getHeaders().get(REFERER) >> null
+            requestMock.getHeaders().get(USER_AGENT) >> null
             ResponseInfo responseMock = new FullResponseInfo(null, null, null, null, null, null, false)
         when:
             String result = accessLogger.combinedLogFormatPrefix(requestMock, null, responseMock)
@@ -419,8 +430,8 @@ class AccessLoggerSpec extends Specification {
             accessLogger.getLocalIpAddress() >> { throw new UnknownHostException() }
             RequestInfo requestMock = Mock(RequestInfo)
             requestMock.getHeaders() >> Mock(DefaultHttpHeaders)
-            requestMock.getHeaders().get("Referer") >> null
-            requestMock.getHeaders().get("User-Agent") >> null
+            requestMock.getHeaders().get(REFERER) >> null
+            requestMock.getHeaders().get(USER_AGENT) >> null
             ResponseInfo responseMock = new FullResponseInfo(null, null, null, null, null, null, false)
         when:
             String result = accessLogger.combinedLogFormatPrefix(requestMock, null, responseMock)

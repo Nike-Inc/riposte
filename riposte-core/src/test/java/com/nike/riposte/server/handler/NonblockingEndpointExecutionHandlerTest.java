@@ -683,4 +683,23 @@ public class NonblockingEndpointExecutionHandlerTest {
         verify(ctxMock, times(0)).fireExceptionCaught(any(Throwable.class));
     }
 
+    @Test
+    public void doExecuteEndpointFunction_provides_friendly_exception_message_if_endpoint_execute_method_returns_null() {
+        // given
+        doReturn(null).when(endpointMock)
+                      .execute(any(RequestInfo.class), any(Executor.class), any(ChannelHandlerContext.class));
+
+        Function<Void, CompletableFuture<ResponseInfo<?>>> executeFunc = handlerSpy
+            .doExecuteEndpointFunction(requestInfo, endpointMock, null, ctxMock);
+
+        // when
+        Throwable ex = catchThrowable(() -> executeFunc.apply(null));
+
+        // then
+        verify(endpointMock).execute(requestInfo, longRunningTaskExecutorMock, ctxMock);
+        assertThat(ex)
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("NonblockingEndpoint.execute() cannot return null.");
+    }
+
 }

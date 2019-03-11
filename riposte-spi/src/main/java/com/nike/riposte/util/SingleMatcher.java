@@ -2,6 +2,8 @@ package com.nike.riposte.util;
 
 import com.nike.riposte.server.http.RequestInfo;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -28,22 +30,28 @@ public class SingleMatcher implements Matcher {
 
     protected static final AntPathMatcher pathParamExtractor = new AntPathMatcher();
 
-    protected final Collection<HttpMethod> matchingMethods;
-    protected final String matchingPathTemplate;
+    protected final @NotNull Collection<HttpMethod> matchingMethods;
+    protected final @NotNull String matchingPathTemplate;
     protected final boolean matchAllMethods;
-    protected final Collection<String> matchingPathTemplates;
+    protected final @NotNull Collection<String> matchingPathTemplates;
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-    protected final Optional<String> cachedMatchesPathResponse;
+    protected final @NotNull Optional<String> cachedMatchesPathResponse;
 
-    public SingleMatcher(String matchingPathTemplate, Collection<HttpMethod> matchingMethods, boolean matchAllMethods) {
+    @SuppressWarnings("ConstantConditions")
+    public SingleMatcher(
+        @NotNull String matchingPathTemplate,
+        @NotNull Collection<HttpMethod> matchingMethods,
+        boolean matchAllMethods
+    ) {
         // If the path template doesn't start with a forward slash it has no hope of ever matching any incoming request.
         if (matchingPathTemplate == null || !matchingPathTemplate.startsWith("/")) {
             throw new IllegalArgumentException("matchingPathTemplate cannot be null and must start with a forward "
                                                + "slash '/'");
         }
 
-        if (matchingMethods == null)
+        if (matchingMethods == null) {
             throw new IllegalArgumentException("matchingMethods cannot be null");
+        }
 
         matchingPathTemplate = MatcherUtil.stripEndSlash(matchingPathTemplate);
 
@@ -58,14 +66,18 @@ public class SingleMatcher implements Matcher {
      * @return A new single matcher with the given path template that matches all HTTP methods ({@link
      * #isMatchAllMethods()} will return true).
      */
-    public static SingleMatcher match(String matchingPathTemplate) {
+    public static @NotNull SingleMatcher match(@NotNull String matchingPathTemplate) {
         return new SingleMatcher(matchingPathTemplate, Collections.emptyList(), true);
     }
 
     /**
      * @return A new single matcher with the given path template that matches the given HTTP methods.
      */
-    public static SingleMatcher match(String matchingPathTemplate, HttpMethod... matchingMethods) {
+    public static @NotNull SingleMatcher match(
+        @NotNull String matchingPathTemplate,
+        @NotNull HttpMethod... matchingMethods
+    ) {
+        //noinspection ConstantConditions
         if (matchingMethods == null || matchingMethods.length == 0) {
             throw new IllegalArgumentException("matchingMethods cannot be null or empty. If you want to match all "
                                                + "methods use the single-arg match(String) method.");
@@ -77,7 +89,11 @@ public class SingleMatcher implements Matcher {
     /**
      * @return A new single matcher with the given path template that matches the given HTTP methods.
      */
-    public static SingleMatcher match(String matchingPathTemplate, Collection<HttpMethod> matchingMethods) {
+    public static @NotNull SingleMatcher match(
+        @NotNull String matchingPathTemplate,
+        @NotNull Collection<HttpMethod> matchingMethods
+    ) {
+        //noinspection ConstantConditions
         if (matchingMethods == null || matchingMethods.isEmpty()) {
             throw new IllegalArgumentException("matchingMethods cannot be null or empty. If you want to match all "
                                                + "methods use the single-arg match(String) method.");
@@ -89,14 +105,14 @@ public class SingleMatcher implements Matcher {
     /**
      * {@inheritDoc}
      */
-    public Collection<HttpMethod> matchingMethods() {
+    public @NotNull Collection<HttpMethod> matchingMethods() {
         return matchingMethods;
     }
 
     /**
      * {@inheritDoc}
      */
-    public Collection<String> matchingPathTemplates() {
+    public @NotNull Collection<String> matchingPathTemplates() {
         return matchingPathTemplates;
     }
 
@@ -110,7 +126,8 @@ public class SingleMatcher implements Matcher {
     /**
      * {@inheritDoc}
      */
-    public Optional<String> matchesPath(RequestInfo<?> request) {
+    public @NotNull Optional<String> matchesPath(@NotNull RequestInfo<?> request) {
+        //noinspection ConstantConditions
         if (request == null || request.getPath() == null)
             return Optional.empty();
 
@@ -128,11 +145,11 @@ public class SingleMatcher implements Matcher {
     /**
      * {@inheritDoc}
      */
-    public boolean matchesMethod(RequestInfo<?> request) {
+    public boolean matchesMethod(@NotNull RequestInfo<?> request) {
         if (matchAllMethods)
             return true;
 
-        //noinspection SimplifiableIfStatement
+        //noinspection SimplifiableIfStatement,ConstantConditions
         if (request == null || request.getMethod() == null)
             return false;
 
