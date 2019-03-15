@@ -36,13 +36,16 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
 
 import io.netty.bootstrap.Bootstrap;
@@ -88,6 +91,7 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
@@ -124,8 +128,10 @@ public class StreamingAsyncHttpClient {
     public static final String DOWNSTREAM_CALL_TIMEOUT_HANDLER_NAME = "downstreamCallTimeoutHandler";
     public static final String DEBUG_LOGGER_HANDLER_NAME = "debugLoggerHandler";
     private static final Logger logger = LoggerFactory.getLogger(StreamingAsyncHttpClient.class);
+    public static final String HTTPS = "HTTPS";
     private volatile ChannelPoolMap<InetSocketAddress, SimpleChannelPool> poolMap;
     private SslContext clientSslCtx;
+    private SslContext insecureSslCtx;
     private final boolean debugChannelLifecycleLoggingEnabled;
     private final long idleChannelTimeoutMillis;
     private final int downstreamConnectionTimeoutMillis;
@@ -810,7 +816,7 @@ public class StreamingAsyncHttpClient {
                         lastChunkSentDownstreamHolder.heldObject = false;
                         //noinspection ConstantConditions
                         prepChannelForDownstreamCall(
-                            pool, ch, callback, distributedSpanStackToUse, mdcContextToUse, isSecureHttpsCall,
+                            downstreamHost, downstreamPort, pool, ch, callback, distributedSpanStackToUse, mdcContextToUse, isSecureHttpsCall,
                             relaxedHttpsValidation, performSubSpanAroundDownstreamCalls, downstreamCallTimeoutMillis,
                             callActiveHolder, lastChunkSentDownstreamHolder, proxyRouterProcessingState,
                             spanForDownstreamCall
@@ -892,11 +898,21 @@ public class StreamingAsyncHttpClient {
     }
 
     protected void prepChannelForDownstreamCall(
-        ChannelPool pool, Channel ch, StreamingCallback callback, Deque<Span> distributedSpanStackToUse,
-        Map<String, String> mdcContextToUse, boolean isSecureHttpsCall, boolean relaxedHttpsValidation,
-        boolean performSubSpanAroundDownstreamCalls, long downstreamCallTimeoutMillis,
-        ObjectHolder<Boolean> callActiveHolder, ObjectHolder<Boolean> lastChunkSentDownstreamHolder,
-        ProxyRouterProcessingState proxyRouterProcessingState, @Nullable Span spanForDownstreamCall
+        String downstreamHost,
+        int downstreamPort,
+        ChannelPool pool,
+        Channel ch,
+        StreamingCallback callback,
+        Deque<Span> distributedSpanStackToUse,
+        Map<String, String> mdcContextToUse,
+        boolean isSecureHttpsCall,
+        boolean relaxedHttpsValidation,
+        boolean performSubSpanAroundDownstreamCalls,
+        long downstreamCallTimeoutMillis,
+        ObjectHolder<Boolean> callActiveHolder,
+        ObjectHolder<Boolean> lastChunkSentDownstreamHolder,
+        ProxyRouterProcessingState proxyRouterProcessingState,
+        @Nullable Span spanForDownstreamCall
     ) throws SSLException, NoSuchAlgorithmException, KeyStoreException {
 
         ChannelHandler chunkSenderHandler = new SimpleChannelInboundHandler<HttpObject>() {
@@ -1139,28 +1155,66 @@ public class StreamingAsyncHttpClient {
         );
 
         if (isSecureHttpsCall) {
-            // SSL call. Make sure we add the SSL handler if necessary.
-            if (!registeredHandlerNames.contains(SSL_HANDLER_NAME)) {
+            // Check and see if there's already an existing SslHandler in the pipeline. If it's pointed at the same
+            //      host/port we need for this call, then we can leave it alone and don't need to create a new one.
+            boolean requiresNewSslHandler = true;
+            if (registeredHandlerNames.contains(SSL_HANDLER_NAME)) {
+                SslHandler existingSslHandler = (SslHandler) p.get(SSL_HANDLER_NAME);
+                SSLEngine existingSslEngine = existingSslHandler.engine();
+                if (Objects.equals(downstreamHost, existingSslEngine.getPeerHost())
+                    && Objects.equals(downstreamPort, existingSslEngine.getPeerPort())
+                ) {
+                    // The existing SslHandler's SslEngine is pointed at the correct host/port. We don't need to
+                    //      add a new one.
+                    requiresNewSslHandler = false;
+                }
+                else {
+                    // The existing SslHandler's SslEngine is *not* pointed at the correct host/port. We need a new one,
+                    //      so remove the old one.
+                    p.remove(SSL_HANDLER_NAME);
+                }
+            }
+
+            if (requiresNewSslHandler) {
+                // SSL call and we need to add a SslHandler. Create the general-purpose reusable SslContexts if needed.
                 if (clientSslCtx == null) {
-                    if (relaxedHttpsValidation) {
-                        clientSslCtx =
-                            SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build();
-                    }
-                    else {
-                        TrustManagerFactory tmf =
-                            TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                        tmf.init((KeyStore) null);
-                        clientSslCtx = SslContextBuilder.forClient().trustManager(tmf).build();
-                    }
+                    TrustManagerFactory tmf = TrustManagerFactory.getInstance(
+                        TrustManagerFactory.getDefaultAlgorithm()
+                    );
+                    tmf.init((KeyStore) null);
+
+                    clientSslCtx = SslContextBuilder
+                        .forClient()
+                        .trustManager(tmf)
+                        .build();
                 }
 
-                p.addAfter(DOWNSTREAM_CALL_TIMEOUT_HANDLER_NAME, SSL_HANDLER_NAME, clientSslCtx.newHandler(ch.alloc()));
+                if (insecureSslCtx == null) {
+                    insecureSslCtx = SslContextBuilder
+                        .forClient()
+                        .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                        .build();
+                }
+
+                // Figure out which SslContext to use for this call.
+                SslContext sslCtxToUse = (relaxedHttpsValidation) ? insecureSslCtx : clientSslCtx;
+
+                // Create the SslHandler and configure the SslEngine
+                // as per the javadocs for SslContext.newHandler(ByteBufAllocator, String, int).
+                SslHandler sslHandler = sslCtxToUse.newHandler(ch.alloc(), downstreamHost, downstreamPort);
+                SSLEngine sslEngine = sslHandler.engine();
+                SSLParameters sslParameters = sslEngine.getSSLParameters();
+                sslParameters.setEndpointIdentificationAlgorithm(HTTPS);
+                sslEngine.setSSLParameters(sslParameters);
+                // Add the SslHandler to the pipeline in the correct location.
+                p.addAfter(DOWNSTREAM_CALL_TIMEOUT_HANDLER_NAME, SSL_HANDLER_NAME, sslHandler);
             }
         }
         else {
             // Not an SSL call. Remove the SSL handler if it's there.
-            if (registeredHandlerNames.contains(SSL_HANDLER_NAME))
+            if (registeredHandlerNames.contains(SSL_HANDLER_NAME)) {
                 p.remove(SSL_HANDLER_NAME);
+            }
         }
 
         // The HttpClientCodec handler deals with HTTP codec stuff so you don't have to. Set it up if it hasn't already
