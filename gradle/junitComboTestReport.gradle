@@ -10,7 +10,7 @@ subprojects {
     test {
         reports.html.enabled = true
         reports.junitXml.enabled = true
-        reports.junitXml.destination = rootProject.test.reports.junitXml.destination
+        reports.junitXml.destination = "${rootProject.test.reports.junitXml.destination}/${project.name}"
     }
     // Tell testReport to run after the tests run
     test.finalizedBy(testReport)
