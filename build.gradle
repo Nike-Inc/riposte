@@ -4,11 +4,6 @@ buildscript {
         jcenter()
     }
     dependencies {
-        // STUFF FOR JACOCO
-        classpath 'com.palantir:jacoco-coverage:0.4.0'
-        // jacoco-coverage blows up unless you specify guava dependency
-        classpath 'com.google.guava:guava:18.0'
-
         // STUFF FOR BINTRAY
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.6'
     }
@@ -131,17 +126,39 @@ ext {
     awsS3libVersion = '1.9.40'
 
     // JACOCO PROPERTIES
-    jacocoToolVersion = '0.7.7.201606060606'
-    // Anything in this jacocoExclusions list will be excluded from coverage reports.
+    jacocoToolVersion = '0.8.3'
+    // Anything in this jacocoExclusions list will be excluded from coverage reports. The format is paths to class
+    //      files, with wildcards allowed. e.g.: jacocoExclusions = [ "com/nike/Foo.class", "**/Bar*.*" ]
     jacocoExclusions = []
     jacocoCoverageThresholdSetup = {
-        configure(subprojects.findAll { !it.name.startsWith("sample") }) {
-            jacocoCoverage {
-                // Enforce minimum code coverage. See https://github.com/palantir/gradle-jacoco-coverage for the full list of options.
-                reportThreshold 0.8, INSTRUCTION
-                reportThreshold 0.5, BRANCH
+        configure(subprojects.findAll { isSubprojectIncludedInJacocoReports(it) }) {
+            // Configure the minimum code coverage rules.
+            jacocoTestCoverageVerification { JacocoCoverageVerification v ->
+                violationRules {
+                    rule { JacocoViolationRule r ->
+                        enabled = true
+                        limit {
+                            minimum = 0.8
+                            counter = "INSTRUCTION"
+                        }
+
+                    }
+
+                    rule { JacocoViolationRule r ->
+                        enabled = true
+                        limit {
+                            minimum = 0.5
+                            counter = "BRANCH"
+                        }
+                    }
+                }
             }
         }
+    }
+    // Configure which subprojects we're doing jacoco for.
+    isSubprojectIncludedInJacocoReports = { Project subProj ->
+        // For this repo we'll include everything that's not a sample.
+        return !subProj.name.startsWith("sample")
     }
 
     // BINTRAY STUFF
