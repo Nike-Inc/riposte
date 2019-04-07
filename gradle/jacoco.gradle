@@ -72,6 +72,13 @@ def subprojectsToIncludeForJacocoComboReport(Set<Project> origSubprojects) {
 //noinspection GroovyAssignabilityCheck
 task jacocoRootReport(type: JacocoReport) {
     def subprojectsToInclude = subprojectsToIncludeForJacocoComboReport(subprojects)
+
+    // This can only run after all the subprojects' test and jacocoTestReport tasks.
+    //      It feels like we should only have to specify jacocoTestReport since those run after tests anyway,
+    //      but it doesn't appear to be honored that way when running the gradle build with the --parallel flag.
+    mustRunAfter subprojectsToInclude*.test
+    mustRunAfter subprojectsToInclude*.jacocoTestReport
+
     additionalSourceDirs.from(files(subprojectsToInclude.sourceSets.main.allSource.srcDirs))
     sourceDirectories.from(files(subprojectsToInclude.sourceSets.main.allSource.srcDirs))
     classDirectories.from(files(subprojectsToInclude.sourceSets.main.output))
