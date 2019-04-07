@@ -18,9 +18,9 @@ ext {
 // Tell subprojects to generate jacoco reports.
 subprojects {
     jacocoTestReport {
-        additionalSourceDirs = files(sourceSets.main.allSource.srcDirs)
-        sourceDirectories = files(sourceSets.main.allSource.srcDirs)
-        classDirectories =  files(sourceSets.main.output)
+        additionalSourceDirs.from(files(sourceSets.main.allSource.srcDirs))
+        sourceDirectories.from(files(sourceSets.main.allSource.srcDirs))
+        classDirectories.from(files(sourceSets.main.output))
         reports {
             html.enabled = true
             xml.enabled = true
@@ -28,9 +28,11 @@ subprojects {
         }
         afterEvaluate {
             //noinspection GroovyAssignabilityCheck
-            classDirectories = files(classDirectories.files.collect {
-                fileTree(dir: it, exclude: jacocoExclusions)
-            })
+            classDirectories.setFrom(
+                    files(classDirectories.files.collect {
+                        fileTree(dir: it, exclude: jacocoExclusions)
+                    })
+            )
         }
 
     }
@@ -40,9 +42,11 @@ subprojects {
         //      exclusions here.
         afterEvaluate {
             //noinspection GroovyAssignabilityCheck
-            classDirectories = files(classDirectories.files.collect {
-                fileTree(dir: it, exclude: jacocoExclusions)
-            })
+            classDirectories.setFrom(
+                    files(classDirectories.files.collect {
+                        fileTree(dir: it, exclude: jacocoExclusions)
+                    })
+            )
         }
     }
 
@@ -68,10 +72,10 @@ def subprojectsToIncludeForJacocoComboReport(Set<Project> origSubprojects) {
 //noinspection GroovyAssignabilityCheck
 task jacocoRootReport(type: JacocoReport) {
     def subprojectsToInclude = subprojectsToIncludeForJacocoComboReport(subprojects)
-    additionalSourceDirs = files(subprojectsToInclude.sourceSets.main.allSource.srcDirs)
-    sourceDirectories = files(subprojectsToInclude.sourceSets.main.allSource.srcDirs)
-    classDirectories =  files(subprojectsToInclude.sourceSets.main.output)
-    executionData = files(subprojectsToInclude.jacocoTestReport.executionData)
+    additionalSourceDirs.from(files(subprojectsToInclude.sourceSets.main.allSource.srcDirs))
+    sourceDirectories.from(files(subprojectsToInclude.sourceSets.main.allSource.srcDirs))
+    classDirectories.from(files(subprojectsToInclude.sourceSets.main.output))
+    executionData.from(files(subprojectsToInclude.jacocoTestReport.executionData))
     reports {
         html.enabled = true
         xml.enabled = true
@@ -79,17 +83,21 @@ task jacocoRootReport(type: JacocoReport) {
     }
     afterEvaluate {
         //noinspection GroovyAssignabilityCheck
-        classDirectories = files(classDirectories.files.collect {
-            fileTree(dir: it, exclude: jacocoExclusions)
-        })
+        classDirectories.setFrom(
+                files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: jacocoExclusions)
+                })
+        )
     }
     onlyIf = {
         true
     }
     doFirst {
-        executionData = files(executionData.findAll {
-            it.exists()
-        })
+        executionData.from(
+                files(executionData.findAll {
+                    it.exists()
+                })
+        )
     }
 }
 
