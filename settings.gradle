@@ -10,6 +10,7 @@ include "riposte-spi",
         "riposte-metrics-codahale",
         "riposte-metrics-codahale-signalfx",
         "riposte-async-http-client",
+        "riposte-async-http-client2",
         "riposte-service-registration-eureka",
         "samples:sample-1-helloworld",
         "samples:sample-2-kotlin-todoservice"
