@@ -8,6 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.17.x` Releases - [0.17.0](#0170)
 - `0.16.x` Releases - [0.16.0](#0160)
 - `0.15.x` Releases - [0.15.0](#0150)
 - `0.14.x` Releases - [0.14.0](#0140)
@@ -17,6 +18,45 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.17.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.17.0)
+
+Released on 2019-06-04.
+
+### Fixed
+
+- Fixed `ProxyRouterEndpoint` to handle SSL connections more correctly. This fixes errors received when talking to 
+servers with certain types of certificates.
+    + Fixed by [Robert Abeyta][contrib_rabeyta] in pull request [#121](https://github.com/Nike-Inc/riposte/pull/121).
+
+### Added
+
+- Added a new `riposte-async-http-client2` module. This is an update to the old `riposte-async-http-client` module
+(which is now deprecated). The old module relied on the 
+[Ning AsyncHttpClient](https://github.com/ning/async-http-client) - the new module relies on the new 
+[Async Http Client](https://github.com/AsyncHttpClient/async-http-client), which is the continuation of the old Ning
+project. Usage should be almost identical to the old `riposte-async-http-client`. 
+    + Added by [Robert Abeyta][contrib_rabeyta] in pull request [#122](https://github.com/Nike-Inc/riposte/pull/122).
+
+### Updated
+
+- Updated some library dependencies:
+    + SLF4J `1.7.21` -> `1.7.26`
+    + Logback `1.1.7` -> `1.2.3`
+    + Wingtips `0.18.1` -> `0.19.1`
+    + Backstopper `0.11.4` -> `0.11.5`
+    + Jackson `2.8.9` -> `2.9.9`
+    + Guice `4.0` -> `4.2.2`
+    + RestAssured `3.0.2` -> `3.3.0`
+    + Apache Commons IO `2.4` -> `2.6`
+    + Groovy `2.5.6` -> `2.5.7`
+    + AssertJ `3.5.2` -> `3.12.2`
+    + Updated by [Robert Abeyta][contrib_rabeyta] in pull request [#123](https://github.com/Nike-Inc/riposte/pull/123).
+
+### Project infrastructure
+
+- Updated gradle to 5.4.1 and got rid of reliance on plugins for console summaries.
+    + Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#124](https://github.com/Nike-Inc/riposte/pull/124).
 
 ## [0.16.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.16.0)
 
