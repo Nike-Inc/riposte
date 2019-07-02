@@ -17,6 +17,7 @@ import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
 
@@ -488,7 +489,7 @@ public class AsyncHttpClientHelperTest {
                 assertThat(subspan.getTraceId()).isEqualTo(initialSpan.getTraceId());
                 assertThat(subspan.getParentSpanId()).isEqualTo(initialSpan.getSpanId());
             }
-            assertThat(achwtams.mdcContextToUse.get(Tracer.TRACE_ID_MDC_KEY)).isEqualTo(subspan.getTraceId());
+            assertThat(achwtams.mdcContextToUse.get(SpanFieldForLoggerMdc.TRACE_ID.mdcKey)).isEqualTo(subspan.getTraceId());
         }
         else {
             assertThat(achwtams.distributedTraceStackToUse).isSameAs(initialSpanStack);

@@ -1,21 +1,5 @@
 package com.nike.riposte.client.asynchttp;
 
-import static com.nike.wingtips.http.HttpRequestTracingUtils.convertSampleableBooleanToExpectedB3Value;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
-
 import com.nike.fastbreak.CircuitBreaker;
 import com.nike.fastbreak.CircuitBreaker.ManualModeTask;
 import com.nike.fastbreak.CircuitBreakerDelegate;
@@ -32,29 +16,13 @@ import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
+
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.EventLoop;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.resolver.NameResolver;
-import io.netty.resolver.RoundRobinInetAddressResolver;
-import io.netty.util.Attribute;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+
 import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.BoundRequestBuilder;
@@ -71,6 +39,43 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.Whitebox;
 import org.slf4j.Logger;
 import org.slf4j.MDC;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.EventLoop;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.resolver.NameResolver;
+import io.netty.resolver.RoundRobinInetAddressResolver;
+import io.netty.util.Attribute;
+
+import static com.nike.wingtips.http.HttpRequestTracingUtils.convertSampleableBooleanToExpectedB3Value;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 /**
  * Tests the functionality of {@link AsyncHttpClientHelper}.
@@ -533,7 +538,7 @@ public class AsyncHttpClientHelperTest {
                 assertThat(subspan.getTraceId()).isEqualTo(initialSpan.getTraceId());
                 assertThat(subspan.getParentSpanId()).isEqualTo(initialSpan.getSpanId());
             }
-            assertThat(achwtams.mdcContextToUse.get(Tracer.TRACE_ID_MDC_KEY)).isEqualTo(subspan.getTraceId());
+            assertThat(achwtams.mdcContextToUse.get(SpanFieldForLoggerMdc.TRACE_ID.mdcKey)).isEqualTo(subspan.getTraceId());
         }
         else {
             assertThat(achwtams.distributedTraceStackToUse).isSameAs(initialSpanStack);

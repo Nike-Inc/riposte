@@ -18,6 +18,7 @@ import com.nike.riposte.util.asynchelperwrapper.BiConsumerWithTracingAndMdcSuppo
 import com.nike.riposte.util.asynchelperwrapper.RunnableWithTracingAndMdcSupport;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 import com.nike.wingtips.util.TracingState;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
@@ -156,6 +157,8 @@ public class NonblockingEndpointExecutionHandlerTest {
     private void resetTracingAndMdc() {
         MDC.clear();
         Tracer.getInstance().unregisterFromThread();
+        Tracer.getInstance().removeAllSpanLifecycleListeners();
+        Tracer.getInstance().setSpanFieldsForLoggerMdc(SpanFieldForLoggerMdc.TRACE_ID);
     }
 
     @Test
@@ -449,7 +452,6 @@ public class NonblockingEndpointExecutionHandlerTest {
         Tracer.getInstance().registerWithThread(new ArrayDeque<>(Collections.singleton(spanMock)));
         assertThat(Tracer.getInstance().getCurrentSpan()).isEqualTo(spanMock);
         verify(spanMock).getTraceId(); // Internal Tracer stuff
-        verify(spanMock).toJSON();     // Internal Tracer stuff
 
         TracingState tracingStateForTest = TracingState.getCurrentThreadTracingState();
         doReturn(tracingStateForTest.getLeft()).when(stateMock).getDistributedTraceStack();
@@ -474,7 +476,6 @@ public class NonblockingEndpointExecutionHandlerTest {
             );
 
             verify(spanMock, atLeastOnce()).getTraceId(); // Internal Tracer stuff
-            verify(spanMock, atLeastOnce()).toJSON();     // Internal Tracer stuff
             verifyNoMoreInteractions(spanMock);
         }
 

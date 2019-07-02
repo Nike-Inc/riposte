@@ -18,6 +18,7 @@ import com.nike.riposte.util.asynchelperwrapper.RunnableWithTracingAndMdcSupport
 import com.nike.riposte.util.asynchelperwrapper.SupplierWithTracingAndMdcSupport;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
@@ -629,8 +630,7 @@ public class AsyncNettyHelperTest {
                 // MDC will have been populated with tracing info.
                 expectedMdcInfo = new HashMap<>();
                 Span expectedSpan = spanStackForLinking.peek();
-                expectedMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, expectedSpan.getTraceId());
-                expectedMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, expectedSpan.toJSON());
+                expectedMdcInfo.put(SpanFieldForLoggerMdc.TRACE_ID.mdcKey, expectedSpan.getTraceId());
             }
         }
         else {
@@ -638,8 +638,7 @@ public class AsyncNettyHelperTest {
             expectedMdcInfo = new HashMap<>(mdcInfoForLinking);
             if (useNullSpanStack) {
                 // In the case of a null span stack, the trace info would be removed from the MDC.
-                expectedMdcInfo.remove(Tracer.TRACE_ID_MDC_KEY);
-                expectedMdcInfo.remove(Tracer.SPAN_JSON_MDC_KEY);
+                expectedMdcInfo.remove(SpanFieldForLoggerMdc.TRACE_ID.mdcKey);
             }
         }
 
@@ -734,8 +733,7 @@ public class AsyncNettyHelperTest {
                 // MDC will have been populated with tracing info.
                 expectedMdcInfo = new HashMap<>();
                 Span expectedSpan = spanStackForLinking.peek();
-                expectedMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, expectedSpan.getTraceId());
-                expectedMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, expectedSpan.toJSON());
+                expectedMdcInfo.put(SpanFieldForLoggerMdc.TRACE_ID.mdcKey, expectedSpan.getTraceId());
             }
         }
         else {

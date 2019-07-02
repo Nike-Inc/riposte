@@ -6,6 +6,7 @@ import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcS
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 
 import org.junit.After;
 import org.junit.Before;
@@ -66,6 +67,8 @@ public class BaseInboundHandlerWithTracingAndMdcSupportTest {
     private void resetTracingAndMdc() {
         MDC.clear();
         Tracer.getInstance().completeRequestSpan();
+        Tracer.getInstance().removeAllSpanLifecycleListeners();
+        Tracer.getInstance().setSpanFieldsForLoggerMdc(SpanFieldForLoggerMdc.TRACE_ID);
     }
 
     @Before
@@ -123,8 +126,7 @@ public class BaseInboundHandlerWithTracingAndMdcSupportTest {
 
         // then
         // Tracer adds some stuff to the MDC
-        stateMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, span.getTraceId());
-        stateMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, span.toJSON());
+        stateMdcInfo.put(SpanFieldForLoggerMdc.TRACE_ID.mdcKey, span.getTraceId());
         assertThat(MDC.getCopyOfContextMap(), is(stateMdcInfo));
         assertThat(Tracer.getInstance().getCurrentSpanStackCopy(), is(stateTraceStack));
     }
@@ -159,8 +161,7 @@ public class BaseInboundHandlerWithTracingAndMdcSupportTest {
         origTraceStack.add(origSpan);
         Map<String, String> origMdcInfo = new HashMap<>();
         origMdcInfo.put(UUID.randomUUID().toString(), UUID.randomUUID().toString());
-        origMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, origSpan.getTraceId());
-        origMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, origSpan.toJSON());
+        origMdcInfo.put(SpanFieldForLoggerMdc.TRACE_ID.mdcKey, origSpan.getTraceId());
         Pair<Deque<Span>, Map<String, String>> origThreadInfo = Pair.of(origTraceStack, origMdcInfo);
 
         // when
@@ -180,8 +181,7 @@ public class BaseInboundHandlerWithTracingAndMdcSupportTest {
         origTraceStack.add(origSpan);
         Map<String, String> origMdcInfo = new HashMap<>();
         origMdcInfo.put(UUID.randomUUID().toString(), UUID.randomUUID().toString());
-        origMdcInfo.put(Tracer.TRACE_ID_MDC_KEY, origSpan.getTraceId());
-        origMdcInfo.put(Tracer.SPAN_JSON_MDC_KEY, origSpan.toJSON());
+        origMdcInfo.put(SpanFieldForLoggerMdc.TRACE_ID.mdcKey, origSpan.getTraceId());
         Pair<Deque<Span>, Map<String, String>> origThreadInfo = Pair.of(origTraceStack, origMdcInfo);
 
         // "Current" state
