@@ -2,6 +2,7 @@ package com.nike.riposte.server.componenttest;
 
 import com.nike.riposte.server.Server;
 import com.nike.riposte.server.config.ServerConfig;
+import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.ProxyRouterEndpoint;
 import com.nike.riposte.server.http.ProxyRouterEndpoint.DownstreamRequestFirstChunkInfo;
@@ -48,6 +49,7 @@ import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBeha
 import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_SAMPLED_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_SPAN_ID_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.DownstreamEndpoint.RECEIVED_TRACE_ID_HEADER_KEY;
+import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.RouterEndpoint.FORCE_PROXY_SPAN_NAME_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.RouterEndpoint.PERFORM_SUBSPAN_HEADER_KEY;
 import static com.nike.riposte.server.componenttest.VerifyProxyRouterTracingBehaviorComponentTest.RouterEndpoint.SET_TRACING_HEADERS_HEADER_KEY;
 import static com.nike.wingtips.http.HttpRequestTracingUtils.convertSampleableBooleanToExpectedB3Value;
@@ -163,7 +165,7 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
             waitUntilSpanRecorderHasExpectedNumSpans(3);
             assertThat(spanRecorder.completedSpans).hasSize(3);
             assertThat(spanRecorder.completedSpans.get(0).getSpanName()).isEqualTo("GET " + DownstreamEndpoint.MATCHING_PATH);
-            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("GET");
+            assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo("proxy-GET " + RouterEndpoint.MATCHING_PATH);
             assertThat(spanRecorder.completedSpans.get(2).getSpanName()).isEqualTo("GET " + RouterEndpoint.MATCHING_PATH);
         }
         else {
@@ -259,6 +261,31 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         }
     }
 
+    @Test
+    public void you_can_specify_proxy_call_span_name_using_ProxyRouterSpanNamingAndTaggingStrategy_setSpanNameOverrideForOutboundProxyRouterEndpointCall() {
+        String expectedProxyCallSpanName = "custom-span-name " + UUID.randomUUID().toString();
+
+        ExtractableResponse response =
+            given()
+                .baseUri("http://127.0.0.1")
+                .port(proxyServerConfig.endpointsPort())
+                .basePath(RouterEndpoint.MATCHING_PATH)
+                .header(PERFORM_SUBSPAN_HEADER_KEY, true)
+                .log().all()
+            .when()
+                .header(FORCE_PROXY_SPAN_NAME_HEADER_KEY, expectedProxyCallSpanName)
+                .get()
+            .then()
+                .log().headers()
+                .extract();
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.asString()).isEqualTo(DownstreamEndpoint.RESPONSE_PAYLOAD);
+
+        waitUntilSpanRecorderHasExpectedNumSpans(3);
+        assertThat(spanRecorder.completedSpans.get(1).getSpanName()).isEqualTo(expectedProxyCallSpanName);
+    }
+    
     static class DownstreamEndpoint extends StandardEndpoint<Void, String> {
 
         public static final String MATCHING_PATH = "/downstreamEndpoint";
@@ -299,6 +326,7 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
         public static final String MATCHING_PATH = "/proxyEndpoint";
         public static final String SET_TRACING_HEADERS_HEADER_KEY = "X-Test-SendTraceHeaders";
         public static final String PERFORM_SUBSPAN_HEADER_KEY = "X-Test-PerformSubSpanAroundCall";
+        public static final String FORCE_PROXY_SPAN_NAME_HEADER_KEY = "X-Test-ForceProxySpanName";
         private final int downstreamPort;
 
         public RouterEndpoint(int downstreamPort) {
@@ -325,6 +353,13 @@ public class VerifyProxyRouterTracingBehaviorComponentTest {
 
             if (performSubspanStrValue != null) {
                 target.withPerformSubSpanAroundDownstreamCall(Boolean.parseBoolean(performSubspanStrValue));
+            }
+
+            String forceProxySpanNameValue = request.getHeaders().get(FORCE_PROXY_SPAN_NAME_HEADER_KEY);
+            if (forceProxySpanNameValue != null) {
+                ProxyRouterSpanNamingAndTaggingStrategy.setSpanNameOverrideForOutboundProxyRouterEndpointCall(
+                    forceProxySpanNameValue, request
+                );
             }
 
             return CompletableFuture.completedFuture(target);

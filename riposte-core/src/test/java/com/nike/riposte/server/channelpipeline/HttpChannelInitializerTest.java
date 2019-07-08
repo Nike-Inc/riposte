@@ -824,6 +824,13 @@ public class HttpChannelInitializerTest {
         // given
         HttpChannelInitializer hci = basicHttpChannelInitializerNoUtilityHandlers();
 
+        DistributedTracingConfig<Span> distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        ServerSpanNamingAndTaggingStrategy<Span> expectedServerSpanNamingAndTaggingStrategy =
+            mock(ServerSpanNamingAndTaggingStrategy.class);
+        Whitebox.setInternalState(hci, "distributedTracingConfig", distributedTracingConfigMock);
+        doReturn(expectedServerSpanNamingAndTaggingStrategy)
+            .when(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
+
         // when
         hci.initChannel(socketChannelMock);
 
@@ -846,6 +853,11 @@ public class HttpChannelInitializerTest {
         Collection<Endpoint<?>> expectedEndpoints = extractField(hci, "endpoints");
         Collection<Endpoint<?>> actualEndpoints = (Collection<Endpoint<?>>) Whitebox.getInternalState(routingHandler.getRight(), "endpoints");
         assertThat(actualEndpoints, is(expectedEndpoints));
+        ServerSpanNamingAndTaggingStrategy<Span> actualNamingStrategy =
+            (ServerSpanNamingAndTaggingStrategy<Span>) Whitebox.getInternalState(
+                routingHandler.getRight(), "spanNamingAndTaggingStrategy"
+            );
+        assertThat(actualNamingStrategy, is(expectedServerSpanNamingAndTaggingStrategy));
     }
 
     @Test

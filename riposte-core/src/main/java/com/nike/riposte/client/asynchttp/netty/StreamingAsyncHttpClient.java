@@ -4,14 +4,12 @@ import com.nike.backstopper.exception.WrapperException;
 import com.nike.internal.util.Pair;
 import com.nike.internal.util.StringUtils;
 import com.nike.riposte.client.asynchttp.netty.downstreampipeline.DownstreamIdleChannelTimeoutHandler;
-import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
 import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.exception.DownstreamChannelClosedUnexpectedlyException;
 import com.nike.riposte.server.error.exception.DownstreamIdleChannelTimeoutException;
 import com.nike.riposte.server.error.exception.HostnameResolutionException;
 import com.nike.riposte.server.error.exception.NativeIoExceptionWrapper;
-import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.wingtips.Span;
@@ -389,7 +387,7 @@ public class StreamingAsyncHttpClient {
                 // Release it back to the pool if possible/necessary so the pool can do its usual cleanup.
                 releaseChannelBackToPoolIfCallIsActive(
                     channel, pool, callActiveHolder,
-                    "closing StreamingChannel due to unrecoverable error: " + String.valueOf(cause),
+                    "closing StreamingChannel due to unrecoverable error: " + cause,
                     distributedTracingSpanStack, distributedTracingMdcInfo
                 );
 
@@ -643,11 +641,9 @@ public class StreamingAsyncHttpClient {
         String downstreamHost, int downstreamPort, HttpRequest initialRequestChunk, boolean isSecureHttpsCall,
         boolean relaxedHttpsValidation, StreamingCallback callback, long downstreamCallTimeoutMillis,
         boolean performSubSpanAroundDownstreamCalls, boolean addTracingHeadersToDownstreamCall,
+        @NotNull ProxyRouterProcessingState proxyRouterProcessingState, @NotNull RequestInfo<?> requestInfo,
         ChannelHandlerContext ctx
     ) {
-        ProxyRouterProcessingState proxyRouterProcessingState =
-            ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
-
         CompletableFuture<StreamingChannel> streamingChannel = new CompletableFuture<>();
 
         // set host header. include port in value when it is a non-default port
@@ -668,14 +664,9 @@ public class StreamingAsyncHttpClient {
             Pair<Deque<Span>, Map<String, String>> originalThreadInfo = null;
             try {
                 long connectionSetupTimeNanos = System.nanoTime() - beforeConnectionStartTimeNanos;
-                HttpProcessingState httpProcessingState = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
-                if (httpProcessingState != null) {
-                    RequestInfo<?> requestInfo = httpProcessingState.getRequestInfo();
-                    if (requestInfo != null) {
-                        requestInfo.addRequestAttribute(DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY,
-                                                        connectionSetupTimeNanos);
-                    }
-                }
+                requestInfo.addRequestAttribute(
+                    DOWNSTREAM_CALL_CONNECTION_SETUP_TIME_NANOS_REQUEST_ATTR_KEY, connectionSetupTimeNanos
+                );
 
                 // Setup tracing and MDC so our log messages have the correct distributed trace info, etc.
                 originalThreadInfo = linkTracingAndMdcToCurrentThread(ctx);
@@ -707,7 +698,6 @@ public class StreamingAsyncHttpClient {
                 }
 
                 // Do a subspan around the downstream call if desired.
-                //noinspection ConstantConditions
                 if (performSubSpanAroundDownstreamCalls) {
                     // TODO: The subspan start stuff should probably be moved to the beginning of
                     //      streamDownstreamCall(), so that we pick up connection setup time (and can annotate conn
@@ -717,6 +707,7 @@ public class StreamingAsyncHttpClient {
                     // Add the subspan.
                     String spanName = getSubspanSpanName(
                         initialRequestChunk,
+                        requestInfo,
                         proxySpanTaggingStrategy
                     );
 
@@ -744,9 +735,7 @@ public class StreamingAsyncHttpClient {
 
                     // Add the initial HttpRequest to our ProxyRouterProcessingState so it's available for final
                     //      response tagging and span naming at the end.
-                    if (proxyRouterProcessingState != null) {
-                        proxyRouterProcessingState.setProxyHttpRequest(initialRequestChunk);
-                    }
+                    proxyRouterProcessingState.setProxyHttpRequest(initialRequestChunk);
 
                     // Add the connection start/finish annotations if desired. These will show up before the subspan
                     //      start timestamp because the span is currently starting after the connection is established,
@@ -814,7 +803,6 @@ public class StreamingAsyncHttpClient {
                         callActiveHolder.heldObject = true;
                         ObjectHolder<Boolean> lastChunkSentDownstreamHolder = new ObjectHolder<>();
                         lastChunkSentDownstreamHolder.heldObject = false;
-                        //noinspection ConstantConditions
                         prepChannelForDownstreamCall(
                             downstreamHost, downstreamPort, pool, ch, callback, distributedSpanStackToUse, mdcContextToUse, isSecureHttpsCall,
                             relaxedHttpsValidation, performSubSpanAroundDownstreamCalls, downstreamCallTimeoutMillis,
@@ -992,7 +980,8 @@ public class StreamingAsyncHttpClient {
                         if (shouldLogBadMessagesAfterRequestFinishes) {
                             runnableWithTracingAndMdc(
                                 () -> logger.warn("Received HttpObject msg when call was not active: {}",
-                                                  String.valueOf(msg)),
+                                                  msg
+                                ),
                                 distributedSpanStackToUse, mdcContextToUse
                             ).run();
                         }
@@ -1390,10 +1379,12 @@ public class StreamingAsyncHttpClient {
     }
 
     /**
-     * Returns the name that should be used for the span surrounding the downstream call. Defaults to whatever {@link
-     * ProxyRouterSpanNamingAndTaggingStrategy#getInitialSpanName(Object)} returns, with a fallback
+     * Returns the name that should be used for the span surrounding the downstream call. Defaults to {@link
+     * ProxyRouterSpanNamingAndTaggingStrategy#getInitialSpanNameOverride(HttpRequest, RequestInfo, String, String)}
+     * if that returns a non-null value, then falls back to whatever {@link
+     * ProxyRouterSpanNamingAndTaggingStrategy#getInitialSpanName(HttpRequest)} returns, with a ultimate fallback
      * of {@link HttpRequestTracingUtils#getFallbackSpanNameForHttpRequest(String, String)} if the naming strategy
-     * returned null or blank string.
+     * returned null or blank string for both the override and initial span name.
      *
      * @param downstreamRequest The Netty {@link HttpRequest} for the downstream call.
      * @param namingStrategy The {@link ProxyRouterSpanNamingAndTaggingStrategy} being used.
@@ -1401,15 +1392,33 @@ public class StreamingAsyncHttpClient {
      */
     protected @NotNull String getSubspanSpanName(
         @NotNull HttpRequest downstreamRequest,
+        @NotNull RequestInfo<?> overallRequest,
         @NotNull ProxyRouterSpanNamingAndTaggingStrategy<Span> namingStrategy
     ) {
         String spanNameFromStrategy = namingStrategy.getInitialSpanName(downstreamRequest);
+        Span overallRequestSpan = Tracer.getInstance().getCurrentSpan();
+        String overallRequestSpanName = (overallRequestSpan == null) ? null : overallRequestSpan.getSpanName();
+
+        String spanNameOverride = namingStrategy.getInitialSpanNameOverride(
+            downstreamRequest, overallRequest, spanNameFromStrategy, overallRequestSpanName
+        );
 
         if (StringUtils.isNotBlank(spanNameFromStrategy)) {
+            // We got a span name from the strategy. See if it should be overridden.
+            if (StringUtils.isNotBlank(spanNameOverride)) {
+                return spanNameOverride;
+            }
+
+            // No override, so just use the name from the strategy.
             return spanNameFromStrategy;
         }
 
-        // The naming strategy didn't have anything for us. Fall back to something reasonable.
+        // The naming strategy didn't have anything for us at all. See if there's an override.
+        if (StringUtils.isNotBlank(spanNameOverride)) {
+            return spanNameOverride;
+        }
+
+        // The naming strategy didn't have anything for us and there was no override. Fall back to something reasonable.
         return getFallbackSpanName(downstreamRequest);
     }
 

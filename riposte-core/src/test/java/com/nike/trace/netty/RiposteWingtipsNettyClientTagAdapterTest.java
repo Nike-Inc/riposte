@@ -55,6 +55,34 @@ public class RiposteWingtipsNettyClientTagAdapterTest {
     }
 
     @Test
+    public void getDefaultInstanceForProxy_returns_DEFAULT_INSTANCE_FOR_PROXY() {
+        // expect
+        assertThat(RiposteWingtipsNettyClientTagAdapter.getDefaultInstanceForProxy())
+            .isSameAs(RiposteWingtipsNettyClientTagAdapter.DEFAULT_INSTANCE_FOR_PROXY);
+    }
+
+    @Test
+    public void default_constructor_works_as_expected() {
+        // when
+        RiposteWingtipsNettyClientTagAdapter impl = new RiposteWingtipsNettyClientTagAdapter();
+
+        // then
+        assertThat(impl.spanNamePrefix).isNull();
+    }
+
+    @Test
+    public void constructor_one_arg_works_as_expected() {
+        // given
+        String prefix = UUID.randomUUID().toString();
+
+        // when
+        RiposteWingtipsNettyClientTagAdapter impl = new RiposteWingtipsNettyClientTagAdapter(prefix);
+
+        // then
+        assertThat(impl.spanNamePrefix).isEqualTo(prefix);
+    }
+
+    @Test
     public void getRequestUrl_works_as_expected() {
         // given
         String expectedResult = UUID.randomUUID().toString();
@@ -243,6 +271,23 @@ public class RiposteWingtipsNettyClientTagAdapterTest {
     public void getHeaderMultipleValue_returns_null_if_passed_null_request() {
         // expect
         assertThat(adapterSpy.getHeaderMultipleValue(null, "foo")).isNull();
+    }
+
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
+    @Test
+    public void getSpanNamePrefix_returns_value_of_prefix_field(boolean prefixIsNull) {
+        // given
+        String prefix = (prefixIsNull) ? null : UUID.randomUUID().toString();
+        RiposteWingtipsNettyClientTagAdapter impl = new RiposteWingtipsNettyClientTagAdapter(prefix);
+
+        // when
+        String result = impl.getSpanNamePrefix(mock(HttpRequest.class));
+
+        // then
+        assertThat(result).isEqualTo(prefix);
     }
 
     @Test

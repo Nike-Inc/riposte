@@ -13,6 +13,8 @@ import org.jetbrains.annotations.Nullable;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 
+import static com.nike.internal.util.StringUtils.isNotBlank;
+
 /**
  * A concrete implementation of {@link ProxyRouterSpanNamingAndTaggingStrategy} that works with Wingtips {@link Span}s,
  * and delegates the work to the Wingtips {@link HttpTagAndSpanNamingStrategy} and {@link HttpTagAndSpanNamingAdapter}
@@ -20,13 +22,13 @@ import io.netty.handler.codec.http.HttpResponse;
  *
  * <p>By default (default constructor, or {@link #getDefaultInstance()}) you'll get {@link
  * ZipkinHttpTagStrategy#getDefaultInstance()} for the Wingtips strategy and {@link
- * RiposteWingtipsNettyClientTagAdapter#getDefaultInstance()} for the adapter.
+ * RiposteWingtipsNettyClientTagAdapter#getDefaultInstanceForProxy()} for the adapter.
  *
  * <p>You can use the alternate constructor if you want different implementations, e.g. you could pass a custom {@link
  * RiposteWingtipsNettyClientTagAdapter} that overrides {@link
- * RiposteWingtipsNettyClientTagAdapter#getInitialSpanName(Object)} and/or {@link
- * RiposteWingtipsNettyClientTagAdapter#getFinalSpanName(Object, Object)} if you want to adjust the span names that
- * are generated.
+ * RiposteWingtipsNettyClientTagAdapter#getInitialSpanName(HttpRequest)} and/or {@link
+ * RiposteWingtipsNettyClientTagAdapter#getFinalSpanName(HttpRequest, HttpResponse)} if you want to adjust the span
+ * names that are generated.
  *
  * @author Nic Munroe
  */
@@ -49,10 +51,13 @@ public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy
 
     /**
      * Creates a new instance that uses {@link ZipkinHttpTagStrategy#getDefaultInstance()} and {@link
-     * RiposteWingtipsNettyClientTagAdapter#getDefaultInstance()} to do the work of span naming and tagging.
+     * RiposteWingtipsNettyClientTagAdapter#getDefaultInstanceForProxy()} to do the work of span naming and tagging.
      */
     public DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy() {
-        this(ZipkinHttpTagStrategy.getDefaultInstance(), RiposteWingtipsNettyClientTagAdapter.getDefaultInstance());
+        this(
+            ZipkinHttpTagStrategy.getDefaultInstance(),
+            RiposteWingtipsNettyClientTagAdapter.getDefaultInstanceForProxy()
+        );
     }
 
     /**
@@ -101,8 +106,28 @@ public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy
     protected void doHandleResponseTaggingAndFinalSpanName(
         @NotNull Span span, @Nullable HttpRequest request, @Nullable HttpResponse response, @Nullable Throwable error
     ) {
+        // Capture the original span name in case we want to revert back to it.
+        String origSpanName = span.getSpanName();
+
+        // Do the final naming and tagging stuff.
         tagAndNamingStrategy.handleResponseTaggingAndFinalSpanName(
             span, request, response, error, tagAndNamingAdapter
         );
+
+        String finalSpanName = span.getSpanName();
+
+        // See if we should revert back to the original span name.
+        String httpMethodStr = (request == null) ? null : request.method().name();
+        if (httpMethodStr != null
+            && (!finalSpanName.equals(origSpanName))
+            && (finalSpanName.equals("proxy-" + httpMethodStr) || finalSpanName.equals(httpMethodStr))
+            && isNotBlank(origSpanName)
+        ) {
+            // The new span name is a basic default one, with just the HTTP method, but the original span name was
+            //      different - probably due to an override from
+            //      ProxyRouterSpanNamingAndTaggingStrategy.getInitialSpanNameOverride(). We should revert back to
+            //      the original span name.
+            changeSpanName(span, origSpanName);
+        }
     }
 }

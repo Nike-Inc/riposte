@@ -1,11 +1,14 @@
 package com.nike.riposte.server.handler;
 
+import com.nike.internal.util.StringUtils;
+import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
 import com.nike.riposte.server.http.impl.RequestInfoImpl;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.http.HttpRequestTracingUtils;
 import com.nike.wingtips.util.TracingState;
 
 import org.jetbrains.annotations.NotNull;
@@ -14,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.DecoderResult;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 
@@ -128,5 +132,54 @@ class RiposteHandlerInternalUtil {
         }
 
         return state.getOverallRequestSpan();
+    }
+
+    /**
+     * Returns the name that should be used for the span surrounding the request. Defaults to whatever {@link
+     * ServerSpanNamingAndTaggingStrategy#getInitialSpanName(RequestInfo)} returns, with a fallback
+     * of {@link HttpRequestTracingUtils#getFallbackSpanNameForHttpRequest(String, String)} if the naming strategy
+     * returned null or blank string.
+     *
+     * @param nettyRequest The Netty {@link HttpRequest}.
+     * @param riposteRequestInfo The Riposte {@link RequestInfo} (if this is null, then the tag strategy and adapter
+     * will be ignored, and we'll fallback to basic behavior using the {@code nettyRequest}).
+     * @param namingStrategy The {@link ServerSpanNamingAndTaggingStrategy} being used.
+     * @return The name that should be used for the span surrounding the request.
+     */
+    @NotNull String determineOverallRequestSpanName(
+        @NotNull HttpRequest nettyRequest,
+        @Nullable RequestInfo<?> riposteRequestInfo,
+        @NotNull ServerSpanNamingAndTaggingStrategy<Span> namingStrategy
+    ) {
+        // Immediately go to the fallback span name if the Riposte RequestInfo is null.
+        if (riposteRequestInfo == null) {
+            return determineFallbackOverallRequestSpanName(nettyRequest);
+        }
+
+        // We have a Riposte RequestInfo. Try the naming strategy first.
+        String spanNameFromStrategy = namingStrategy.getInitialSpanName(riposteRequestInfo);
+
+        if (StringUtils.isNotBlank(spanNameFromStrategy)) {
+            return spanNameFromStrategy;
+        }
+
+        // The naming strategy didn't have anything for us. Fall back to something reasonable.
+        return determineFallbackOverallRequestSpanName(nettyRequest);
+    }
+
+    @NotNull String determineFallbackOverallRequestSpanName(@NotNull HttpRequest nettyRequest) {
+        try {
+            HttpMethod method = nettyRequest.method();
+            String methodName = (method == null) ? null : method.name();
+            return HttpRequestTracingUtils.getFallbackSpanNameForHttpRequest(null, methodName);
+        }
+        catch (Throwable t) {
+            logger.error(
+                "An unexpected error occurred while trying to extract fallback span name from Netty HttpRequest. "
+                + "A hardcoded fallback name will be used as a last resort, however this error should be investigated "
+                + "as it shouldn't be possible.", t
+            );
+            return "UNKNOWN_HTTP_METHOD";
+        }
     }
 }

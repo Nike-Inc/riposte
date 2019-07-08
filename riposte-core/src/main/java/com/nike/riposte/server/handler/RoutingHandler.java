@@ -2,6 +2,8 @@ package com.nike.riposte.server.handler;
 
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
 import com.nike.riposte.server.error.exception.PathNotFound404Exception;
@@ -11,6 +13,9 @@ import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
+import com.nike.wingtips.Span;
+
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,18 +44,30 @@ import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled
  *
  * @author Nic Munroe
  */
+@SuppressWarnings("WeakerAccess")
 public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
 
+    protected final @NotNull ServerSpanNamingAndTaggingStrategy<Span> spanNamingAndTaggingStrategy;
     protected final RiposteHandlerInternalUtil handlerUtils = RiposteHandlerInternalUtil.DEFAULT_IMPL;
     protected final Collection<Endpoint<?>> endpoints;
     protected final int globalConfiguredMaxRequestSizeInBytes;
 
-    public RoutingHandler(Collection<Endpoint<?>> endpoints, int globalMaxRequestSizeInBytes) {
-        if (endpoints == null || endpoints.isEmpty())
+    public RoutingHandler(
+        Collection<Endpoint<?>> endpoints,
+        int globalMaxRequestSizeInBytes,
+        @NotNull DistributedTracingConfig<Span> distributedTracingConfig
+    ) {
+        if (endpoints == null || endpoints.isEmpty()) {
             throw new IllegalArgumentException("endpoints cannot be empty");
+        }
 
+        //noinspection ConstantConditions
+        if (distributedTracingConfig == null) {
+            throw new IllegalArgumentException("distributedTracingConfig cannot be null");
+        }
         this.endpoints = endpoints;
         this.globalConfiguredMaxRequestSizeInBytes = globalMaxRequestSizeInBytes;
+        this.spanNamingAndTaggingStrategy = distributedTracingConfig.getServerSpanNamingAndTaggingStrategy();
     }
 
     /**
@@ -61,7 +78,6 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
      * request, and this will throw a {@link MultipleMatchingEndpointsException} if there are multiple endpoints that
      * fully match the path and HTTP method.
      */
-    @SuppressWarnings("WeakerAccess")
     protected Pair<Endpoint<?>, String> findSingleEndpointForExecution(RequestInfo requestInfo) {
         boolean hasPathMatch = false;
         List<Endpoint<?>> fullyMatchingEndpoints = new ArrayList<>(1);
@@ -113,27 +129,51 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
     @Override
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
+            HttpRequest nettyRequest = (HttpRequest)msg;
+
             HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
             RequestInfo request = handlerUtils.createRequestInfoFromNettyHttpRequestAndHandleStateSetupIfNecessary(
-                (HttpRequest)msg,
+                nettyRequest,
                 state
             );
 
             // If the Netty HttpRequest is invalid, we shouldn't do any endpoint routing.
-            handlerUtils.throwExceptionIfNotSuccessfullyDecoded((HttpRequest) msg);
+            handlerUtils.throwExceptionIfNotSuccessfullyDecoded(nettyRequest);
 
             // The HttpRequest is valid, so continue with the endpoint routing.
             Pair<Endpoint<?>, String> endpointForExecution = findSingleEndpointForExecution(request);
 
             request.setPathParamsBasedOnPathTemplate(endpointForExecution.getRight());
             state.setEndpointForExecution(endpointForExecution.getLeft(), endpointForExecution.getRight());
-            
+
+            handleSpanNameUpdateForRequestWithPathTemplate(nettyRequest, request, state);
+
             throwExceptionIfContentLengthHeaderIsLargerThanConfiguredMaxRequestSize(
-                (HttpRequest) msg, endpointForExecution.getLeft()
+                nettyRequest, endpointForExecution.getLeft()
             );
         }
 
         return PipelineContinuationBehavior.CONTINUE;
+    }
+
+    protected void handleSpanNameUpdateForRequestWithPathTemplate(
+        @NotNull HttpRequest nettyRequest,
+        @NotNull RequestInfo riposteRequestInfo,
+        @NotNull HttpProcessingState state
+    ) {
+        // Change the span name based on what the strategy wants now that the path template has been set on RequestInfo.
+        Span requestSpan = handlerUtils.getOverallRequestSpan(state);
+        if (requestSpan != null) {
+            String newSpanName = handlerUtils.determineOverallRequestSpanName(
+                nettyRequest, riposteRequestInfo, spanNamingAndTaggingStrategy
+            );
+            // Don't do anything if the span name hasn't actually changed, to avoid wiping out any cached data the
+            //      span may have already calculated.
+            if (!newSpanName.equals(requestSpan.getSpanName())) {
+                // Span name is different now, so change it.
+                spanNamingAndTaggingStrategy.changeSpanName(requestSpan, newSpanName);
+            }
+        }
     }
 
     private void throwExceptionIfContentLengthHeaderIsLargerThanConfiguredMaxRequestSize(HttpRequest msg, Endpoint<?> endpoint) {

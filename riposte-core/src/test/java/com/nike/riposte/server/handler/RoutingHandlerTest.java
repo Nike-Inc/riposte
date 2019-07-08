@@ -2,6 +2,8 @@ package com.nike.riposte.server.handler;
 
 import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
+import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfig;
+import com.nike.riposte.server.config.distributedtracing.ServerSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.error.exception.InvalidHttpRequestException;
 import com.nike.riposte.server.error.exception.MethodNotAllowed405Exception;
 import com.nike.riposte.server.error.exception.MultipleMatchingEndpointsException;
@@ -11,13 +13,17 @@ import com.nike.riposte.server.handler.base.PipelineContinuationBehavior;
 import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.RequestInfo;
+import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.StandardEndpoint;
 import com.nike.riposte.util.Matcher;
+import com.nike.wingtips.Span;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
 import org.assertj.core.api.Assertions;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.UUID;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -44,7 +51,9 @@ import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.TRANSFER_ENCODING;
 import static io.netty.handler.codec.http.HttpHeaders.Values.CHUNKED;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -73,6 +82,9 @@ public class RoutingHandlerTest {
     private HttpHeaders httpHeaders;
     private int maxRequestSizeInBytes;
     private HttpRequest msg;
+    private DistributedTracingConfig<Span> distributedTracingConfigMock;
+    private DummyServerSpanNamingAndTaggingStrategy spanNamingStrategySpy;
+    private String initialSpanNameFromStrategy;
 
     @Before
     public void beforeMethod() {
@@ -87,6 +99,9 @@ public class RoutingHandlerTest {
         httpHeaders = new DefaultHttpHeaders();
         maxRequestSizeInBytes = 10;
         msg = mock(HttpRequest.class);
+        distributedTracingConfigMock = mock(DistributedTracingConfig.class);
+        initialSpanNameFromStrategy = "someSpan_" + UUID.randomUUID().toString();
+        spanNamingStrategySpy = spy(new DummyServerSpanNamingAndTaggingStrategy(initialSpanNameFromStrategy));
 
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttrMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
@@ -97,31 +112,55 @@ public class RoutingHandlerTest {
         doReturn(true).when(matcherMock).matchesMethod(any(RequestInfo.class));
         doReturn(requestInfoMock).when(stateMock).getRequestInfo();
         doReturn(httpHeaders).when(msg).headers();
+        doReturn(spanNamingStrategySpy).when(distributedTracingConfigMock).getServerSpanNamingAndTaggingStrategy();
 
-        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes));
+        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes, distributedTracingConfigMock));
     }
 
     @Test
     public void constructor_sets_fields_based_on_incoming_args() {
         // when
-        RoutingHandler theHandler = new RoutingHandler(endpoints, maxRequestSizeInBytes);
+        RoutingHandler theHandler = new RoutingHandler(endpoints, maxRequestSizeInBytes, distributedTracingConfigMock);
 
         // then
         Collection<Endpoint<?>>
             actualEndpoints = (Collection<Endpoint<?>>) Whitebox.getInternalState(theHandler, "endpoints");
         assertThat(actualEndpoints).isSameAs(endpoints);
+        assertThat(theHandler.globalConfiguredMaxRequestSizeInBytes).isEqualTo(maxRequestSizeInBytes);
+        assertThat(theHandler.spanNamingAndTaggingStrategy).isSameAs(spanNamingStrategySpy);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void constructor_throws_IllegalArgumentException_if_arg_is_null() {
-        // expect
-        new RoutingHandler(null, maxRequestSizeInBytes);
+    @DataProvider(value = {
+        "true",
+        "false"
+    })
+    @Test
+    public void constructor_throws_IllegalArgumentException_if_endpoints_arg_is_null_or_empty(
+        boolean endpointsIsNull
+    ) {
+        // given
+        Collection<Endpoint<?>> nullOrEmptyEndpoints = (endpointsIsNull) ? null : Collections.emptyList();
+
+        // when
+        Throwable ex = catchThrowable(
+            () -> new RoutingHandler(nullOrEmptyEndpoints, maxRequestSizeInBytes, distributedTracingConfigMock)
+        );
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("endpoints cannot be empty");
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void constructor_throws_IllegalArgumentException_if_arg_is_empty() {
-        // expect
-        new RoutingHandler(Collections.emptyList(), maxRequestSizeInBytes);
+    @Test
+    public void constructor_throws_IllegalArgumentException_if_distributedTracingConfig_arg_is_null() {
+        // when
+        Throwable ex = catchThrowable(() -> new RoutingHandler(endpoints, maxRequestSizeInBytes, null));
+
+        // then
+        assertThat(ex)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("distributedTracingConfig cannot be null");
     }
 
     @Test
@@ -137,7 +176,71 @@ public class RoutingHandlerTest {
         verify(handlerSpy).findSingleEndpointForExecution(requestInfoMock);
         verify(requestInfoMock).setPathParamsBasedOnPathTemplate(defaultPath);
         verify(stateMock).setEndpointForExecution(endpointMock, defaultPath);
+        verify(handlerSpy).handleSpanNameUpdateForRequestWithPathTemplate(msg, requestInfoMock, stateMock);
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
+    }
+
+    private enum SpanNameUpdateScenario {
+        NEW_SPAN_NAME(
+            "newSpanName-" + UUID.randomUUID().toString(), "origSpanName", false, true
+        ),
+        NEW_SPAN_NAME_EQUALS_ORIG_SPAN_NAME(
+            "someOrigSpanName", "someOrigSpanName", false, false
+        ),
+        OVERALL_REQUEST_SPAN_IS_NULL(
+            "new-doesnotmatter", "orig-doesnotmatter", true, false
+        );
+
+        public final String newSpanName;
+        public final String origSpanName;
+        public final boolean overallRequestSpanIsNull;
+        public final boolean expectSpanNameChange;
+
+        SpanNameUpdateScenario(
+            String newSpanName, String origSpanName, boolean overallRequestSpanIsNull, boolean expectSpanNameChange
+        ) {
+            this.newSpanName = newSpanName;
+            this.origSpanName = origSpanName;
+            this.overallRequestSpanIsNull = overallRequestSpanIsNull;
+            this.expectSpanNameChange = expectSpanNameChange;
+        }
+    }
+
+    @DataProvider(value = {
+        "NEW_SPAN_NAME",
+        "NEW_SPAN_NAME_EQUALS_ORIG_SPAN_NAME",
+        "OVERALL_REQUEST_SPAN_IS_NULL"
+    })
+    @Test
+    public void handleSpanNameUpdateForRequestWithPathTemplate_works_as_expected(
+        SpanNameUpdateScenario scenario
+    ) {
+        RiposteHandlerInternalUtil handlerUtilSpy = spy(new RiposteHandlerInternalUtil());
+        Whitebox.setInternalState(handlerSpy, "handlerUtils", handlerUtilSpy);
+
+        HttpRequest nettyRequestMock = mock(HttpRequest.class);
+
+        Span spanMock = (scenario.overallRequestSpanIsNull) ? null : mock(Span.class);
+
+        if (spanMock != null) {
+            doReturn(scenario.origSpanName).when(spanMock).getSpanName();
+        }
+
+        doReturn(spanMock).when(handlerUtilSpy).getOverallRequestSpan(stateMock);
+        doReturn(scenario.newSpanName).when(handlerUtilSpy).determineOverallRequestSpanName(
+            nettyRequestMock, requestInfoMock, spanNamingStrategySpy
+        );
+
+        // when
+        handlerSpy.handleSpanNameUpdateForRequestWithPathTemplate(nettyRequestMock, requestInfoMock, stateMock);
+
+        // then
+        if (scenario.expectSpanNameChange) {
+            verify(spanNamingStrategySpy).doChangeSpanName(spanMock, scenario.newSpanName);
+        }
+        else {
+            verify(spanNamingStrategySpy, never()).doChangeSpanName(any(Span.class), anyString());
+        }
     }
 
     @Test
@@ -214,7 +317,7 @@ public class RoutingHandlerTest {
 
         maxRequestSizeInBytes = 10;
         httpHeaders.set(CONTENT_LENGTH, 100);
-        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes));
+        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes, distributedTracingConfigMock));
 
         // when
         Throwable thrownException = Assertions.catchThrowable(() -> handlerSpy.doChannelRead(ctxMock, msg));
@@ -235,7 +338,7 @@ public class RoutingHandlerTest {
 
         httpHeaders.set(CONTENT_LENGTH, 101);
 
-        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSize));
+        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSize, distributedTracingConfigMock));
 
         // when
         Throwable thrownException = Assertions.catchThrowable(() -> handlerSpy.doChannelRead(ctxMock, msg));
@@ -252,7 +355,7 @@ public class RoutingHandlerTest {
 
         maxRequestSizeInBytes = 101;
         httpHeaders.set(CONTENT_LENGTH, 100);
-        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes));
+        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes, distributedTracingConfigMock));
 
         // when
         PipelineContinuationBehavior result = handlerSpy.doChannelRead(ctxMock, msg);
@@ -277,7 +380,7 @@ public class RoutingHandlerTest {
         doReturn(null).when(endpointMock).maxRequestSizeInBytesOverride();
 
         maxRequestSizeInBytes = 101;
-        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes));
+        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSizeInBytes, distributedTracingConfigMock));
 
         // when
         PipelineContinuationBehavior result = handlerSpy.doChannelRead(ctxMock, msg);
@@ -299,7 +402,7 @@ public class RoutingHandlerTest {
 
         httpHeaders.set(CONTENT_LENGTH, 100);
 
-        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSize));
+        handlerSpy = spy(new RoutingHandler(endpoints, maxRequestSize, distributedTracingConfigMock));
 
         // when
         PipelineContinuationBehavior result = handlerSpy.doChannelRead(ctxMock, msg);
@@ -363,6 +466,32 @@ public class RoutingHandlerTest {
             assertThat(requestInfo.getUri()).isEqualTo(uri);
             assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
         }
+    }
+
+    private static class DummyServerSpanNamingAndTaggingStrategy extends ServerSpanNamingAndTaggingStrategy<Span> {
+
+        public String initialSpanName;
+
+        private DummyServerSpanNamingAndTaggingStrategy(String initialSpanName) {
+            this.initialSpanName = initialSpanName;
+        }
+
+        @Override
+        protected @Nullable String doGetInitialSpanName(@NotNull RequestInfo<?> request) {
+            return initialSpanName;
+        }
+
+        @Override
+        protected void doChangeSpanName(@NotNull Span span, @NotNull String newName) { }
+
+        @Override
+        protected void doHandleRequestTagging(@NotNull Span span, @NotNull RequestInfo<?> request) { }
+
+        @Override
+        protected void doHandleResponseTaggingAndFinalSpanName(
+            @NotNull Span span, @Nullable RequestInfo<?> request, @Nullable ResponseInfo<?> response,
+            @Nullable Throwable error
+        ) { }
     }
 
 }

@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -254,7 +255,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
 
         // Verify the proxy server downstream child span's annotations and tags.
         {
-            Span proxyDownstreamChildSpan = findCompletedSpan("GET", "netty.httpclient");
+            Span proxyDownstreamChildSpan = findCompletedSpan("proxy-GET " + RouterEndpoint.MATCHING_PATH, "netty.httpclient");
             verifyProxyChildSpanAnnotations(dtConfig, proxyDownstreamChildSpan);
             verifySpanTags(
                 dtConfig, proxyDownstreamChildSpan, "GET", downstreamPath,
@@ -680,7 +681,7 @@ public class VerifyDistributedTracingConfigBehaviorAndTagsComponentTest {
 
     private static class SpanRecorder implements SpanLifecycleListener {
 
-        public final List<Span> completedSpans = new ArrayList<>();
+        public final List<Span> completedSpans = Collections.synchronizedList(new ArrayList<>());
 
         @Override
         public void spanStarted(Span span) {

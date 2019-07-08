@@ -8,11 +8,16 @@ import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfi
 import com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProxyRouterProcessingState;
+import com.nike.riposte.server.http.RequestInfo;
 import com.nike.wingtips.Span;
+import com.nike.wingtips.Tracer;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -20,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.Deque;
 import java.util.Map;
+import java.util.UUID;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -31,6 +37,8 @@ import io.netty.channel.pool.ChannelPool;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
@@ -115,6 +123,17 @@ public class StreamingAsyncHttpClientTest {
 
         failedFutureMock = mock(ChannelFuture.class);
         doReturn(failedFutureMock).when(channelMock).newFailedFuture(any(Throwable.class));
+
+        resetTracing();
+    }
+
+    @After
+    public void afterMethod() {
+        resetTracing();
+    }
+
+    private void resetTracing() {
+        Tracer.getInstance().completeRequestSpan();
     }
 
     @Test
@@ -448,11 +467,15 @@ public class StreamingAsyncHttpClientTest {
         ChannelHandlerContext ctx = mockChannelHandlerContext();
         StreamingCallback streamingCallback = mock(StreamingCallback.class);
 
+        ProxyRouterProcessingState proxyState = ChannelAttributes.getProxyRouterProcessingStateForChannel(ctx).get();
+        RequestInfo<?> requestInfoMock = mock(RequestInfo.class);
+
         // when
         new StreamingAsyncHttpClient(
             200, 200, true, mock(DistributedTracingConfig.class)
         ).streamDownstreamCall(
-            downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, true, true, ctx
+            downstreamHost, downstreamPort, request, isSecure, false, streamingCallback, 200, true, true,
+            proxyState, requestInfoMock, ctx
         );
 
         // then
@@ -477,6 +500,189 @@ public class StreamingAsyncHttpClientTest {
                                                  Channel theChannelMock) {
         assertThat(callActiveHolder.heldObject).isFalse();
         verify(theChannelPoolMock).release(theChannelMock);
+    }
+
+    private enum GetSubspanSpanNameScenario {
+        STRATEGY_INITIAL_AND_OVERRIDE_SPAN_NAMES_EXIST(
+            "someInitialName", "someOverrideName", false, "notUsed", "someOverrideName"
+        ),
+        STRATEGY_INITIAL_AND_OVERRIDE_SPAN_NAMES_EXIST_WITH_NULL_OVERALL_SPAN(
+            "someInitialName", "someOverrideName", true, "notUsed", "someOverrideName"
+        ),
+        STRATEGY_INITAL_NAME_EXISTS_AND_OVERRIDE_IS_NULL(
+            "someInitialName", null, false, "notUsed", "someInitialName"
+        ),
+        STRATEGY_INITAL_NAME_EXISTS_AND_OVERRIDE_IS_BLANK(
+            "someInitialName", "   ", false, "notUsed", "someInitialName"
+        ),
+        STRATEGY_INITAL_NAME_IS_NULL_AND_OVERRIDE_EXISTS(
+            null, "someOverrideName", false, "notUsed", "someOverrideName"
+        ),
+        STRATEGY_INITAL_NAME_IS_BLANK_AND_OVERRIDE_EXISTS(
+            "   ", "someOverrideName", false, "notUsed", "someOverrideName"
+        ),
+        STRATEGY_INITAL_NAME_IS_MISSING_AND_OVERRIDE_EXISTS_WITH_NULL_OVERALL_SPAN(
+            null, "someOverrideName", true, "notUsed", "someOverrideName"
+        ),
+        STRATEGY_AND_OVERRIDE_SPAN_NAMES_ARE_NULL(
+            null, null, false, "someFallbackName", "someFallbackName"
+        ),
+        STRATEGY_AND_OVERRIDE_SPAN_NAMES_ARE_BLANK(
+            "   ", "   ", false, "someFallbackName", "someFallbackName"
+        );
+
+        public final String strategyInitialName;
+        public final String strategyInitialNameOverride;
+        public final boolean overallRequestSpanIsNull;
+        public final String fallbackSpanName;
+        public final String expectedResult;
+
+        GetSubspanSpanNameScenario(
+            String strategyInitialName,
+            String strategyInitialNameOverride,
+            boolean overallRequestSpanIsNull,
+            String fallbackSpanName,
+            String expectedResult
+        ) {
+            this.strategyInitialName = strategyInitialName;
+            this.strategyInitialNameOverride = strategyInitialNameOverride;
+            this.overallRequestSpanIsNull = overallRequestSpanIsNull;
+            this.fallbackSpanName = fallbackSpanName;
+            this.expectedResult = expectedResult;
+        }
+    }
+
+    @DataProvider(value = {
+        "STRATEGY_INITIAL_AND_OVERRIDE_SPAN_NAMES_EXIST",
+        "STRATEGY_INITIAL_AND_OVERRIDE_SPAN_NAMES_EXIST_WITH_NULL_OVERALL_SPAN",
+        "STRATEGY_INITAL_NAME_EXISTS_AND_OVERRIDE_IS_NULL",
+        "STRATEGY_INITAL_NAME_EXISTS_AND_OVERRIDE_IS_BLANK",
+        "STRATEGY_INITAL_NAME_IS_NULL_AND_OVERRIDE_EXISTS",
+        "STRATEGY_INITAL_NAME_IS_BLANK_AND_OVERRIDE_EXISTS",
+        "STRATEGY_INITAL_NAME_IS_MISSING_AND_OVERRIDE_EXISTS_WITH_NULL_OVERALL_SPAN",
+        "STRATEGY_AND_OVERRIDE_SPAN_NAMES_ARE_NULL",
+        "STRATEGY_AND_OVERRIDE_SPAN_NAMES_ARE_BLANK",
+    })
+    @Test
+    public void getSubspanSpanName_works_as_expected(GetSubspanSpanNameScenario scenario) {
+        // given
+        String overallRequestSpanName = null;
+
+        if (scenario.overallRequestSpanIsNull) {
+            assertThat(Tracer.getInstance().getCurrentSpan()).isNull();
+        }
+        else {
+            overallRequestSpanName = "overall-request-spanName_" + UUID.randomUUID().toString();
+            Tracer.getInstance().startRequestWithRootSpan(overallRequestSpanName);
+        }
+
+        DummyProxyRouterSpanNamingAndTaggingStrategy namingStrategySpy = spy(
+            new DummyProxyRouterSpanNamingAndTaggingStrategy(
+                scenario.strategyInitialName, scenario.strategyInitialNameOverride
+            )
+        );
+
+        HttpRequest nettyRequestMock = mock(HttpRequest.class);
+        RequestInfo<?> riposteRequestMock = mock(RequestInfo.class);
+
+        StreamingAsyncHttpClient implSpy = spy(new StreamingAsyncHttpClient(
+            200, 200, true, mock(DistributedTracingConfig.class)
+        ));
+
+        doReturn(scenario.fallbackSpanName).when(implSpy).getFallbackSpanName(nettyRequestMock);
+
+        // when
+        String result = implSpy.getSubspanSpanName(nettyRequestMock, riposteRequestMock, namingStrategySpy);
+
+        // then
+        verify(namingStrategySpy).doGetInitialSpanNameOverride(
+            nettyRequestMock, riposteRequestMock, scenario.strategyInitialName, overallRequestSpanName
+        );
+        assertThat(result).isEqualTo(scenario.expectedResult);
+    }
+
+    private enum GetFallbackSpanNameScenario {
+        NORMAL(HttpMethod.GET, false, "async_downstream_call-GET"),
+        NULL_HTTP_METHOD(null, false, "async_downstream_call-UNKNOWN_HTTP_METHOD"),
+        UNEXPECTED_EXCEPTION_IS_THROWN(HttpMethod.GET, true, "async_downstream_call-UNKNOWN_HTTP_METHOD");
+
+        public final HttpMethod httpMethod;
+        public final boolean throwUnexpectedException;
+        public final String expectedResult;
+
+        GetFallbackSpanNameScenario(
+            HttpMethod httpMethod, boolean throwUnexpectedException, String expectedResult
+        ) {
+            this.httpMethod = httpMethod;
+            this.throwUnexpectedException = throwUnexpectedException;
+            this.expectedResult = expectedResult;
+        }
+    }
+
+    @DataProvider(value = {
+        "NORMAL",
+        "NULL_HTTP_METHOD",
+        "UNEXPECTED_EXCEPTION_IS_THROWN",
+    })
+    @Test
+    public void getFallbackSpanName_works_as_expected(GetFallbackSpanNameScenario scenario) {
+        // given
+        HttpRequest nettyRequestMock = mock(HttpRequest.class);
+        HttpMethod httpMethodSpy = (scenario.httpMethod == null) ? null : spy(scenario.httpMethod);
+        if (scenario.throwUnexpectedException) {
+            doThrow(new RuntimeException("intentional test exception")).when(httpMethodSpy).name();
+        }
+        doReturn(httpMethodSpy).when(nettyRequestMock).method();
+        
+        StreamingAsyncHttpClient impl = new StreamingAsyncHttpClient(
+            200, 200, true, mock(DistributedTracingConfig.class)
+        );
+
+        // when
+        String result = impl.getFallbackSpanName(nettyRequestMock);
+
+        // then
+        assertThat(result).isEqualTo(scenario.expectedResult);
+    }
+
+    private static class DummyProxyRouterSpanNamingAndTaggingStrategy extends ProxyRouterSpanNamingAndTaggingStrategy<Span> {
+
+        public final String initialSpanName;
+        public final String initialSpanNameOverride;
+
+        private DummyProxyRouterSpanNamingAndTaggingStrategy(
+            String initialSpanName, String initialSpanNameOverride
+        ) {
+            this.initialSpanName = initialSpanName;
+            this.initialSpanNameOverride = initialSpanNameOverride;
+        }
+
+        @Override
+        protected @Nullable String doGetInitialSpanName(
+            @NotNull HttpRequest request
+        ) {
+            return initialSpanName;
+        }
+
+        @Override
+        protected @Nullable String doGetInitialSpanNameOverride(
+            @NotNull HttpRequest downstreamRequest, @NotNull RequestInfo<?> overallRequest,
+            @Nullable String initialSpanName, @Nullable String overallRequestSpanName
+        ) {
+            return initialSpanNameOverride;
+        }
+
+        @Override
+        protected void doChangeSpanName(@NotNull Span span, @NotNull String newName) { }
+
+        @Override
+        protected void doHandleRequestTagging(@NotNull Span span, @NotNull HttpRequest request) { }
+
+        @Override
+        protected void doHandleResponseTaggingAndFinalSpanName(
+            @NotNull Span span, @Nullable HttpRequest request, @Nullable HttpResponse response,
+            @Nullable Throwable error
+        ) { }
     }
 
 }

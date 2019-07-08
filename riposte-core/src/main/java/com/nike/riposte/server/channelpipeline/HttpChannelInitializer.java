@@ -501,7 +501,7 @@ public class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         // INBOUND - Add RoutingHandler to figure out which endpoint should handle the request and set it on our request
         //           state for later execution
-        p.addLast(ROUTING_HANDLER_NAME, new RoutingHandler(endpoints, maxRequestSizeInBytes));
+        p.addLast(ROUTING_HANDLER_NAME, new RoutingHandler(endpoints, maxRequestSizeInBytes, distributedTracingConfig));
 
         // INBOUND - Add SmartHttpContentDecompressor for automatic content decompression if the request indicates it
         //           is compressed *and* the target endpoint (determined by the previous RoutingHandler) is one that

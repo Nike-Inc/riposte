@@ -209,6 +209,7 @@ public class ProxyRouterEndpointExecutionHandler extends BaseInboundHandlerWithT
                                         downstreamHost, downstreamPort, downstreamRequestFirstChunk, isSecureHttpsCall,
                                         relaxedHttpsValidation, callback, callTimeoutValueToUse,
                                             performSubSpanAroundDownstreamCall, addTracingHeadersToDownstreamCall,
+                                            proxyRouterState, requestInfo,
                                             ctx
                                     );
 
