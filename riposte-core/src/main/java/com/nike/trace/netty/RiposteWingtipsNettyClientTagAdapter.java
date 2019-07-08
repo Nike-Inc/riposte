@@ -21,19 +21,40 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  *
  * @author Nic Munroe
  */
+@SuppressWarnings("WeakerAccess")
 public class RiposteWingtipsNettyClientTagAdapter extends HttpTagAndSpanNamingAdapter<HttpRequest, HttpResponse> {
 
-    @SuppressWarnings("WeakerAccess")
     protected static final RiposteWingtipsNettyClientTagAdapter
         DEFAULT_INSTANCE = new RiposteWingtipsNettyClientTagAdapter();
+
+    protected static final RiposteWingtipsNettyClientTagAdapter
+        DEFAULT_INSTANCE_FOR_PROXY = new RiposteWingtipsNettyClientTagAdapter("proxy");
 
     /**
      * @return A reusable, thread-safe, singleton instance of this class that can be used by anybody who wants to use
      * this class and does not need any customization.
      */
-    @SuppressWarnings("unchecked")
     public static RiposteWingtipsNettyClientTagAdapter getDefaultInstance() {
         return DEFAULT_INSTANCE;
+    }
+
+    /**
+     * @return A reusable, thread-safe, singleton instance of this class that can be used by anybody who wants to use
+     * this class and does not need any customization, and is using it in the context of proxying requests (i.e. the
+     * span names this produces will be prefixed with "proxy-").
+     */
+    public static RiposteWingtipsNettyClientTagAdapter getDefaultInstanceForProxy() {
+        return DEFAULT_INSTANCE_FOR_PROXY;
+    }
+
+    protected final @Nullable String spanNamePrefix;
+
+    public RiposteWingtipsNettyClientTagAdapter() {
+        this(null);
+    }
+
+    public RiposteWingtipsNettyClientTagAdapter(@Nullable String spanNamePrefix) {
+        this.spanNamePrefix = spanNamePrefix;
     }
 
     @Nullable
@@ -129,6 +150,13 @@ public class RiposteWingtipsNettyClientTagAdapter extends HttpTagAndSpanNamingAd
         }
 
         return headers.getAll(headerKey);
+    }
+
+    @Override
+    public @Nullable String getSpanNamePrefix(
+        @Nullable HttpRequest request
+    ) {
+        return spanNamePrefix;
     }
 
     @Nullable

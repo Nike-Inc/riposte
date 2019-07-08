@@ -52,25 +52,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 @RunWith(DataProviderRunner.class)
 public class VerifyDecoderFailedResultIsHandledTest {
 
-    private static Server proxyServer;
-    private static ServerConfig proxyServerConfig;
-    private static Server downstreamServer;
-    private static ServerConfig downstreamServerConfig;
     private static Server basicServer;
-    private static ServerConfig basicServerConfig;
+    private static final ServerConfig basicServerConfig = new BasicServerTestConfig();
+    private static Server downstreamServer;
+    private static final ServerConfig downstreamServerConfig = new DownstreamServerTestConfig();
+    private static Server proxyServer;
+    private static final ServerConfig proxyServerConfig = new ProxyTestingTestConfig();
     private static final int incompleteCallTimeoutMillis = 5000;
 
     @BeforeClass
     public static void setUpClass() throws Exception {
-        basicServerConfig = new BasicServerTestConfig();
         basicServer = new Server(basicServerConfig);
         basicServer.startup();
 
-        downstreamServerConfig = new DownstreamServerTestConfig();
         downstreamServer = new Server(downstreamServerConfig);
         downstreamServer.startup();
 
-        proxyServerConfig = new ProxyTestingTestConfig();
         proxyServer = new Server(proxyServerConfig);
         proxyServer.startup();
     }

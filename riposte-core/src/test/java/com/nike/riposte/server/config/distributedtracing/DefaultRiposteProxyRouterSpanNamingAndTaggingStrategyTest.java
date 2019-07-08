@@ -16,17 +16,27 @@ import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests the functionality of {@link DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy}.
@@ -75,6 +85,8 @@ public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategyTest {
         responseMock = mock(HttpResponse.class);
         errorMock = mock(Throwable.class);
         spanMock = mock(Span.class);
+
+        doReturn(HttpMethod.GET).when(requestMock).method();
     }
 
     @Test
@@ -87,7 +99,7 @@ public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategyTest {
         assertThat(instance)
             .isSameAs(DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy.DEFAULT_INSTANCE);
         assertThat(instance.tagAndNamingStrategy).isSameAs(ZipkinHttpTagStrategy.getDefaultInstance());
-        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsNettyClientTagAdapter.getDefaultInstance());
+        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsNettyClientTagAdapter.getDefaultInstanceForProxy());
     }
 
     @Test
@@ -98,7 +110,7 @@ public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategyTest {
 
         // then
         assertThat(instance.tagAndNamingStrategy).isSameAs(ZipkinHttpTagStrategy.getDefaultInstance());
-        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsNettyClientTagAdapter.getDefaultInstance());
+        assertThat(instance.tagAndNamingAdapter).isSameAs(RiposteWingtipsNettyClientTagAdapter.getDefaultInstanceForProxy());
     }
 
     @Test
@@ -210,14 +222,90 @@ public class DefaultRiposteProxyRouterSpanNamingAndTaggingStrategyTest {
         strategyRequestTaggingArgs.get().verifyArgs(spanMock, requestMock, wingtipsAdapterMock);
     }
 
+    private enum FinalSpanNameScenario {
+        REVERT_SCENARIO_WITH_PREFIX(
+            HttpMethod.GET, "proxy-GET /foo/bar/{baz}", "proxy-GET", false, true
+        ),
+        REVERT_SCENARIO_NO_PREFIX(
+            HttpMethod.GET, "some-orig-span-name-" + UUID.randomUUID().toString(), "GET", false, true
+        ),
+        REQUEST_IS_NULL(
+            HttpMethod.GET, "proxy-GET /foo/bar/{baz}", "proxy-GET", true, false
+        ),
+        SPAN_NAME_FROM_STRATEGY_MATCHES_ORIG_SPAN_NAME(
+            HttpMethod.GET, "foo", "foo", false, false
+        ),
+        SPAN_NAME_FROM_STRATEGY_IS_NOT_BASIC_SPAN_NAME(
+            HttpMethod.GET, "foo", "some-custom-name", false, false
+        ),
+        ORIG_SPAN_NAME_IS_BLANK(
+            HttpMethod.GET, "   ", "proxy-GET", false, false
+        );
+
+        public final HttpMethod httpMethod;
+        public final String origSpanName;
+        public final String finalNameFromStrategy;
+        public final boolean requestIsNull;
+        public final boolean expectSpanNameReversion;
+
+        FinalSpanNameScenario(
+            HttpMethod httpMethod, String origSpanName, String finalNameFromStrategy, boolean requestIsNull,
+            boolean expectSpanNameReversion
+        ) {
+            this.httpMethod = httpMethod;
+            this.origSpanName = origSpanName;
+            this.finalNameFromStrategy = finalNameFromStrategy;
+            this.requestIsNull = requestIsNull;
+            this.expectSpanNameReversion = expectSpanNameReversion;
+        }
+    }
+
+    @DataProvider(value = {
+        "REVERT_SCENARIO_WITH_PREFIX",
+        "REVERT_SCENARIO_NO_PREFIX",
+        "REQUEST_IS_NULL",
+        "SPAN_NAME_FROM_STRATEGY_MATCHES_ORIG_SPAN_NAME",
+        "SPAN_NAME_FROM_STRATEGY_IS_NOT_BASIC_SPAN_NAME",
+        "ORIG_SPAN_NAME_IS_BLANK",
+    })
     @Test
-    public void doHandleResponseTaggingAndFinalSpanName_delegates_to_wingtips_strategy() {
+    public void doHandleResponseTaggingAndFinalSpanName_delegates_to_wingtips_strategy_but_reverts_span_name_if_necessary(
+        FinalSpanNameScenario scenario
+    ) {
+        // given
+        DefaultRiposteProxyRouterSpanNamingAndTaggingStrategy implSpy = spy(impl);
+        doAnswer(new Answer() {
+            int invocationCount = 0;
+
+            @Override
+            public Object answer(InvocationOnMock invocation) {
+                if (invocationCount == 0) {
+                    invocationCount++;
+                    return scenario.origSpanName;
+                }
+
+                return scenario.finalNameFromStrategy;
+            }
+        }).when(spanMock).getSpanName();
+
+        doReturn(scenario.httpMethod).when(requestMock).method();
+        HttpRequest requestToUse = (scenario.requestIsNull) ? null : requestMock;
+
         // when
-        impl.doHandleResponseTaggingAndFinalSpanName(spanMock, requestMock, responseMock, errorMock);
+        implSpy.doHandleResponseTaggingAndFinalSpanName(spanMock, requestToUse, responseMock, errorMock);
 
         // then
+        // The strategy should always be called.
         strategyResponseTaggingArgs.get().verifyArgs(
-            spanMock, requestMock, responseMock, errorMock, wingtipsAdapterMock
+            spanMock, requestToUse, responseMock, errorMock, wingtipsAdapterMock
         );
+
+        // The span name may or may not have been reverted back to the original span name, though.
+        if (scenario.expectSpanNameReversion) {
+            verify(implSpy).doChangeSpanName(spanMock, scenario.origSpanName);
+        }
+        else {
+            verify(implSpy, never()).doChangeSpanName(any(Span.class), anyString());
+        }
     }
 }

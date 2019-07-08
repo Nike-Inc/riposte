@@ -10,6 +10,7 @@ import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSp
 import com.nike.riposte.server.config.distributedtracing.SpanNamingAndTaggingStrategy;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
+import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingAdapter;
 import com.nike.wingtips.tags.HttpTagAndSpanNamingStrategy;
 
@@ -221,7 +222,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         int initialSpanStackSize = (spanStack == null) ? 0 : spanStack.size();
         assertThat(instance.distributedTraceStackToUse).hasSize(initialSpanStackSize + 1);
         Span subspan = (Span) instance.distributedTraceStackToUse.peek();
-        assertThat(instance.mdcContextToUse.get(Tracer.TRACE_ID_MDC_KEY)).isEqualTo(subspan.getTraceId());
+        assertThat(instance.mdcContextToUse.get(SpanFieldForLoggerMdc.TRACE_ID.mdcKey)).isEqualTo(subspan.getTraceId());
 
         if (existingSpanStackState == ExistingSpanStackState.NULL || existingSpanStackState == EMPTY) {
             assertThat(instance.distributedTraceStackToUse).hasSize(1);
