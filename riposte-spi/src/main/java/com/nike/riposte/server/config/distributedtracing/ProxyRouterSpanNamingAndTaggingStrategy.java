@@ -215,7 +215,7 @@ public abstract class ProxyRouterSpanNamingAndTaggingStrategy<S>
         Object requestInfoAttrOverrideValue =
             overallRequest.getRequestAttributes().get(SPAN_NAME_FOR_OUTBOUND_PROXY_CALL_REQ_ATTR_KEY);
         if (requestInfoAttrOverrideValue != null) {
-            return String.valueOf(requestInfoAttrOverrideValue.toString());
+            return requestInfoAttrOverrideValue.toString();
         }
 
         String httpMethodStr = downstreamRequest.method().name();
