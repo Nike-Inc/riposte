@@ -6,9 +6,7 @@ dependencies {
             "com.nike.fastbreak:fastbreak:$fastbreakVersion",
             "com.nike.backstopper:backstopper-core:$backstopperVersion",
             "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
-            "org.slf4j:slf4j-api:$slf4jVersion",
-            "org.slf4j:jcl-over-slf4j:$slf4jVersion",
-            "org.slf4j:log4j-over-slf4j:$slf4jVersion"
+            "org.slf4j:slf4j-api:$slf4jVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",

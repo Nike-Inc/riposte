@@ -10,8 +10,6 @@ dependencies {
             "com.nike.wingtips:wingtips-core:$wingtipsVersion",
             "com.nike.backstopper:backstopper-jackson:$backstopperVersion",
             "org.slf4j:slf4j-api:$slf4jVersion",
-            "org.slf4j:jcl-over-slf4j:$slf4jVersion",
-            "org.slf4j:log4j-over-slf4j:$slf4jVersion",
             "org.javassist:javassist:$javassistVersion",
             "com.jcraft:jzlib:$jzlibVersion"
     )
