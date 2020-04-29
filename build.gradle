@@ -79,9 +79,9 @@ ext {
     logbackVersion = '1.2.3'
     javaxInjectVersion = '1'
 
-    wingtipsVersion = '0.20.1'
-    backstopperVersion = '0.11.5'
-    fastbreakVersion = '0.10.0'
+    wingtipsVersion = '0.22.0'
+    backstopperVersion = '0.13.0'
+    fastbreakVersion = '0.10.1'
     spockVersion = '1.2-groovy-2.5'
     cgLibVersion = '3.1'
     objenesisVersion = '2.1'
