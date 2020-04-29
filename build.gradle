@@ -75,7 +75,7 @@ javadocJar.enabled = false
 // ========== PROPERTIES FOR GRADLE BUILD - DEPENDENCY VERSIONS / ETC
 ext {
     // DEPENDENCY VERSIONS
-    slf4jVersion = '1.7.26'
+    slf4jVersion = '1.7.30'
     logbackVersion = '1.2.3'
     javaxInjectVersion = '1'
 

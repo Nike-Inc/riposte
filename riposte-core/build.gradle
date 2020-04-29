@@ -9,7 +9,6 @@ dependencies {
             "io.netty:netty-transport-native-epoll:$nettyVersion:linux-x86_64",
             "com.nike.wingtips:wingtips-core:$wingtipsVersion",
             "com.nike.backstopper:backstopper-jackson:$backstopperVersion",
-            "org.slf4j:slf4j-api:$slf4jVersion",
             "org.javassist:javassist:$javassistVersion",
             "com.jcraft:jzlib:$jzlibVersion"
     )
