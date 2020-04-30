@@ -79,7 +79,6 @@ ext {
     nettyVersion = '4.1.49.Final'
     slf4jVersion = '1.7.30'
     jetbrainsAnnotationsVersion = '17.0.0'
-    javassistVersion = '3.18.2-GA'
     jacksonVersion = '2.9.9'
     jzlibVersion = '1.1.3'
     wingtipsVersion = '0.22.0'
