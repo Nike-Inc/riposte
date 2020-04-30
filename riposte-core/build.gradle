@@ -3,7 +3,6 @@ evaluationDependsOn(':')
 dependencies {
     compile(
             project(":riposte-spi"),
-            "io.netty:netty-all:$nettyVersion",
             // We pull in the native epoll transport dependency here so that if you are running on linux x86_64 you'll get the maximum performance possible from Netty.
             // If you're not on linux x86_64 then it will gracefully fall back to the standard java NIO transports.
             "io.netty:netty-transport-native-epoll:$nettyVersion:linux-x86_64",

@@ -29,7 +29,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.CharsetUtil;
 
@@ -96,28 +95,6 @@ public class VerifyCornerCasesComponentTest {
         NettyHttpClientRequestBuilder request = request()
             .withMethod(HttpMethod.GET)
             .withUri("%notAnEscapeSequence");
-
-        // when
-        NettyHttpClientResponse response = request.execute(downstreamServerConfig.endpointsPort(), 3000);
-
-        // then
-        verifyErrorReceived(response.payload,
-                            response.statusCode,
-                            new ApiErrorWithMetadata(SampleCoreApiError.MALFORMED_REQUEST,
-                                                     Pair.of("cause", "Invalid HTTP request"))
-        );
-    }
-
-    // NOTE: This is really more of a Netty bug - see https://github.com/netty/netty/issues/8554. Once that's fixed
-    //      then I'd expect this to stop failing. For now it exercises another codepath that causes RequestInfoImpl
-    //      construction to fail.
-    @Test
-    public void http_call_with_bad_content_type_header_should_result_in_expected_400_error() throws Exception {
-        // given
-        NettyHttpClientRequestBuilder request = request()
-            .withMethod(HttpMethod.GET)
-            .withUri(BasicEndpoint.MATCHING_PATH)
-            .withHeader(HttpHeaderNames.CONTENT_TYPE.toString(), ";");
 
         // when
         NettyHttpClientResponse response = request.execute(downstreamServerConfig.endpointsPort(), 3000);
