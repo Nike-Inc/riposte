@@ -419,7 +419,7 @@ public class VerifyPreEndpointExecutionWorkChainComponentTest {
     private static ObjectMapper customRequestContentDeserializerForWorkChainNotification(RequestInfo<?> request) {
         return new ObjectMapper() {
             @Override
-            public <T> T readValue(byte[] src, TypeReference valueTypeRef) throws IOException {
+            public <T> T readValue(byte[] src, TypeReference<T> valueTypeRef) throws IOException {
                 contentDeserializationThreadNames.add(Thread.currentThread().getName());
                 if ("true".equals(request.getHeaders().get(BLOW_UP_IN_CONTENT_DESERIALIZER_HEADER_KEY)))
                     throw new ApiException(SampleCoreApiError.MALFORMED_REQUEST);
