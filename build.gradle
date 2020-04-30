@@ -75,49 +75,44 @@ javadocJar.enabled = false
 // ========== PROPERTIES FOR GRADLE BUILD - DEPENDENCY VERSIONS / ETC
 ext {
     // DEPENDENCY VERSIONS
+    // Core and multi-module dependencies
+    nettyVersion = '4.1.30.Final'
     slf4jVersion = '1.7.30'
-    logbackVersion = '1.2.3'
-    javaxInjectVersion = '1'
-
+    jetbrainsAnnotationsVersion = '17.0.0'
+    javassistVersion = '3.18.2-GA'
+    jacksonVersion = '2.9.9'
+    jzlibVersion = '1.1.3'
     wingtipsVersion = '0.22.0'
     backstopperVersion = '0.13.0'
     fastbreakVersion = '0.10.1'
-    spockVersion = '1.2-groovy-2.5'
-    cgLibVersion = '3.1'
-    objenesisVersion = '2.1'
-    javassistVersion = '3.18.2-GA'
-    jacksonVersion = '2.9.9'
+
+    // Misc module dependencies
     ningAsyncHttpClientVersion = '1.9.38'
     asyncHttpClientVersion = '2.9.0'
-
     servletApiVersion = '3.1.0'
+    guiceVersion = '4.2.2'
+    codahaleMetricsVersion = '3.1.1'
+    signalFxCodahaleVersion = '0.0.28'
+    eurekaClientVersion = '1.3.4'
+    archaiusVersion = '0.6.5'
+    typesafeConfigVersion = '1.3.0'
 
-    nettyVersion = '4.1.30.Final'
+    // ====== Test dependencies
     junitVersion = '4.12'
     junitDataproviderVersion = '1.9.3'
     assertJVersion = '3.12.2'
     mockitoVersion = '1.10.8'
+    restAssuredVersion = '3.3.0'
     slf4jTestVersion = '1.1.0'
-    guiceVersion = '4.2.2'
+    logbackVersion = '1.2.3'
 
-    jetbrainsAnnotationsVersion = '17.0.0'
-    
+    spockVersion = '1.2-groovy-2.5'
+    cgLibVersion = '3.1'
+    objenesisVersion = '2.1'
     groovyVersion = '2.5.7'
 
-    restAssuredVersion = '3.3.0'
-
-    codahaleMetricsVersion = '3.1.1'
-
-    signalFxCodahaleVersion = '0.0.28'
-
-    eurekaClientVersion = '1.3.4'
-
-    archaiusVersion = '0.6.5'
-    typesafeConfigVersion = '1.3.0'
     apacheCommonsIoVersion = '2.6'
     apacheCommonsCodecVersion = '1.10'
-
-    jzlibVersion = '1.1.3'
 
     // JACOCO PROPERTIES
     jacocoToolVersion = '0.8.4'
