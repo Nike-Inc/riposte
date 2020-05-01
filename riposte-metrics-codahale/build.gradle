@@ -5,6 +5,7 @@ dependencies {
             project(":riposte-core"),
             "io.dropwizard.metrics:metrics-core:$codahaleMetricsVersion",
             "io.dropwizard.metrics:metrics-jvm:$codahaleMetricsVersion",
+            "io.dropwizard.metrics:metrics-jmx:$codahaleMetricsVersion",
             "io.dropwizard.metrics:metrics-graphite:$codahaleMetricsVersion"
     )
     compileOnly(

@@ -86,6 +86,10 @@ public class CodahaleMetricsEngineTest {
         public boolean isScheduled() {
             return false;
         }
+
+        @Override
+        public void close() {
+        }
     }
 
     static class WeirdScheduledTestReporter implements TestReporter, ReporterFactory {
@@ -114,6 +118,10 @@ public class CodahaleMetricsEngineTest {
         @Override
         public Reporter getReporter(MetricRegistry registry) {
             return this;
+        }
+
+        @Override
+        public void close() {
         }
     }
 
@@ -174,6 +182,9 @@ public class CodahaleMetricsEngineTest {
             return this;
         }
 
+        @Override
+        public void close() {
+        }
     }
 
 }

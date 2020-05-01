@@ -51,14 +51,13 @@ public class SignalFxReporterFactoryTest {
 
         configuratorMock = mock(Function.class);
 
+        metricRegistryMock = mock(MetricRegistry.class);
         configuratorResult = new Builder(metricRegistryMock, apiKey).addDimension(customDimKey, customDimValue);
         doReturn(configuratorResult).when(configuratorMock).apply(any(Builder.class));
 
         reporterFrequency = Pair.of(42L, TimeUnit.HOURS);
 
         factory = new SignalFxReporterFactory(apiKey, configuratorMock, reporterFrequency);
-
-        metricRegistryMock = mock(MetricRegistry.class);
     }
 
     @Test
