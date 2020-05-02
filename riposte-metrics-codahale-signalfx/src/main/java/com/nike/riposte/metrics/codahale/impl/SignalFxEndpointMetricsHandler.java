@@ -13,7 +13,7 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Timer;
 import com.signalfx.codahale.metrics.MetricBuilder;
 import com.signalfx.codahale.reporter.MetricMetadata;
@@ -79,7 +79,7 @@ public class SignalFxEndpointMetricsHandler implements EndpointMetricsHandler {
      * The default recommended constructor when you don't have any special customizations you want to do. This will
      * setup the endpoint timer with the default dimensions (using {@link
      * #DEFAULT_REQUEST_LATENCY_TIMER_DIMENSION_CONFIGURATOR}), and will set it up to use a {@link
-     * SlidingTimeWindowReservoir} that matches the given {@link SignalFxReporterFactory#getInterval()} and
+     * SlidingTimeWindowArrayReservoir} that matches the given {@link SignalFxReporterFactory#getInterval()} and
      * {@link SignalFxReporterFactory#getTimeUnit()} reporting rate so that the values seen in SignalFx will be accurate
      * and sensible.
      *
@@ -232,7 +232,7 @@ public class SignalFxEndpointMetricsHandler implements EndpointMetricsHandler {
     }
 
     /**
-     * A {@link MetricBuilder} for {@link Timer}s that constructs the timer to have a {@link SlidingTimeWindowReservoir}
+     * A {@link MetricBuilder} for {@link Timer}s that constructs the timer to have a {@link SlidingTimeWindowArrayReservoir}
      * with the given sliding window time values. i.e. if you constructed an instance of this class via {@code
      * new RollingWindowTimerBuilder(10L, TimeUnit.SECONDS} then a timer generated with that instance would always give
      * you data for *only* the 10 seconds previous to whenever you requested the data.
@@ -248,7 +248,7 @@ public class SignalFxEndpointMetricsHandler implements EndpointMetricsHandler {
 
         @Override
         public Timer newMetric() {
-            return new Timer(new SlidingTimeWindowReservoir(amount, timeUnit));
+            return new Timer(new SlidingTimeWindowArrayReservoir(amount, timeUnit));
         }
 
         @Override
@@ -259,7 +259,7 @@ public class SignalFxEndpointMetricsHandler implements EndpointMetricsHandler {
 
     /**
      * A {@link MetricBuilder} for {@link Histogram}s that constructs the histogram to have a {@link
-     * SlidingTimeWindowReservoir} with the given sliding window time values. i.e. if you constructed an instance of
+     * SlidingTimeWindowArrayReservoir} with the given sliding window time values. i.e. if you constructed an instance of
      * this class via {@code new RollingWindowHistogramBuilder(10L, TimeUnit.SECONDS} then a histogram generated with
      * that instance would always give you data for *only* the 10 seconds previous to whenever you requested the data.
      */
@@ -274,7 +274,7 @@ public class SignalFxEndpointMetricsHandler implements EndpointMetricsHandler {
 
         @Override
         public Histogram newMetric() {
-            return new Histogram(new SlidingTimeWindowReservoir(amount, timeUnit));
+            return new Histogram(new SlidingTimeWindowArrayReservoir(amount, timeUnit));
         }
 
         @Override

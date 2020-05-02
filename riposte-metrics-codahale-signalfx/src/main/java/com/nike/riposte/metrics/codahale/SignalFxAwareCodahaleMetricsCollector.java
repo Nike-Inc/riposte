@@ -10,7 +10,7 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Timer;
 import com.signalfx.codahale.metrics.MetricBuilder;
 import com.signalfx.codahale.reporter.MetricMetadata;
@@ -46,7 +46,7 @@ public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollec
      * frequency.
      *
      * <p>Note that {@link Timer}s and {@link Histogram}s created from this class will have {@link
-     * SlidingTimeWindowReservoir} reservoirs that match the given {@link SignalFxReporterFactory#getInterval()} and
+     * SlidingTimeWindowArrayReservoir} reservoirs that match the given {@link SignalFxReporterFactory#getInterval()} and
      * {@link SignalFxReporterFactory#getTimeUnit()}.
      *
      * @param sfxReporterFactory The {@link SignalFxReporterFactory} to use to get the {@link
@@ -61,7 +61,7 @@ public class SignalFxAwareCodahaleMetricsCollector extends CodahaleMetricsCollec
      * to retrieve the {@link SignalFxReporter#getMetricMetadata()} and reporting frequency.
      *
      * <p>Note that {@link Timer}s and {@link Histogram}s created from this class will have {@link
-     * SlidingTimeWindowReservoir} reservoirs that match the given {@link SignalFxReporterFactory#getInterval()} and
+     * SlidingTimeWindowArrayReservoir} reservoirs that match the given {@link SignalFxReporterFactory#getInterval()} and
      * {@link SignalFxReporterFactory#getTimeUnit()}.
      *
      * @param sfxReporterFactory The {@link SignalFxReporterFactory} to use to get the {@link

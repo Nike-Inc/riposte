@@ -17,7 +17,7 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -565,9 +565,9 @@ public class CodahaleMetricsListener implements MetricsListener {
         /**
          * Sets the supplier that should be used to create the request-size and response-size Histogram metrics. You
          * might want to set this in order to change the {@link Reservoir} type used by the histograms to a {@link
-         * SlidingTimeWindowReservoir} with the sliding window time values that match your reporter's update frequency.
+         * SlidingTimeWindowArrayReservoir} with the sliding window time values that match your reporter's update frequency.
          * i.e. if you passed in a supplier like this:
-         * {@code () -> new Histogram(new SlidingTimeWindowReservoir(10L, TimeUnit.SECONDS))} then the request-size and
+         * {@code () -> new Histogram(new SlidingTimeWindowArrayReservoir(10L, TimeUnit.SECONDS))} then the request-size and
          * response-size histograms generated would always give you data for *only* the 10 seconds previous to whenever
          * you requested the data. This can be null - if it is null then {@link
          * #DEFAULT_REQUEST_AND_RESPONSE_SIZE_HISTOGRAM_SUPPLIER} will be used.

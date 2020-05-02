@@ -18,7 +18,7 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Timer;
 import com.signalfx.codahale.metrics.MetricBuilder;
 import com.signalfx.codahale.reporter.MetricMetadata;
@@ -473,7 +473,7 @@ public class SignalFxEndpointMetricsHandlerTest {
         "3      |   HOURS"
     }, splitBy = "\\|")
     @Test
-    public void RollingWindowTimerBuilder_newMetric_creates_new_timer_with_SlidingTimeWindowReservoir_with_expected_values(
+    public void RollingWindowTimerBuilder_newMetric_creates_new_timer_with_SlidingTimeWindowArrayReservoir_with_expected_values(
         long amount, TimeUnit timeUnit
     ) {
         // given
@@ -485,8 +485,8 @@ public class SignalFxEndpointMetricsHandlerTest {
         // then
         Histogram histogram = (Histogram) getInternalState(timer, "histogram");
         Reservoir reservoir = (Reservoir) getInternalState(histogram, "reservoir");
-        assertThat(reservoir).isInstanceOf(SlidingTimeWindowReservoir.class);
-        // The expected value here comes from logic in the SlidingTimeWindowReservoir constructor.
+        assertThat(reservoir).isInstanceOf(SlidingTimeWindowArrayReservoir.class);
+        // The expected value here comes from logic in the SlidingTimeWindowArrayReservoir constructor.
         assertThat(getInternalState(reservoir, "window")).isEqualTo(timeUnit.toNanos(amount) * 256);
     }
 
@@ -541,7 +541,7 @@ public class SignalFxEndpointMetricsHandlerTest {
         "3      |   HOURS"
     }, splitBy = "\\|")
     @Test
-    public void RollingWindowHistogramBuilder_newMetric_creates_new_histogram_with_SlidingTimeWindowReservoir_with_expected_values(
+    public void RollingWindowHistogramBuilder_newMetric_creates_new_histogram_with_SlidingTimeWindowArrayReservoir_with_expected_values(
         long amount, TimeUnit timeUnit
     ) {
         // given
@@ -552,8 +552,8 @@ public class SignalFxEndpointMetricsHandlerTest {
 
         // then
         Reservoir reservoir = (Reservoir) getInternalState(histogram, "reservoir");
-        assertThat(reservoir).isInstanceOf(SlidingTimeWindowReservoir.class);
-        // The expected value here comes from logic in the SlidingTimeWindowReservoir constructor.
+        assertThat(reservoir).isInstanceOf(SlidingTimeWindowArrayReservoir.class);
+        // The expected value here comes from logic in the SlidingTimeWindowArrayReservoir constructor.
         assertThat(getInternalState(reservoir, "window")).isEqualTo(timeUnit.toNanos(amount) * 256);
     }
 
