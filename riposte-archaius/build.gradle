@@ -3,7 +3,8 @@ evaluationDependsOn(':')
 dependencies {
     compile(
             project(":riposte-core"),
-            "com.netflix.archaius:archaius-core:$archaiusVersion"
+            "com.netflix.archaius:archaius-core:$archaiusVersion",
+            "commons-configuration:commons-configuration:$apacheCommonsConfigurationVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
