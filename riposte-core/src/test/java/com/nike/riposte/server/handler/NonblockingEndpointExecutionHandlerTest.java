@@ -30,7 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.mockito.verification.VerificationMode;
 import org.slf4j.MDC;
 
@@ -204,8 +204,8 @@ public class NonblockingEndpointExecutionHandlerTest {
         // then
         verify(endpointMock).execute(requestInfo, longRunningTaskExecutorMock, ctxMock);
         // The 2nd whenComplete is for cancelling the timeout check if the response finishes before the timeout
-        verify(futureThatWillBeAttachedToSpy, times(2)).whenComplete(any(BiConsumerWithTracingAndMdcSupport.class));
-        verify(eventLoopMock).schedule(any(RunnableWithTracingAndMdcSupport.class), any(Long.class), eq(TimeUnit.MILLISECONDS));
+        verify(futureThatWillBeAttachedToSpy, times(2)).whenComplete(any(BiConsumer.class));
+        verify(eventLoopMock).schedule(any(Runnable.class), any(Long.class), eq(TimeUnit.MILLISECONDS));
         verify(handlerSpy).doExecuteEndpointFunction(
             requestInfo, endpointMock, stateMock.getDistributedTraceStack().peek(), ctxMock
         );
@@ -266,7 +266,7 @@ public class NonblockingEndpointExecutionHandlerTest {
         handlerSpy.doChannelRead(ctxMock, msg);
 
         // then
-        verify(eventLoopMock).schedule(any(RunnableWithTracingAndMdcSupport.class), eq(defaultCompletableFutureTimeoutMillis), eq(TimeUnit.MILLISECONDS));
+        verify(eventLoopMock).schedule(any(Runnable.class), eq(defaultCompletableFutureTimeoutMillis), eq(TimeUnit.MILLISECONDS));
     }
 
     @Test
@@ -279,7 +279,7 @@ public class NonblockingEndpointExecutionHandlerTest {
         handlerSpy.doChannelRead(ctxMock, msg);
 
         // then
-        verify(eventLoopMock).schedule(any(RunnableWithTracingAndMdcSupport.class), eq(endpointValue), eq(TimeUnit.MILLISECONDS));
+        verify(eventLoopMock).schedule(any(Runnable.class), eq(endpointValue), eq(TimeUnit.MILLISECONDS));
     }
 
     private BiConsumer<ResponseInfo<?>, Throwable> extractContinuationLogic() throws Exception {

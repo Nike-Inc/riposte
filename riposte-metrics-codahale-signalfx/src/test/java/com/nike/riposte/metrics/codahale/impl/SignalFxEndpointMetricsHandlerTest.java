@@ -43,6 +43,7 @@ import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHand
 import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator.DEFAULT_METHOD_DIMENSION_KEY;
 import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator.DEFAULT_RESPONSE_CODE_DIMENSION_KEY;
 import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator.DEFAULT_URI_DIMENSION_KEY;
+import static com.nike.riposte.testutils.Whitebox.getInternalState;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Matchers.any;
@@ -55,7 +56,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.internal.util.reflection.Whitebox.getInternalState;
 
 /**
  * Tests the functionality of {@link SignalFxEndpointMetricsHandler}.
@@ -111,7 +111,7 @@ public class SignalFxEndpointMetricsHandlerTest {
 
         doReturn(timerBuilderTaggerMock).when(dimensionConfiguratorMock).setupMetricWithDimensions(
             eq(timerBuilderTaggerMock), eq(requestInfoMock), eq(responseInfoMock), eq(httpStateMock), anyInt(),
-            anyInt(), anyLong(), any(Endpoint.class), anyString(), anyString(), anyString()
+            anyInt(), anyLong(), any(), anyString(), anyString(), anyString()
         );
 
         timerMock = mock(Timer.class);

@@ -144,7 +144,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
         registeredMeterMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Meter meterMock = mock(Meter.class);
             registeredMeterMocks.put(name, meterMock);
             return meterMock;
@@ -152,7 +152,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
         registeredCounterMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Counter counterMock = mock(Counter.class);
             registeredCounterMocks.put(name, counterMock);
             return counterMock;
@@ -160,7 +160,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
         registeredHistogramMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Histogram histogramMock = mock(Histogram.class);
             registeredHistogramMocks.put(name, histogramMock);
             return histogramMock;
@@ -168,8 +168,8 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
         registeredGauges = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
-            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            String name = invocation.getArgument(0);
+            Metric metric = invocation.getArgument(1);
             if (metric instanceof Gauge)
                 registeredGauges.put(name, (Gauge)metric);
             else if (metric instanceof Timer)
@@ -234,11 +234,11 @@ public class EndpointMetricsHandlerDefaultImplTest {
 
             // We're supposed to customize the timer creation for the purposes of this test to verify that all timer
             //      creation goes through the createAndRegisterRequestTimer() method.
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             // Replace the normal prefix with the customized prefix. This adds the non-standard-ness that lets us verify
             //      the custom createAndRegisterRequestTimer() was used.
             name = name.replace(newImpl.prefix, expectedTimerPrefix);
-            MetricRegistry registry = invocation.getArgumentAt(1, MetricRegistry.class);
+            MetricRegistry registry = invocation.getArgument(1);
             return registry.register(name, mock(Timer.class));
         }).when(newImpl).createAndRegisterRequestTimer(anyString(), any(MetricRegistry.class));
 

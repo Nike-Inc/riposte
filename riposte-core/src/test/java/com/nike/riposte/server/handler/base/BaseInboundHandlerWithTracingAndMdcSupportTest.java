@@ -4,6 +4,7 @@ import com.nike.internal.util.Pair;
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.handler.base.BaseInboundHandlerWithTracingAndMdcSupport.HandlerMethodToExecute;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.testutils.Whitebox;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
 import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
@@ -11,7 +12,6 @@ import com.nike.wingtips.Tracer.SpanFieldForLoggerMdc;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.internal.util.reflection.Whitebox;
 import org.slf4j.Logger;
 import org.slf4j.MDC;
 
@@ -42,7 +42,6 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -356,7 +355,7 @@ public class BaseInboundHandlerWithTracingAndMdcSupportTest {
 
         HandlerMethodToExecute expectedHandlerMethodToExecute = constructHandlerMethodToExecuteFromMethodName(methodName);
         doReturn(argsEligibleForLinkUnlink).when(handlerSpy).argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(
-            eq(expectedHandlerMethodToExecute), eq(ctxMock), anyObject(), any(Throwable.class)
+            eq(expectedHandlerMethodToExecute), eq(ctxMock), any(), any()
         );
 
         TestLogger handlerLogger = TestLoggerFactory.getTestLogger(((Logger) Whitebox.getInternalState(handlerSpy, "logger")).getName());
@@ -485,7 +484,7 @@ public class BaseInboundHandlerWithTracingAndMdcSupportTest {
         int numExpectedArgsEligibleMethodCalls = (argsEligibleMethodShouldHaveBeenCalled) ? 1 : 0;
 
         verify(handlerSpy, times(numExpectedArgsEligibleMethodCalls)).argsAreEligibleForLinkingAndUnlinkingDistributedTracingInfo(
-            eq(expectedHandlerMethodToExecute), eq(ctxMock), anyObject(), any(Throwable.class)
+            eq(expectedHandlerMethodToExecute), eq(ctxMock), any(), any()
         );
     }
 

@@ -36,7 +36,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.Logger;
 import org.slf4j.MDC;
 
@@ -551,7 +551,7 @@ public class AsyncHttpClientHelperTest {
         if (throwCircuitBreakerOpenException)
             verifyZeroInteractions(loggerMock);
         else
-            verify(loggerMock).error(anyString(), anyString(), anyString(), eq(exToThrow));
+            verify(loggerMock).error(anyString(), any(), any(), eq(exToThrow));
     }
 
     @DataProvider(value = {

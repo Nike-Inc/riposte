@@ -6,6 +6,7 @@ import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfi
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
+import com.nike.riposte.testutils.Whitebox;
 import com.nike.wingtips.Span;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
@@ -15,7 +16,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -140,7 +140,7 @@ public class RequestStateCleanerHandlerTest {
         doAnswer(invocation -> httpStateRef.get()).when(stateAttrMock).get();
         doAnswer(
             invocation -> {
-                httpStateRef.set(invocation.getArgumentAt(0, HttpProcessingState.class));
+                httpStateRef.set(invocation.getArgument(0));
                 return null;
             }
         ).when(stateAttrMock).set(any(HttpProcessingState.class));
@@ -149,7 +149,7 @@ public class RequestStateCleanerHandlerTest {
         doAnswer(invocation -> proxyStateRef.get()).when(proxyRouterProcessingStateAttrMock).get();
         doAnswer(
             invocation -> {
-                proxyStateRef.set(invocation.getArgumentAt(0, ProxyRouterProcessingState.class));
+                proxyStateRef.set(invocation.getArgument(0));
                 return null;
             }
         ).when(proxyRouterProcessingStateAttrMock).set(any(ProxyRouterProcessingState.class));

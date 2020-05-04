@@ -31,7 +31,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.Logger;
 
 import java.util.Arrays;
@@ -159,7 +159,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredTimerMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Timer timerMock = mock(Timer.class);
             registeredTimerMocks.put(name, timerMock);
             return timerMock;
@@ -167,7 +167,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredMeterMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Meter meterMock = mock(Meter.class);
             registeredMeterMocks.put(name, meterMock);
             return meterMock;
@@ -175,7 +175,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredCounterMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Counter counterMock = mock(Counter.class);
             registeredCounterMocks.put(name, counterMock);
             return counterMock;
@@ -183,7 +183,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredHistogramMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Histogram histogramMock = mock(Histogram.class);
             registeredHistogramMocks.put(name, histogramMock);
             return histogramMock;
@@ -191,8 +191,8 @@ public class CodahaleMetricsListenerTest {
 
         registeredGauges = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
-            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            String name = invocation.getArgument(0);
+            Metric metric = invocation.getArgument(1);
             if (metric instanceof Gauge)
                 registeredGauges.put(name, (Gauge)metric);
             else if (metric instanceof Histogram)
@@ -204,26 +204,26 @@ public class CodahaleMetricsListenerTest {
         }).when(metricRegistryMock).register(anyString(), any(Metric.class));
 
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
-            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            String name = invocation.getArgument(0);
+            Metric metric = invocation.getArgument(1);
             metricRegistryMock.register(name, metric);
             return metric;
         }).when(cmcMock).registerNamedMetric(anyString(), any(Metric.class));
 
         doAnswer(
-            invocation -> metricRegistryMock.counter(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.counter(invocation.getArgument(0))
         ).when(cmcMock).getNamedCounter(anyString());
 
         doAnswer(
-            invocation -> metricRegistryMock.meter(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.meter(invocation.getArgument(0))
         ).when(cmcMock).getNamedMeter(anyString());
 
         doAnswer(
-            invocation -> metricRegistryMock.histogram(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.histogram(invocation.getArgument(0))
         ).when(cmcMock).getNamedHistogram(anyString());
 
         doAnswer(
-            invocation -> metricRegistryMock.timer(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.timer(invocation.getArgument(0))
         ).when(cmcMock).getNamedTimer(anyString());
     }
 

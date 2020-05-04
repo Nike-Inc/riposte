@@ -24,7 +24,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.Logger;
 
 import java.util.Deque;
@@ -105,7 +105,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         doReturn(state).when(stateAttributeMock).get();
         doReturn(proxyRouterStateMock).when(proxyRouterProcessingStateAttributeMock).get();
         doReturn(proxyRouterProcessingStateAttributeMock).when(channelMock).attr(ChannelAttributes.PROXY_ROUTER_PROCESSING_STATE_ATTRIBUTE_KEY);
-        doReturn(requestInfoMock).when(exceptionHandlingHandlerMock).getRequestInfo(any(HttpProcessingState.class), any(Object.class));
+        doReturn(requestInfoMock).when(exceptionHandlingHandlerMock).getRequestInfo(any(), any());
         doReturn(true).when(responseInfoMock).isResponseSendingStarted();
         doReturn(true).when(responseInfoMock).isResponseSendingLastChunkSent();
         state.setResponseInfo(responseInfoMock, null);

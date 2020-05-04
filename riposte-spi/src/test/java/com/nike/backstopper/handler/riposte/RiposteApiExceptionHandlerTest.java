@@ -20,7 +20,7 @@ import com.nike.riposte.server.http.RequestInfo;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 
 import java.util.Arrays;
 import java.util.List;
