@@ -19,6 +19,8 @@ dependencies {
             "org.codehaus.groovy:groovy-all:$groovyVersion",
             "cglib:cglib:$cgLibVersion", //For Spock mocks
             "org.objenesis:objenesis:$objenesisVersion", //Also for Spock mocks
+            "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
+            "org.junit.vintage:junit-vintage-engine:$junit5Version",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",

@@ -45,6 +45,9 @@ allprojects {
     }
 
     test {
+        // Needed for spock tests to run when in combo junit 4/5 mode.
+        useJUnitPlatform()
+
         // Travis CI appears to have some resource constraint issues. Make sure tests have enough memory.
         maxHeapSize = "1024m"
         maxParallelForks = 1
@@ -97,6 +100,7 @@ ext {
     typesafeConfigVersion = '1.4.0'
 
     // ====== Test dependencies
+    junit5Version = '5.6.2'
     junitVersion = '4.13'
     junitDataproviderVersion = '1.13.1'
     assertJVersion = '3.15.0'
