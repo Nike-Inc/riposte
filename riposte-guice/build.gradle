@@ -2,7 +2,7 @@ evaluationDependsOn(':')
 
 dependencies {
     compile(
-            project(":riposte-core"),
+            project(":riposte-spi"),
             "com.google.inject:guice:$guiceVersion"
     )
     compileOnly(

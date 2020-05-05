@@ -3,7 +3,6 @@ evaluationDependsOn(':')
 dependencies {
     compile(
             project(":riposte-spi"),
-            project(":riposte-core")
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
