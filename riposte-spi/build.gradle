@@ -2,7 +2,7 @@ evaluationDependsOn(':')
 
 dependencies {
     compile(
-            "io.netty:netty-all:$nettyVersion",
+            "io.netty:netty-codec-http:$nettyVersion",
             "com.nike.fastbreak:fastbreak:$fastbreakVersion",
             "com.nike.backstopper:backstopper-core:$backstopperVersion",
             "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
