@@ -9,7 +9,7 @@ import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the default functionality of {@link ServerSpanNamingAndTaggingStrategy}.
@@ -31,7 +31,7 @@ public class ServerSpanNamingAndTaggingStrategyTest {
         assertThat(defaultImpl.shouldAddEndpointFinishAnnotation()).isTrue();
         assertThat(defaultImpl.endpointFinishAnnotationName()).isEqualTo("endpoint.finish");
 
-        verifyZeroInteractions(responseMock, errorMock);
+        verifyNoInteractions(responseMock, errorMock);
     }
 
     private static class DefaultServerSpanNamingAndTaggingStrategy<S> extends ServerSpanNamingAndTaggingStrategy<S> {

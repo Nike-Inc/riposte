@@ -157,8 +157,9 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
         HttpHeaders headers = new DefaultHttpHeaders().set(NONE_OR_UNKNOWN_TAG, "true");
         QueryStringDecoder queryParams = new QueryStringDecoder("/?" + NONE_OR_UNKNOWN_TAG + "=true");
 
-        return new RequestInfoImpl(NONE_OR_UNKNOWN_TAG, null, headers, null, queryParams, null, null, null, null, false,
-                                   true, false);
+        return new RequestInfoImpl<>(
+            NONE_OR_UNKNOWN_TAG, null, headers, null, queryParams, null, null, null, null, false, true, false
+        );
     }
 
     /**
@@ -352,7 +353,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
             @SuppressWarnings("ConstantConditions") // isContentDeserializerSetup() verifies contentDeserializerTypeReference is non-null.
             Type inputType = contentDeserializerTypeReference.getType();
             if (inputType instanceof Class) {
-                Class inputTypeClass = (Class) inputType;
+                Class<?> inputTypeClass = (Class<?>) inputType;
                 // If they want a raw byte[] then return getRawContentBytes().
                 if (byte[].class.equals(inputTypeClass)) {
                     return (T) getRawContentBytes();
@@ -372,7 +373,6 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
         }
         catch (Throwable e) {
             // Something went wrong during deserialization. Throw an appropriate error.
-            //noinspection ConstantConditions - isContentDeserializerSetup() verifies contentDeserializerTypeReference is non-null.
             logger.info("Unable to deserialize request content to desired object type - {}: {}",
                         contentDeserializerTypeReference.getType().toString(), e.getMessage());
             throw new RequestContentDeserializationException(

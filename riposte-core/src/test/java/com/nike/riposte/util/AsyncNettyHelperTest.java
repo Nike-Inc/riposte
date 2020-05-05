@@ -54,15 +54,15 @@ import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyObject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link AsyncNettyHelper}.
@@ -773,7 +773,7 @@ public class AsyncNettyHelperTest {
         if (channelActive)
             verify(runnableMock).run();
         else
-            verifyZeroInteractions(runnableMock);
+            verifyNoInteractions(runnableMock);
     }
 
     @DataProvider(value = {
@@ -818,7 +818,7 @@ public class AsyncNettyHelperTest {
 
         // then
         if (stateIsNull || requestInfoIsNull)
-            verifyZeroInteractions(requestInfoMock);
+            verifyNoInteractions(requestInfoMock);
         else {
             verify(requestInfoMock).releaseAllResources();
             assertThat(currentSpanStackWhenRequestResourcesReleased.get(0)).isEqualTo(stateInfo.getLeft());
@@ -826,7 +826,7 @@ public class AsyncNettyHelperTest {
         }
 
         if (proxyRouterStateIsNull)
-            verifyZeroInteractions(proxyRouterStateMock);
+            verifyNoInteractions(proxyRouterStateMock);
         else {
             verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
             verify(proxyRouterStateMock).cancelDownstreamRequest(any());
@@ -914,7 +914,7 @@ public class AsyncNettyHelperTest {
                 circuitBreaker, executor, ctxMock);
 
         // then
-        verify(circuitBreaker).executeAsyncCall(anyObject());
+        verify(circuitBreaker).executeAsyncCall(any());
         assertThat(circuitBreakerCompletableFuture.isCompletedExceptionally()).isFalse();
         assertThat(circuitBreakerCompletableFuture.get()).isEqualTo(expectedResult);
         // verify new span is not created, but existing span does successfully hop threads
@@ -970,7 +970,7 @@ public class AsyncNettyHelperTest {
         // then
         assertThat(circuitBreakerFuture.isCompletedExceptionally()).isFalse();
         assertThat(circuitBreakerFuture.get()).isEqualTo(expectedResult);
-        verify(circuitBreaker).executeAsyncCall(anyObject());
+        verify(circuitBreaker).executeAsyncCall(any());
         // verify span is as expected
         assertThat(runningSpan.get().getParentSpanId()).isEqualTo(parentSpan.getSpanId());
         assertThat(runningSpan.get().getSpanName()).isEqualTo(expectedSpanName);

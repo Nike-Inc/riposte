@@ -56,11 +56,11 @@ import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultM
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -68,7 +68,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link CodahaleMetricsListener}.
@@ -658,7 +658,7 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, new Object());
 
         // then
-        verifyZeroInteractions(listener.inflightRequests, listener.processedRequests);
+        verifyNoInteractions(listener.inflightRequests, listener.processedRequests);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -677,7 +677,7 @@ public class CodahaleMetricsListenerTest {
         verify(listener.inflightRequests).dec();
         verify(listener.processedRequests).inc();
         // But we should short circuit immediately afterward
-        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verifyNoInteractions(listener.requestSizes, listener.responseSizes);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -696,7 +696,7 @@ public class CodahaleMetricsListenerTest {
         verify(listener.inflightRequests).dec();
         verify(listener.processedRequests).inc();
         // But we should short circuit immediately afterward
-        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verifyNoInteractions(listener.requestSizes, listener.responseSizes);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -715,7 +715,7 @@ public class CodahaleMetricsListenerTest {
         verify(listener.inflightRequests).dec();
         verify(listener.processedRequests).inc();
         // But we should short circuit immediately afterward
-        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verifyNoInteractions(listener.requestSizes, listener.responseSizes);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -745,7 +745,7 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(event, null);
 
         // then
-        verifyZeroInteractions(listener.inflightRequests, listener.responseWriteFailed, listener.processedRequests);
+        verifyNoInteractions(listener.inflightRequests, listener.responseWriteFailed, listener.processedRequests);
         verify(loggerMock).error("Metrics Error: unknown metrics event " + event);
     }
 
@@ -763,7 +763,7 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(event, state);
 
         // then
-        verifyZeroInteractions(listener.processedRequests); // Should have blown up before the processedRequests stuff.
+        verifyNoInteractions(listener.processedRequests); // Should have blown up before the processedRequests stuff.
         verify(loggerMock).error("Metrics Error: ", ex);
     }
 

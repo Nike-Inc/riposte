@@ -47,8 +47,8 @@ import static com.nike.riposte.metrics.codahale.impl.EndpointMetricsHandlerDefau
 import static com.nike.riposte.metrics.codahale.impl.EndpointMetricsHandlerDefaultImpl.ROUTING_ERROR_MAP_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -520,7 +520,7 @@ public class EndpointMetricsHandlerDefaultImplTest {
         else {
             // Outside the normal 1xx-5xx response codes, so none of the response meters should have been modified.
             instance.endpointResponsesMeters.values().forEach(
-                meterArray -> Stream.of(meterArray).forEach(Mockito::verifyZeroInteractions)
+                meterArray -> Stream.of(meterArray).forEach(Mockito::verifyNoInteractions)
             );
         }
     }

@@ -25,6 +25,7 @@ import java.util.Optional;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 
 import static com.nike.riposte.util.HttpUtils.getConfiguredMaxRequestSize;
 import static com.nike.riposte.util.HttpUtils.isMaxRequestSizeValidationDisabled;
@@ -180,8 +181,9 @@ public class RoutingHandler extends BaseInboundHandlerWithTracingAndMdcSupport {
         int configuredMaxRequestSize = getConfiguredMaxRequestSize(endpoint, globalConfiguredMaxRequestSizeInBytes);
 
         if (!isMaxRequestSizeValidationDisabled(configuredMaxRequestSize)
-                && HttpHeaders.isContentLengthSet(msg)
-                && HttpHeaders.getContentLength(msg) > configuredMaxRequestSize) {
+            && HttpUtil.isContentLengthSet(msg)
+            && HttpUtil.getContentLength(msg) > configuredMaxRequestSize
+        ) {
             throw new RequestTooBigException(
                 "Content-Length header value exceeded configured max request size of " + configuredMaxRequestSize
             );

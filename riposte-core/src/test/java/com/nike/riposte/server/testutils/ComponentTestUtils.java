@@ -318,7 +318,7 @@ public class ComponentTestUtils {
                 ch.close();
             }
         } finally {
-            bootstrap.group().shutdownGracefully();
+            bootstrap.config().group().shutdownGracefully();
         }
     }
 

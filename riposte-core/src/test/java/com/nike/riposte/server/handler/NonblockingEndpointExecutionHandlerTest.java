@@ -55,8 +55,8 @@ import io.netty.util.concurrent.ScheduledFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -67,7 +67,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link NonblockingEndpointExecutionHandler}
@@ -252,7 +252,7 @@ public class NonblockingEndpointExecutionHandlerTest {
         PipelineContinuationBehavior result = handlerSpy.doChannelRead(ctxMock, badMsg);
 
         // then
-        verifyZeroInteractions(endpointMock, eventLoopMock);
+        verifyNoInteractions(endpointMock, eventLoopMock);
         assertThat(futureThatWillBeAttachedToSpy).isNull();
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }

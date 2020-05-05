@@ -47,10 +47,10 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyObject;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyObject;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -58,7 +58,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link com.nike.riposte.server.handler.ChannelPipelineFinalizerHandler}
@@ -276,7 +276,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         handler.finalizeChannelPipeline(ctxMock, null, state, null);
 
         // then
-        verifyZeroInteractions(metricsListenerMock);
+        verifyNoInteractions(metricsListenerMock);
         Assertions.assertThat(state.isRequestMetricsRecordedOrScheduled()).isEqualTo(metricsAlreadyScheduled);
     }
 
@@ -342,7 +342,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         handler.finalizeChannelPipeline(ctxMock, msg, state, null);
 
         // then
-        verify(pipelineMock, never()).addFirst(anyString(), anyObject());
+        verify(pipelineMock, never()).addFirst(anyString(), any());
     }
 
     @DataProvider(value = {
@@ -468,12 +468,12 @@ public class ChannelPipelineFinalizerHandlerTest {
             Assertions.assertThat(span.isCompleted()).isTrue();
 
         if (httpStateIsNull)
-            verifyZeroInteractions(requestInfoMock);
+            verifyNoInteractions(requestInfoMock);
         else
             verify(requestInfoMock).releaseAllResources();
 
         if (proxyRouterStateIsNull)
-            verifyZeroInteractions(proxyRouterStateMock);
+            verifyNoInteractions(proxyRouterStateMock);
         else {
             verify(proxyRouterStateMock).cancelRequestStreaming(any(), any());
             verify(proxyRouterStateMock).cancelDownstreamRequest(any());
@@ -508,7 +508,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         Assertions.assertThat(state.isTraceCompletedOrScheduled()).isTrue();
 
         if (requestInfoIsNull)
-            verifyZeroInteractions(requestInfoMock);
+            verifyNoInteractions(requestInfoMock);
         else
             verify(requestInfoMock).releaseAllResources();
         
@@ -636,7 +636,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         handler.doChannelInactive(ctxMock);
 
         // then
-        verifyZeroInteractions(accessLoggerMock);
+        verifyNoInteractions(accessLoggerMock);
         Assertions.assertThat(state.isAccessLogCompletedOrScheduled()).isEqualTo(accessLoggingAlreadyScheduled);
     }
 

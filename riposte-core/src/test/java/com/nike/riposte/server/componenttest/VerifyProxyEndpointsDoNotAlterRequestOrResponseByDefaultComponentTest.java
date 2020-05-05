@@ -550,8 +550,8 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) {
             List<HttpObject> responseChunks;
 
-            if (msg.getUri().equals(MATCHING_PATH)) {
-                if(HttpMethod.POST.equals(msg.getMethod()) || HttpMethod.HEAD.equals(msg.getMethod())) {
+            if (msg.uri().equals(MATCHING_PATH)) {
+                if(HttpMethod.POST.equals(msg.method()) || HttpMethod.HEAD.equals(msg.method())) {
                     responseChunks = handleMatchingCall(msg);
                 }
                 else {

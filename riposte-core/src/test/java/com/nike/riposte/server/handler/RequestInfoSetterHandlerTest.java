@@ -31,8 +31,8 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyObject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -192,7 +192,7 @@ public class RequestInfoSetterHandlerTest {
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
         doReturn(0).when(endpointMock).maxRequestSizeInBytesOverride();
-        doReturn(100).when(requestInfo).addContentChunk(anyObject());
+        doReturn(100).when(requestInfo).addContentChunk(any());
 
         // when
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
@@ -208,7 +208,7 @@ public class RequestInfoSetterHandlerTest {
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
         doReturn(1).when(endpointMock).maxRequestSizeInBytesOverride();
-        doReturn(2).when(requestInfo).addContentChunk(anyObject());
+        doReturn(2).when(requestInfo).addContentChunk(any());
 
         // when
         Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));
@@ -224,7 +224,7 @@ public class RequestInfoSetterHandlerTest {
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
         doReturn(100).when(endpointMock).maxRequestSizeInBytesOverride();
-        doReturn(99).when(requestInfo).addContentChunk(anyObject());
+        doReturn(99).when(requestInfo).addContentChunk(any());
 
         // when
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
@@ -251,7 +251,7 @@ public class RequestInfoSetterHandlerTest {
 
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
-        doReturn(5).when(requestInfo).addContentChunk(anyObject());
+        doReturn(5).when(requestInfo).addContentChunk(any());
 
         // when
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, httpContentMock);
@@ -280,7 +280,7 @@ public class RequestInfoSetterHandlerTest {
         maxRequestSizeInBytes = 10;
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
 
-        doReturn(11).when(requestInfo).addContentChunk(anyObject());
+        doReturn(11).when(requestInfo).addContentChunk(any());
 
         // when
         Throwable thrownException = Assertions.catchThrowable(() -> handler.doChannelRead(ctxMock, httpContentMock));

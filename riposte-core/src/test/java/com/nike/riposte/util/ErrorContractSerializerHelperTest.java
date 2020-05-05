@@ -19,12 +19,13 @@ import java.util.function.Supplier;
 import static com.nike.riposte.util.ErrorContractSerializerHelper.asErrorResponseBodySerializer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.anyObject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link ErrorContractSerializerHelper}.
@@ -78,7 +79,7 @@ public class ErrorContractSerializerHelperTest {
 
         // then
         assertThat(result).isNull();
-        verifyZeroInteractions(objectMapperMock);
+        verifyNoInteractions(objectMapperMock);
     }
 
     @Test
@@ -89,7 +90,7 @@ public class ErrorContractSerializerHelperTest {
         ErrorResponseBodySerializer serializer = asErrorResponseBodySerializer(objectMapperMock);
 
         String objectMapperResult = UUID.randomUUID().toString();
-        doReturn(objectMapperResult).when(objectMapperMock).writeValueAsString(anyObject());
+        doReturn(objectMapperResult).when(objectMapperMock).writeValueAsString(any());
 
         Object objectToSerialize = new Object();
         ErrorResponseBody errorResponseBodyMock = mock(ErrorResponseBody.class);
@@ -114,7 +115,7 @@ public class ErrorContractSerializerHelperTest {
         doReturn(new Object()).when(errorResponseBodyMock).bodyToSerialize();
 
         JsonProcessingException jsonProcessingExceptionMock = mock(JsonProcessingException.class);
-        doThrow(jsonProcessingExceptionMock).when(objectMapperMock).writeValueAsString(anyObject());
+        doThrow(jsonProcessingExceptionMock).when(objectMapperMock).writeValueAsString(any());
 
         // when
         Throwable ex = catchThrowable(() -> serializer.serializeErrorResponseBodyToString(errorResponseBodyMock));

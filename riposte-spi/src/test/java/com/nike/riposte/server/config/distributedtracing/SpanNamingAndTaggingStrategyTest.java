@@ -12,8 +12,8 @@ import org.junit.runner.RunWith;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link SpanNamingAndTaggingStrategy}.
@@ -60,7 +60,7 @@ public class SpanNamingAndTaggingStrategyTest {
         assertThat(defaultImplSpy.shouldAddErrorAnnotationForCaughtException(responseMock, errorMock)).isTrue();
         assertThat(defaultImplSpy.errorAnnotationName(responseMock, errorMock)).isEqualTo("error");
 
-        verifyZeroInteractions(responseMock, errorMock);
+        verifyNoInteractions(responseMock, errorMock);
     }
 
     @Test
@@ -76,7 +76,7 @@ public class SpanNamingAndTaggingStrategyTest {
         assertThat(result).isEqualTo(expectedResult);
         verify(defaultImplSpy).doGetInitialSpanName(requestMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(requestMock);
+        verifyNoInteractions(requestMock);
     }
 
     @Test
@@ -92,7 +92,7 @@ public class SpanNamingAndTaggingStrategyTest {
         assertThat(result).isNull();
         verify(defaultImplSpy).doGetInitialSpanName(requestMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(requestMock);
+        verifyNoInteractions(requestMock);
     }
 
     @Test
@@ -107,7 +107,7 @@ public class SpanNamingAndTaggingStrategyTest {
         assertThat(result).isNull();
         verify(defaultImplSpy, never()).doGetInitialSpanName(requestMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(requestMock);
+        verifyNoInteractions(requestMock);
     }
 
     @Test
@@ -121,7 +121,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doChangeSpanName(spanMock, newName);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock);
+        verifyNoInteractions(spanMock);
     }
 
     @Test
@@ -137,7 +137,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doChangeSpanName(spanMock, newName);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock);
+        verifyNoInteractions(spanMock);
     }
 
     @DataProvider(value = {
@@ -159,7 +159,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy, never()).doChangeSpanName(any(FooSpan.class), anyString());
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock);
+        verifyNoInteractions(spanMock);
     }
 
     @Test
@@ -170,7 +170,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doHandleRequestTagging(spanMock, requestMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock);
+        verifyNoInteractions(spanMock, requestMock);
     }
 
     @Test
@@ -185,7 +185,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doHandleRequestTagging(spanMock, requestMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock);
+        verifyNoInteractions(spanMock, requestMock);
     }
 
     @DataProvider(value = {
@@ -207,7 +207,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy, never()).doHandleRequestTagging(any(FooSpan.class), any(FooRequest.class));
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock);
+        verifyNoInteractions(spanMock, requestMock);
     }
 
     @Test
@@ -218,7 +218,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doHandleResponseTaggingAndFinalSpanName(spanMock, requestMock, responseMock, errorMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock, responseMock, errorMock);
+        verifyNoInteractions(spanMock, requestMock, responseMock, errorMock);
     }
 
     @Test
@@ -229,7 +229,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doHandleResponseTaggingAndFinalSpanName(spanMock, null, null, null);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock, responseMock, errorMock);
+        verifyNoInteractions(spanMock, requestMock, responseMock, errorMock);
     }
 
     @Test
@@ -247,7 +247,7 @@ public class SpanNamingAndTaggingStrategyTest {
         // then
         verify(defaultImplSpy).doHandleResponseTaggingAndFinalSpanName(spanMock, requestMock, responseMock, errorMock);
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock, responseMock, errorMock);
+        verifyNoInteractions(spanMock, requestMock, responseMock, errorMock);
     }
 
     @Test
@@ -260,7 +260,7 @@ public class SpanNamingAndTaggingStrategyTest {
             any(FooSpan.class), any(FooRequest.class), any(FooResponse.class), any(Throwable.class)
         );
         verifyNoMoreInteractions(defaultImplSpy);
-        verifyZeroInteractions(spanMock, requestMock, responseMock, errorMock);
+        verifyNoInteractions(spanMock, requestMock, responseMock, errorMock);
     }
 
     private static class DefaultSpanNamingAndTaggingStrategy

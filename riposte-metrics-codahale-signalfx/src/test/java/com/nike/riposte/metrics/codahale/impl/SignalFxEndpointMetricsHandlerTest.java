@@ -46,16 +46,16 @@ import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHand
 import static com.nike.riposte.testutils.Whitebox.getInternalState;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link SignalFxEndpointMetricsHandler}.
@@ -383,7 +383,7 @@ public class SignalFxEndpointMetricsHandlerTest {
         handler.setupEndpointsMetrics(serverConfigMock, metricRegistryMock);
         
         // then
-        verifyZeroInteractions(
+        verifyNoInteractions(
             serverConfigMock, metricMetadataMock, metricRegistryMock, requestTimerBuilderMock, dimensionConfiguratorMock
         );
     }

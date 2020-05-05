@@ -49,8 +49,8 @@ import static com.nike.riposte.client.asynchttp.netty.StreamingAsyncHttpClient.C
 import static io.netty.handler.codec.http.HttpHeaders.Names.HOST;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -59,7 +59,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -172,7 +172,7 @@ public class StreamingAsyncHttpClientTest {
 
         // then
         assertThat(result).isSameAs(streamChunkChannelPromiseMock);
-        verifyZeroInteractions(streamChunkChannelPromiseMock); // not yet completed
+        verifyNoInteractions(streamChunkChannelPromiseMock); // not yet completed
         ArgumentCaptor<Runnable> taskCaptor = ArgumentCaptor.forClass(Runnable.class);
         verify(eventLoopMock).execute(taskCaptor.capture());
         Runnable task = taskCaptor.getValue();
@@ -405,7 +405,7 @@ public class StreamingAsyncHttpClientTest {
 
         // then
         assertThat(streamingChannelSpy.channelClosedDueToUnrecoverableError).isTrue();
-        verifyZeroInteractions(channelMock);
+        verifyNoInteractions(channelMock);
     }
 
     @Test
