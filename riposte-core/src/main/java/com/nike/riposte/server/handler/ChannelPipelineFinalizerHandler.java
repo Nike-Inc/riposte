@@ -159,16 +159,36 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
         //      multiple chunked messages, this block will only be executed once because when the generic error response
         //      is sent it will update the state.isResponseSent() so that further calls will return true.
         if (!state.isResponseSendingStarted()) {
-            String errorMsg = "Discovered a request that snuck through without a response being sent. This should not "
-                              + "be possible and indicates a major problem in the channel pipeline.";
+            boolean channelIsActive = ctx.channel().isActive();
+            String whatWeAreGoingToDo = (channelIsActive)
+                                        ? "We will attempt to send an error response now."
+                                        : "The channel is already closed so we cannot send an error response now.";
+            String errorMsg = "Discovered a request that snuck through without a response being sent. This can happen "
+                              + "due to a problem with the response sender (for example). Note that the cause of this "
+                              + "stack trace may not be the cause of the response sending failure - search the logs "
+                              + "for this request for full details of what happened. " + whatWeAreGoingToDo;
             logErrorWithTracing(errorMsg, new Exception("Wrapper exception", cause), state);
 
-            // Send a generic unhandled error response with a wrapper exception so that the logging info output by the
-            //      exceptionHandlingHandler will have the overview of what went wrong.
-            Exception exceptionToUse = new Exception(errorMsg, cause);
-            ResponseInfo<ErrorResponseBody> responseInfo =
-                exceptionHandlingHandler.processUnhandledError(state, msg, exceptionToUse);
-            responseSender.sendErrorResponse(ctx, requestInfo, responseInfo);
+            // Only try to send a last-ditch response if the channel is still open
+            if (channelIsActive) {
+                try {
+                    // Send a generic unhandled error response with a wrapper exception so that the logging info output by the
+                    //      exceptionHandlingHandler will have the overview of what went wrong.
+                    Exception exceptionToUse = new Exception(errorMsg, cause);
+                    ResponseInfo<ErrorResponseBody> responseInfo =
+                        exceptionHandlingHandler.processUnhandledError(state, msg, exceptionToUse);
+                    responseSender.sendErrorResponse(ctx, requestInfo, responseInfo);
+                }
+                catch (Exception ex) {
+                    logErrorWithTracing(
+                        "Unable to send last-ditch error response in ChannelPipelineFinalizerHandler. The channel "
+                        + "will be closed.",
+                        ex,
+                        state
+                    );
+                    ctx.channel().close();
+                }
+            }
         }
 
         ctx.flush();
@@ -189,7 +209,11 @@ public class ChannelPipelineFinalizerHandler extends BaseInboundHandlerWithTraci
 
         // If we're in an error case (cause != null) and the response sending has started but not completed, then this
         //      request is broken. We can't do anything except kill the channel.
-        if ((cause != null) && state.isResponseSendingStarted() && !state.isResponseSendingLastChunkSent()) {
+        if ((cause != null)
+            && state.isResponseSendingStarted()
+            && !state.isResponseSendingLastChunkSent()
+            && ctx.channel().isActive()
+        ) {
             logErrorWithTracing(
                 "Received an error in ChannelPipelineFinalizerHandler after response sending was started, but "
                 + "before it finished. Closing the channel. unexpected_error=" + cause.toString(),

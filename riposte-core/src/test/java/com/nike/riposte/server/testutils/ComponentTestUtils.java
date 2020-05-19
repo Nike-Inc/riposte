@@ -3,6 +3,8 @@ package com.nike.riposte.server.testutils;
 import com.nike.backstopper.apierror.ApiError;
 import com.nike.backstopper.model.DefaultErrorContractDTO;
 import com.nike.internal.util.Pair;
+import com.nike.wingtips.Span;
+import com.nike.wingtips.lifecyclelistener.SpanLifecycleListener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -14,8 +16,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +80,64 @@ public class ComponentTestUtils {
     public static int findFreePort() throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(0)) {
             return serverSocket.getLocalPort();
+        }
+    }
+
+    public static class SpanRecorder implements SpanLifecycleListener {
+
+        public final List<Span> completedSpans = Collections.synchronizedList(new ArrayList<>());
+
+        @Override
+        public void spanStarted(Span span) {
+        }
+
+        @Override
+        public void spanSampled(Span span) {
+        }
+
+        @Override
+        public void spanCompleted(Span span) {
+            completedSpans.add(span);
+        }
+    }
+
+    public static void waitUntilSpanRecorderHasExpectedNumSpans(
+        SpanRecorder spanRecorder, int expectedNumSpans
+    ) {
+        waitUntilSpanRecorderHasExpectedNumSpans(spanRecorder, expectedNumSpans, 5000);
+    }
+
+    public static void waitUntilSpanRecorderHasExpectedNumSpans(
+        SpanRecorder spanRecorder, int expectedNumSpans, long timeoutMillis
+    ) {
+        waitUntilCollectionHasSize(spanRecorder.completedSpans, expectedNumSpans, timeoutMillis, "spanRecorder");
+
+        // Before we return we need to sort completedSpans by start time (in reverse order to mimic what normally
+        //      happens with spans where the last-created is first-completed). We need to do this sort because running
+        //      these tests on travis CI can get weird and we can get them completing and arriving in the list in
+        //      out-of-expected-order state.
+        spanRecorder.completedSpans.sort(Comparator.comparingLong(Span::getSpanStartTimeNanos).reversed());
+    }
+
+    public static void waitUntilCollectionHasSize(
+        Collection<?> collection, int expectedSize, long timeoutMillis, String collectionName
+    ) {
+        long startTimeMillis = System.currentTimeMillis();
+        while (collection.size() < expectedSize) {
+            try {
+                Thread.sleep(10);
+            }
+            catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+
+            long timeSinceStart = System.currentTimeMillis() - startTimeMillis;
+            if (timeSinceStart > timeoutMillis) {
+                throw new RuntimeException(
+                    collectionName + " did not have the expected size of " + expectedSize + " after waiting "
+                    + timeoutMillis + " milliseconds"
+                );
+            }
         }
     }
 
@@ -358,7 +422,7 @@ public class ComponentTestUtils {
             return this;
         }
 
-        public NettyHttpClientRequestBuilder withHeader(String key, Object value) {
+        public NettyHttpClientRequestBuilder withHeader(CharSequence key, Object value) {
             this.headers.set(key, value);
             return this;
         }

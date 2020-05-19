@@ -50,13 +50,13 @@ public class RequestInfoSetterHandler extends BaseInboundHandlerWithTracingAndMd
     public PipelineContinuationBehavior doChannelRead(ChannelHandlerContext ctx, Object msg) {
         try {
             HttpProcessingState state = ChannelAttributes.getHttpProcessingStateForChannel(ctx).get();
-            if (state == null || state.isResponseSendingLastChunkSent()) {
+            if (state == null || state.isResponseSendingLastChunkSent() || !ctx.channel().isActive()) {
                 if (state == null)
                     logger.error("HttpProcessingState is null for this request. This should not be possible.");
 
                 // A response has already been sent for this request (likely due to an error being thrown from an
-                //      earlier msg) or the state is null. We can therefore ignore this msg chunk and not process
-                //      anything further.
+                //      earlier msg), the channel is closed, or the state is null. We can therefore ignore this msg
+                //      chunk and not process anything further.
                 return PipelineContinuationBehavior.DO_NOT_FIRE_CONTINUE_EVENT;
             }
 

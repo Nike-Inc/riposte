@@ -32,10 +32,10 @@ import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -72,6 +72,7 @@ public class RequestInfoSetterHandlerTest {
 
         handler = new RequestInfoSetterHandler(maxRequestSizeInBytes);
 
+        doReturn(true).when(channelMock).isActive();
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(stateAttrMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
         doReturn(stateMock).when(stateAttrMock).get();
@@ -140,7 +141,7 @@ public class RequestInfoSetterHandlerTest {
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, msgMock);
 
         // then
-        verify(ctxMock).channel();
+        verify(ctxMock, times(2)).channel();
         verifyNoMoreInteractions(ctxMock);
         verify(stateMock).isResponseSendingLastChunkSent();
         verifyNoMoreInteractions(stateMock);
@@ -149,20 +150,26 @@ public class RequestInfoSetterHandlerTest {
     }
 
     @DataProvider(value = {
-        "true   |   false",
-        "false  |   true",
-        "true   |   true"
+        "true   |   false   |   false",
+        "false  |   true    |   false",
+        "true   |   true    |   false",
+        "false  |   false   |   true",
     }, splitBy = "\\|")
     @Test
-    public void doChannelRead_releases_content_and_returns_do_not_fire_when_state_is_null_or_response_already_sent(
-        boolean stateIsNull, boolean responseAlreadySent
+    public void doChannelRead_releases_content_and_returns_do_not_fire_when_state_is_null_or_response_already_sent_or_channel_is_inactive(
+        boolean stateIsNull, boolean responseAlreadySent, boolean channelIsInactive
     ) {
         // given
-        if (stateIsNull)
+        if (stateIsNull) {
             doReturn(null).when(stateAttrMock).get();
+        }
 
         if (responseAlreadySent) {
             doReturn(true).when(stateMock).isResponseSendingLastChunkSent();
+        }
+
+        if (channelIsInactive) {
+            doReturn(false).when(channelMock).isActive();
         }
 
         // when
