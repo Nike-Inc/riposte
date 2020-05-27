@@ -18,13 +18,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static com.nike.riposte.metrics.codahale.contrib.SignalFxReporterFactory.DEFAULT_REPORTING_FREQUENCY;
+import static com.nike.riposte.testutils.Whitebox.getInternalState;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.internal.util.reflection.Whitebox.getInternalState;
 
 /**
  * Tests the functionality of {@link SignalFxReporterFactory}.
@@ -51,14 +51,13 @@ public class SignalFxReporterFactoryTest {
 
         configuratorMock = mock(Function.class);
 
+        metricRegistryMock = mock(MetricRegistry.class);
         configuratorResult = new Builder(metricRegistryMock, apiKey).addDimension(customDimKey, customDimValue);
         doReturn(configuratorResult).when(configuratorMock).apply(any(Builder.class));
 
         reporterFrequency = Pair.of(42L, TimeUnit.HOURS);
 
         factory = new SignalFxReporterFactory(apiKey, configuratorMock, reporterFrequency);
-
-        metricRegistryMock = mock(MetricRegistry.class);
     }
 
     @Test

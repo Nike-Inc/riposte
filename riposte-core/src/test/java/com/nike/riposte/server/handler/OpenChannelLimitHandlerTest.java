@@ -28,8 +28,8 @@ import static com.nike.riposte.server.handler.OpenChannelLimitHandler.TOO_MANY_O
 import static com.nike.riposte.server.handler.base.PipelineContinuationBehavior.CONTINUE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;

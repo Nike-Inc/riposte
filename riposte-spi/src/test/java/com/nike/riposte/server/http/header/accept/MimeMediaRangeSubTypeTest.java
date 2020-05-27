@@ -3,7 +3,7 @@ package com.nike.riposte.server.http.header.accept;
 import com.nike.riposte.server.http.mimetype.MimeType;
 
 import org.junit.Test;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 
 import java.util.UUID;
 

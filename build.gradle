@@ -5,7 +5,7 @@ buildscript {
     }
     dependencies {
         // STUFF FOR BINTRAY
-        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.4'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.5'
     }
 }
 
@@ -45,6 +45,9 @@ allprojects {
     }
 
     test {
+        // Needed for spock tests to run when in combo junit 4/5 mode.
+        useJUnitPlatform()
+
         // Travis CI appears to have some resource constraint issues. Make sure tests have enough memory.
         maxHeapSize = "1024m"
         maxParallelForks = 1
@@ -75,52 +78,47 @@ javadocJar.enabled = false
 // ========== PROPERTIES FOR GRADLE BUILD - DEPENDENCY VERSIONS / ETC
 ext {
     // DEPENDENCY VERSIONS
-    slf4jVersion = '1.7.26'
-    logbackVersion = '1.2.3'
-    javaxInjectVersion = '1'
+    // Core and multi-module dependencies
+    nettyVersion = '4.1.49.Final'
+    slf4jVersion = '1.7.30'
+    jetbrainsAnnotationsVersion = '19.0.0'
+    jacksonVersion = '2.11.0'
+    wingtipsVersion = '0.22.0'
+    backstopperVersion = '0.13.0'
+    fastbreakVersion = '0.10.1'
 
-    wingtipsVersion = '0.20.1'
-    backstopperVersion = '0.11.5'
-    fastbreakVersion = '0.10.0'
-    spockVersion = '1.2-groovy-2.5'
-    cgLibVersion = '3.1'
-    objenesisVersion = '2.1'
-    javassistVersion = '3.18.2-GA'
-    jacksonVersion = '2.9.9'
-    ningAsyncHttpClientVersion = '1.9.38'
-    asyncHttpClientVersion = '2.9.0'
-
+    // Misc module dependencies
+    ningAsyncHttpClientVersion = '1.9.40'
+    asyncHttpClientVersion = '2.12.1'
     servletApiVersion = '3.1.0'
+    guiceVersion = '4.2.3'
+    codahaleMetricsVersion = '4.1.6'
+    signalFxCodahaleVersion = '1.0.3'
+    eurekaClientVersion = '1.9.21'
+    archaiusVersion = '0.7.7'
+    apacheCommonsConfigurationVersion = '1.8'
+    typesafeConfigVersion = '1.4.0'
 
-    nettyVersion = '4.1.30.Final'
-    junitVersion = '4.12'
-    junitDataproviderVersion = '1.9.3'
-    assertJVersion = '3.12.2'
-    mockitoVersion = '1.10.8'
-    slf4jTestVersion = '1.1.0'
-    guiceVersion = '4.2.2'
+    // ====== Test dependencies
+    junit5Version = '5.6.2'
+    junitVersion = '4.13'
+    junitDataproviderVersion = '1.13.1'
+    assertJVersion = '3.15.0'
+    mockitoVersion = '3.3.3'
+    restAssuredVersion = '4.3.0'
+    slf4jTestVersion = '1.2.0'
+    logbackVersion = '1.2.3'
 
-    jetbrainsAnnotationsVersion = '17.0.0'
-    
-    groovyVersion = '2.5.7'
+    spockVersion = '2.0-M2-groovy-3.0'
+    cgLibVersion = '3.3.0'
+    objenesisVersion = '3.1'
+    groovyVersion = '3.0.3'
 
-    restAssuredVersion = '3.3.0'
-
-    codahaleMetricsVersion = '3.1.1'
-
-    signalFxCodahaleVersion = '0.0.28'
-
-    eurekaClientVersion = '1.3.4'
-
-    archaiusVersion = '0.6.5'
-    typesafeConfigVersion = '1.3.0'
     apacheCommonsIoVersion = '2.6'
-    apacheCommonsCodecVersion = '1.10'
-
-    jzlibVersion = '1.1.3'
+    apacheCommonsCodecVersion = '1.14'
 
     // JACOCO PROPERTIES
-    jacocoToolVersion = '0.8.4'
+    jacocoToolVersion = '0.8.5'
     // Anything in this jacocoExclusions list will be excluded from coverage reports. The format is paths to class
     //      files, with wildcards allowed. e.g.: jacocoExclusions = [ "com/nike/Foo.class", "**/Bar*.*" ]
     jacocoExclusions = []

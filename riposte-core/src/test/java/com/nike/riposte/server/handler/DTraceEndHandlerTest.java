@@ -16,7 +16,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.MDC;
 
 import java.util.Deque;
@@ -41,7 +41,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link com.nike.riposte.server.handler.DTraceEndHandler}
@@ -246,6 +246,6 @@ public class DTraceEndHandlerTest {
 
         // then
         verify(handlerSpy, never()).completeCurrentSpan();
-        verifyZeroInteractions(lastChunkChannelFutureMock);
+        verifyNoInteractions(lastChunkChannelFutureMock);
     }
 }

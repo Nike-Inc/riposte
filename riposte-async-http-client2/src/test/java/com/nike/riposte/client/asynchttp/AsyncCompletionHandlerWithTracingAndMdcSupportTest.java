@@ -23,7 +23,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.MDC;
 
 import java.util.Deque;
@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.nike.riposte.client.asynchttp.AsyncCompletionHandlerWithTracingAndMdcSupportTest.ExistingSpanStackState.EMPTY;
 import static java.lang.Boolean.TRUE;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -47,7 +47,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link AsyncCompletionHandlerWithTracingAndMdcSupport}.
@@ -333,7 +333,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         }
 
         assertThat(ignoredResult).isEqualTo(responseMock);
-        verifyZeroInteractions(responseMock);
+        verifyNoInteractions(responseMock);
     }
 
     @DataProvider(value = {
@@ -374,7 +374,7 @@ public class AsyncCompletionHandlerWithTracingAndMdcSupportTest {
         verifyNoMoreInteractions(cfMock);
 
         assertThat(ignoredResult).isEqualTo(responseMock);
-        verifyZeroInteractions(responseMock);
+        verifyNoInteractions(responseMock);
     }
 
     private Pair<Deque<Span>, Map<String, String>> generateTraceInfo(Boolean setupForSubspan) {

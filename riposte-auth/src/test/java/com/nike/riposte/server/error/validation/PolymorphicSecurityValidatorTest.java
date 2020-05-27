@@ -19,12 +19,12 @@ import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @RunWith(DataProviderRunner.class)
 public class PolymorphicSecurityValidatorTest {
@@ -215,7 +215,7 @@ public class PolymorphicSecurityValidatorTest {
         validator.validateSecureRequestForEndpoint(mock(RequestInfo.class), mockEndpoint);
 
         // then
-        verifyZeroInteractions(innerValidatorOne);
-        verifyZeroInteractions(innerValidatorTwo);
+        verifyNoInteractions(innerValidatorOne);
+        verifyNoInteractions(innerValidatorTwo);
     }
 }

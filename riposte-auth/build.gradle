@@ -3,7 +3,6 @@ evaluationDependsOn(':')
 dependencies {
     compile(
             project(":riposte-spi"),
-            project(":riposte-core")
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
@@ -11,6 +10,8 @@ dependencies {
     testCompile (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
+            "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
+            "org.junit.vintage:junit-vintage-engine:$junit5Version",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "commons-codec:commons-codec:$apacheCommonsCodecVersion",

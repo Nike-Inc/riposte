@@ -13,7 +13,7 @@ import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Timer;
 
 import java.util.HashMap;
@@ -37,8 +37,8 @@ import static com.codahale.metrics.MetricRegistry.name;
  * is not usually how endpoint latency is distributed). You can customize the timer behavior by using the
  * {@link EndpointMetricsHandlerDefaultImpl#EndpointMetricsHandlerDefaultImpl(Supplier)} constructor, passing in a
  * custom {@link Supplier} for generating {@link Timer}s. For example you could use the {@link Timer#Timer(Reservoir)}
- * constructor and pass in a {@link SlidingTimeWindowReservoir} to get much better accuracy over whatever rolling time
- * window you choose.
+ * constructor and pass in a {@link SlidingTimeWindowArrayReservoir to get much better accuracy over whatever rolling
+ * time window you choose.
  *
  * @author Nic Munroe
  */

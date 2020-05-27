@@ -128,7 +128,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
     }
 
     private String generateUriForInitialLineLength(HttpMethod method, String baseUri, int desiredInitialLineLength) {
-        String baseInitialLine = method.name() + " " + baseUri + "/ HTTP/1.1";
+        String baseInitialLine = method.name() + " " + baseUri + "/ HTTP/1.1\r"; // Netty now considers the trailing \r when calculating header length.
         int neededWildcardLength = desiredInitialLineLength - baseInitialLine.length();
         return baseUri + "/" + generatePayload(neededWildcardLength, "a");
     }
@@ -138,7 +138,7 @@ public class VerifyDecoderFailedResultIsHandledTest {
     }
 
     private Pair<String, Object> generateHeaderForHeaderLineLength(String headerKey, int desiredHeaderLineLength) {
-        String baseHeaderLine = headerKey + ": ";
+        String baseHeaderLine = headerKey + ": " + "\r"; // Netty now considers the trailing \r when calculating header length.
         int neededHeaderValueLength = desiredHeaderLineLength - baseHeaderLine.length();
         return Pair.of(headerKey, generatePayload(neededHeaderValueLength, "h"));
     }
@@ -216,7 +216,9 @@ public class VerifyDecoderFailedResultIsHandledTest {
         );
         Pair<String, Object> halfMaxLengthHeaderPlusOne = generateHeaderForHeaderLineLength(
             "bar",
-            (CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize() / 2) + 1
+            // We have to do +2 rather than +1 here because generateHeaderForHeaderLineLength(...) accounts for the
+            //      trailing \r, but since we're doing two headers we don't want to consider the \r twice.
+            (CUSTOM_REQUEST_DECODER_CONFIG.maxHeaderSize() / 2) + 2
         );
 
         NettyHttpClientRequestBuilder request = request()

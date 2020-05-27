@@ -2,19 +2,19 @@ evaluationDependsOn(':')
 
 dependencies {
     compile(
-            "io.netty:netty-all:$nettyVersion",
+            "io.netty:netty-codec-http:$nettyVersion",
             "com.nike.fastbreak:fastbreak:$fastbreakVersion",
             "com.nike.backstopper:backstopper-core:$backstopperVersion",
             "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
-            "org.slf4j:slf4j-api:$slf4jVersion",
-            "org.slf4j:jcl-over-slf4j:$slf4jVersion",
-            "org.slf4j:log4j-over-slf4j:$slf4jVersion"
+            "org.slf4j:slf4j-api:$slf4jVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
     testCompile (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+            "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
+            "org.junit.vintage:junit-vintage-engine:$junit5Version",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "org.assertj:assertj-core:$assertJVersion",

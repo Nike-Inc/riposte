@@ -2,7 +2,7 @@ evaluationDependsOn(':')
 
 dependencies {
     compile(
-            project(":riposte-core"),
+            project(":riposte-spi"),
             "com.google.inject:guice:$guiceVersion"
     )
     compileOnly(
@@ -10,6 +10,8 @@ dependencies {
     )
     testCompile (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
+            "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
+            "org.junit.vintage:junit-vintage-engine:$junit5Version",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "com.nike.backstopper:backstopper-reusable-tests:$backstopperVersion"

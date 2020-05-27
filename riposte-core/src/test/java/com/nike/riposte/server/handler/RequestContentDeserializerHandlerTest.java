@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 
 import java.util.UUID;
 
@@ -24,14 +24,14 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link RequestContentDeserializerHandler}
@@ -187,10 +187,10 @@ public class RequestContentDeserializerHandlerTest {
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, wrongMsgType);
 
         // then
-        verifyZeroInteractions(ctxMock);
-        verifyZeroInteractions(stateMock);
-        verifyZeroInteractions(endpointMock);
-        verifyZeroInteractions(requestInfoSpy);
+        verifyNoInteractions(ctxMock);
+        verifyNoInteractions(stateMock);
+        verifyNoInteractions(endpointMock);
+        verifyNoInteractions(requestInfoSpy);
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 }

@@ -18,7 +18,7 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Reservoir;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Timer;
 import com.signalfx.codahale.metrics.MetricBuilder;
 import com.signalfx.codahale.reporter.MetricMetadata;
@@ -43,19 +43,19 @@ import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHand
 import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator.DEFAULT_METHOD_DIMENSION_KEY;
 import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator.DEFAULT_RESPONSE_CODE_DIMENSION_KEY;
 import static com.nike.riposte.metrics.codahale.impl.SignalFxEndpointMetricsHandler.DefaultMetricDimensionConfigurator.DEFAULT_URI_DIMENSION_KEY;
+import static com.nike.riposte.testutils.Whitebox.getInternalState;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.internal.util.reflection.Whitebox.getInternalState;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link SignalFxEndpointMetricsHandler}.
@@ -111,7 +111,7 @@ public class SignalFxEndpointMetricsHandlerTest {
 
         doReturn(timerBuilderTaggerMock).when(dimensionConfiguratorMock).setupMetricWithDimensions(
             eq(timerBuilderTaggerMock), eq(requestInfoMock), eq(responseInfoMock), eq(httpStateMock), anyInt(),
-            anyInt(), anyLong(), any(Endpoint.class), anyString(), anyString(), anyString()
+            anyInt(), anyLong(), any(), anyString(), anyString(), anyString()
         );
 
         timerMock = mock(Timer.class);
@@ -383,7 +383,7 @@ public class SignalFxEndpointMetricsHandlerTest {
         handler.setupEndpointsMetrics(serverConfigMock, metricRegistryMock);
         
         // then
-        verifyZeroInteractions(
+        verifyNoInteractions(
             serverConfigMock, metricMetadataMock, metricRegistryMock, requestTimerBuilderMock, dimensionConfiguratorMock
         );
     }
@@ -473,7 +473,7 @@ public class SignalFxEndpointMetricsHandlerTest {
         "3      |   HOURS"
     }, splitBy = "\\|")
     @Test
-    public void RollingWindowTimerBuilder_newMetric_creates_new_timer_with_SlidingTimeWindowReservoir_with_expected_values(
+    public void RollingWindowTimerBuilder_newMetric_creates_new_timer_with_SlidingTimeWindowArrayReservoir_with_expected_values(
         long amount, TimeUnit timeUnit
     ) {
         // given
@@ -485,8 +485,8 @@ public class SignalFxEndpointMetricsHandlerTest {
         // then
         Histogram histogram = (Histogram) getInternalState(timer, "histogram");
         Reservoir reservoir = (Reservoir) getInternalState(histogram, "reservoir");
-        assertThat(reservoir).isInstanceOf(SlidingTimeWindowReservoir.class);
-        // The expected value here comes from logic in the SlidingTimeWindowReservoir constructor.
+        assertThat(reservoir).isInstanceOf(SlidingTimeWindowArrayReservoir.class);
+        // The expected value here comes from logic in the SlidingTimeWindowArrayReservoir constructor.
         assertThat(getInternalState(reservoir, "window")).isEqualTo(timeUnit.toNanos(amount) * 256);
     }
 
@@ -541,7 +541,7 @@ public class SignalFxEndpointMetricsHandlerTest {
         "3      |   HOURS"
     }, splitBy = "\\|")
     @Test
-    public void RollingWindowHistogramBuilder_newMetric_creates_new_histogram_with_SlidingTimeWindowReservoir_with_expected_values(
+    public void RollingWindowHistogramBuilder_newMetric_creates_new_histogram_with_SlidingTimeWindowArrayReservoir_with_expected_values(
         long amount, TimeUnit timeUnit
     ) {
         // given
@@ -552,8 +552,8 @@ public class SignalFxEndpointMetricsHandlerTest {
 
         // then
         Reservoir reservoir = (Reservoir) getInternalState(histogram, "reservoir");
-        assertThat(reservoir).isInstanceOf(SlidingTimeWindowReservoir.class);
-        // The expected value here comes from logic in the SlidingTimeWindowReservoir constructor.
+        assertThat(reservoir).isInstanceOf(SlidingTimeWindowArrayReservoir.class);
+        // The expected value here comes from logic in the SlidingTimeWindowArrayReservoir constructor.
         assertThat(getInternalState(reservoir, "window")).isEqualTo(timeUnit.toNanos(amount) * 256);
     }
 

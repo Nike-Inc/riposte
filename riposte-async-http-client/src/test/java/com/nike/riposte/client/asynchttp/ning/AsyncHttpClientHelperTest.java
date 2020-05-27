@@ -14,6 +14,7 @@ import com.nike.riposte.client.asynchttp.ning.testutils.ArgCapturingHttpTagAndSp
 import com.nike.riposte.server.channelpipeline.ChannelAttributes;
 import com.nike.riposte.server.config.distributedtracing.SpanNamingAndTaggingStrategy;
 import com.nike.riposte.server.http.HttpProcessingState;
+import com.nike.riposte.testutils.Whitebox;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.TraceHeaders;
 import com.nike.wingtips.Tracer;
@@ -36,7 +37,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
 import org.slf4j.Logger;
 import org.slf4j.MDC;
 
@@ -67,10 +67,10 @@ import static com.nike.riposte.client.asynchttp.ning.AsyncHttpClientHelper.DEFAU
 import static com.nike.wingtips.http.HttpRequestTracingUtils.convertSampleableBooleanToExpectedB3Value;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -78,7 +78,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Tests the functionality of {@link AsyncHttpClientHelper}.
@@ -500,7 +501,7 @@ public class AsyncHttpClientHelperTest {
         Span spanForDownstreamCall = achwtams.getSpanForCall();
         if (initialSpan == null && !performSubspan) {
             assertThat(spanForDownstreamCall).isNull();
-            verifyZeroInteractions(reqMock);
+            verifyNoMoreInteractions(reqMock);
         }
         else {
             assertThat(spanForDownstreamCall).isNotNull();
@@ -549,9 +550,9 @@ public class AsyncHttpClientHelperTest {
             .isInstanceOf(ExecutionException.class)
             .hasCause(exToThrow);
         if (throwCircuitBreakerOpenException)
-            verifyZeroInteractions(loggerMock);
+            verifyNoInteractions(loggerMock);
         else
-            verify(loggerMock).error(anyString(), anyString(), anyString(), eq(exToThrow));
+            verify(loggerMock).error(anyString(), any(), any(), eq(exToThrow));
     }
 
     @DataProvider(value = {

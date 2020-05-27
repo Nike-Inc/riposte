@@ -92,6 +92,7 @@ public class ProxyRouterProcessingStateTest {
     @Test
     public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone_works_as_expected_happy_path() {
         // given
+        //noinspection deprecation
         stateSpy.setDistributedTracingConfig(distributedTracingConfigMock);
 
         Span downstreamReqSpanMock = mock(Span.class);
@@ -124,6 +125,7 @@ public class ProxyRouterProcessingStateTest {
     @Test
     public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone_does_nothing_if_spanAroundProxyCall_is_null() {
         // given
+        //noinspection deprecation
         stateSpy.setDistributedTracingConfig(distributedTracingConfigMock);
 
         stateSpy.setProxyHttpRequest(requestMock);
@@ -143,6 +145,7 @@ public class ProxyRouterProcessingStateTest {
     @Test
     public void handleTracingResponseTaggingAndFinalSpanNameIfNotAlreadyDone_does_nothing_if_DistributedTracingConfig_is_null() {
         // given
+        //noinspection deprecation
         stateSpy.setDistributedTracingConfig(null);
         assertThat(stateSpy.isTracingResponseTaggingAndFinalSpanNameCompleted()).isFalse();
 
@@ -158,6 +161,7 @@ public class ProxyRouterProcessingStateTest {
         // given
         doThrow(new RuntimeException("intentional exception")).when(distributedTracingConfigMock)
                                                               .getProxyRouterSpanNamingAndTaggingStrategy();
+        //noinspection deprecation
         stateSpy.setDistributedTracingConfig(distributedTracingConfigMock);
 
         stateSpy.setProxyHttpRequest(requestMock);

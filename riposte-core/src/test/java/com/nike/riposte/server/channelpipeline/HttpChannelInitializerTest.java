@@ -38,6 +38,7 @@ import com.nike.riposte.server.http.Endpoint;
 import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.http.filter.RequestAndResponseFilter;
 import com.nike.riposte.server.logging.AccessLogger;
+import com.nike.riposte.testutils.Whitebox;
 import com.nike.riposte.util.Matcher;
 import com.nike.wingtips.Span;
 
@@ -51,7 +52,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,8 +74,8 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.JdkSslClientContext;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -85,9 +85,9 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThan;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -398,7 +398,7 @@ public class HttpChannelInitializerTest {
 
         // given
         HttpChannelInitializer
-            hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, true, mock(RequestValidator.class), reqResFilters);
+            hci = basicHttpChannelInitializer(SslContextBuilder.forClient().build(), 42, 100, true, mock(RequestValidator.class), reqResFilters);
 
         // when
         hci.initChannel(socketChannelMock);
@@ -443,7 +443,7 @@ public class HttpChannelInitializerTest {
     public void initChannel_adds_debugLoggingHandler_first_if_debugChannelLifecycleLoggingEnabled_is_true() throws SSLException {
         // given
         HttpChannelInitializer
-            hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, true, mock(RequestValidator.class),
+            hci = basicHttpChannelInitializer(SslContextBuilder.forClient().build(), 42, 100, true, mock(RequestValidator.class),
                                               createRequestAndResponseFilterMock());
 
         // when
@@ -460,7 +460,7 @@ public class HttpChannelInitializerTest {
     public void initChannel_does_not_add_debugLoggingHandler_if_debugChannelLifecycleLoggingEnabled_is_false() throws SSLException {
         // given
         HttpChannelInitializer
-            hci = basicHttpChannelInitializer(new JdkSslClientContext(), 42, 100, false, mock(RequestValidator.class),
+            hci = basicHttpChannelInitializer(SslContextBuilder.forClient().build(), 42, 100, false, mock(RequestValidator.class),
                                                 createRequestAndResponseFilterMock());
 
         // when
@@ -476,7 +476,7 @@ public class HttpChannelInitializerTest {
     @Test
     public void initChannel_adds_sslCtx_handler_first_if_available_and_no_utility_handlers() throws SSLException {
         // given
-        SslContext sslCtx = new JdkSslClientContext();
+        SslContext sslCtx = SslContextBuilder.forClient().build();
         HttpChannelInitializer hci = basicHttpChannelInitializer(sslCtx, 0, 100, false, mock(RequestValidator.class),
                                                                  createRequestAndResponseFilterMock());
 

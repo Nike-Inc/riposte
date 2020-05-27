@@ -10,7 +10,7 @@ import com.nike.riposte.server.http.RequestInfo;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 
 import java.util.UUID;
 import java.util.function.Function;
@@ -23,13 +23,13 @@ import io.netty.util.Attribute;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link RequestContentValidationHandler}
@@ -247,10 +247,10 @@ public class RequestContentValidationHandlerTest {
         PipelineContinuationBehavior result = handler.doChannelRead(ctxMock, notLastContentMsg);
 
         // then
-        verifyZeroInteractions(requestInfoMock);
-        verifyZeroInteractions(endpointMock);
-        verifyZeroInteractions(stateMock);
-        verifyZeroInteractions(requestValidatorMock);
+        verifyNoInteractions(requestInfoMock);
+        verifyNoInteractions(endpointMock);
+        verifyNoInteractions(stateMock);
+        verifyNoInteractions(requestValidatorMock);
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 
@@ -264,7 +264,7 @@ public class RequestContentValidationHandlerTest {
 
         // then
         verify(stateMock).addPreEndpointExecutionWorkChainSegment(any(Function.class));
-        verifyZeroInteractions(requestValidatorMock);
+        verifyNoInteractions(requestValidatorMock);
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
 

@@ -6,6 +6,7 @@ import com.nike.riposte.server.config.distributedtracing.DistributedTracingConfi
 import com.nike.riposte.server.http.HttpProcessingState;
 import com.nike.riposte.server.http.ProxyRouterProcessingState;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
+import com.nike.riposte.testutils.Whitebox;
 import com.nike.wingtips.Span;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
@@ -15,7 +16,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -32,15 +32,15 @@ import io.netty.util.Attribute;
 import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.IDLE_CHANNEL_TIMEOUT_HANDLER_NAME;
 import static com.nike.riposte.server.channelpipeline.HttpChannelInitializer.INCOMPLETE_HTTP_CALL_TIMEOUT_HANDLER_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link RequestStateCleanerHandler}
@@ -140,7 +140,7 @@ public class RequestStateCleanerHandlerTest {
         doAnswer(invocation -> httpStateRef.get()).when(stateAttrMock).get();
         doAnswer(
             invocation -> {
-                httpStateRef.set(invocation.getArgumentAt(0, HttpProcessingState.class));
+                httpStateRef.set(invocation.getArgument(0));
                 return null;
             }
         ).when(stateAttrMock).set(any(HttpProcessingState.class));
@@ -149,7 +149,7 @@ public class RequestStateCleanerHandlerTest {
         doAnswer(invocation -> proxyStateRef.get()).when(proxyRouterProcessingStateAttrMock).get();
         doAnswer(
             invocation -> {
-                proxyStateRef.set(invocation.getArgumentAt(0, ProxyRouterProcessingState.class));
+                proxyStateRef.set(invocation.getArgument(0));
                 return null;
             }
         ).when(proxyRouterProcessingStateAttrMock).set(any(ProxyRouterProcessingState.class));
@@ -178,7 +178,7 @@ public class RequestStateCleanerHandlerTest {
         verify(metricsListenerMock).onEvent(eq(ServerMetricsEvent.REQUEST_RECEIVED), eq(actualHttpState));
 
         // sanity check - we should have rewired attr mocks to not do anything with the state mocks.
-        verifyZeroInteractions(stateMock, proxyRouterProcessingStateMock);
+        verifyNoInteractions(stateMock, proxyRouterProcessingStateMock);
     }
 
     @Test
@@ -193,7 +193,7 @@ public class RequestStateCleanerHandlerTest {
 
         // then
         verify(stateMock).cleanStateForNewRequest();
-        verifyZeroInteractions(metricsListenerMock);
+        verifyNoInteractions(metricsListenerMock);
     }
 
     @DataProvider(value = {
@@ -296,8 +296,8 @@ public class RequestStateCleanerHandlerTest {
         // then
         verify(ctxMock).fireChannelRead(ignoredMsgMock); // the normal continuation behavior from the super class.
         verifyNoMoreInteractions(ctxMock); // nothing else should have happened related to the ctx.
-        verifyZeroInteractions(stateMock);
-        verifyZeroInteractions(metricsListenerMock);
+        verifyNoInteractions(stateMock);
+        verifyNoInteractions(metricsListenerMock);
     }
 
 }

@@ -162,7 +162,7 @@ public class VerifyProxyRequestCornerCasesComponentTest {
         }
         finally {
             proxyServerChannel.close();
-            bootstrap.group().shutdownGracefully();
+            bootstrap.config().group().shutdownGracefully();
         }
     }
 

@@ -30,7 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.mockito.verification.VerificationMode;
 import org.slf4j.MDC;
 
@@ -55,8 +55,8 @@ import io.netty.util.concurrent.ScheduledFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -67,7 +67,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link NonblockingEndpointExecutionHandler}
@@ -204,8 +204,8 @@ public class NonblockingEndpointExecutionHandlerTest {
         // then
         verify(endpointMock).execute(requestInfo, longRunningTaskExecutorMock, ctxMock);
         // The 2nd whenComplete is for cancelling the timeout check if the response finishes before the timeout
-        verify(futureThatWillBeAttachedToSpy, times(2)).whenComplete(any(BiConsumerWithTracingAndMdcSupport.class));
-        verify(eventLoopMock).schedule(any(RunnableWithTracingAndMdcSupport.class), any(Long.class), eq(TimeUnit.MILLISECONDS));
+        verify(futureThatWillBeAttachedToSpy, times(2)).whenComplete(any(BiConsumer.class));
+        verify(eventLoopMock).schedule(any(Runnable.class), any(Long.class), eq(TimeUnit.MILLISECONDS));
         verify(handlerSpy).doExecuteEndpointFunction(
             requestInfo, endpointMock, stateMock.getDistributedTraceStack().peek(), ctxMock
         );
@@ -252,7 +252,7 @@ public class NonblockingEndpointExecutionHandlerTest {
         PipelineContinuationBehavior result = handlerSpy.doChannelRead(ctxMock, badMsg);
 
         // then
-        verifyZeroInteractions(endpointMock, eventLoopMock);
+        verifyNoInteractions(endpointMock, eventLoopMock);
         assertThat(futureThatWillBeAttachedToSpy).isNull();
         assertThat(result).isEqualTo(PipelineContinuationBehavior.CONTINUE);
     }
@@ -266,7 +266,7 @@ public class NonblockingEndpointExecutionHandlerTest {
         handlerSpy.doChannelRead(ctxMock, msg);
 
         // then
-        verify(eventLoopMock).schedule(any(RunnableWithTracingAndMdcSupport.class), eq(defaultCompletableFutureTimeoutMillis), eq(TimeUnit.MILLISECONDS));
+        verify(eventLoopMock).schedule(any(Runnable.class), eq(defaultCompletableFutureTimeoutMillis), eq(TimeUnit.MILLISECONDS));
     }
 
     @Test
@@ -279,7 +279,7 @@ public class NonblockingEndpointExecutionHandlerTest {
         handlerSpy.doChannelRead(ctxMock, msg);
 
         // then
-        verify(eventLoopMock).schedule(any(RunnableWithTracingAndMdcSupport.class), eq(endpointValue), eq(TimeUnit.MILLISECONDS));
+        verify(eventLoopMock).schedule(any(Runnable.class), eq(endpointValue), eq(TimeUnit.MILLISECONDS));
     }
 
     private BiConsumer<ResponseInfo<?>, Throwable> extractContinuationLogic() throws Exception {

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link AsyncHttpClientHelperTagAdapter}.
@@ -135,7 +135,7 @@ public class AsyncHttpClientHelperTagAdapterTest {
 
         // then
         assertThat(result).isNull();
-        verifyZeroInteractions(requestMock, responseMock);
+        verifyNoInteractions(requestMock, responseMock);
     }
 
     @Test
@@ -183,7 +183,7 @@ public class AsyncHttpClientHelperTagAdapterTest {
 
         // then
         assertThat(result).isNull();
-        verifyZeroInteractions(requestMock);
+        verifyNoInteractions(requestMock);
     }
 
     @Test
@@ -193,7 +193,7 @@ public class AsyncHttpClientHelperTagAdapterTest {
 
         // then
         assertThat(result).isNull();
-        verifyZeroInteractions(requestMock);
+        verifyNoInteractions(requestMock);
     }
 
     @Test

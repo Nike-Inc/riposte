@@ -31,7 +31,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.Whitebox;
+import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.Logger;
 
 import java.util.Arrays;
@@ -56,11 +56,11 @@ import static com.nike.riposte.metrics.codahale.CodahaleMetricsListener.DefaultM
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -68,7 +68,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link CodahaleMetricsListener}.
@@ -159,7 +159,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredTimerMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Timer timerMock = mock(Timer.class);
             registeredTimerMocks.put(name, timerMock);
             return timerMock;
@@ -167,7 +167,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredMeterMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Meter meterMock = mock(Meter.class);
             registeredMeterMocks.put(name, meterMock);
             return meterMock;
@@ -175,7 +175,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredCounterMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Counter counterMock = mock(Counter.class);
             registeredCounterMocks.put(name, counterMock);
             return counterMock;
@@ -183,7 +183,7 @@ public class CodahaleMetricsListenerTest {
 
         registeredHistogramMocks = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
+            String name = invocation.getArgument(0);
             Histogram histogramMock = mock(Histogram.class);
             registeredHistogramMocks.put(name, histogramMock);
             return histogramMock;
@@ -191,8 +191,8 @@ public class CodahaleMetricsListenerTest {
 
         registeredGauges = new HashMap<>();
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
-            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            String name = invocation.getArgument(0);
+            Metric metric = invocation.getArgument(1);
             if (metric instanceof Gauge)
                 registeredGauges.put(name, (Gauge)metric);
             else if (metric instanceof Histogram)
@@ -204,26 +204,26 @@ public class CodahaleMetricsListenerTest {
         }).when(metricRegistryMock).register(anyString(), any(Metric.class));
 
         doAnswer(invocation -> {
-            String name = invocation.getArgumentAt(0, String.class);
-            Metric metric = invocation.getArgumentAt(1, Metric.class);
+            String name = invocation.getArgument(0);
+            Metric metric = invocation.getArgument(1);
             metricRegistryMock.register(name, metric);
             return metric;
         }).when(cmcMock).registerNamedMetric(anyString(), any(Metric.class));
 
         doAnswer(
-            invocation -> metricRegistryMock.counter(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.counter(invocation.getArgument(0))
         ).when(cmcMock).getNamedCounter(anyString());
 
         doAnswer(
-            invocation -> metricRegistryMock.meter(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.meter(invocation.getArgument(0))
         ).when(cmcMock).getNamedMeter(anyString());
 
         doAnswer(
-            invocation -> metricRegistryMock.histogram(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.histogram(invocation.getArgument(0))
         ).when(cmcMock).getNamedHistogram(anyString());
 
         doAnswer(
-            invocation -> metricRegistryMock.timer(invocation.getArgumentAt(0, String.class))
+            invocation -> metricRegistryMock.timer(invocation.getArgument(0))
         ).when(cmcMock).getNamedTimer(anyString());
     }
 
@@ -658,7 +658,7 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(ServerMetricsEvent.RESPONSE_SENT, new Object());
 
         // then
-        verifyZeroInteractions(listener.inflightRequests, listener.processedRequests);
+        verifyNoInteractions(listener.inflightRequests, listener.processedRequests);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -677,7 +677,7 @@ public class CodahaleMetricsListenerTest {
         verify(listener.inflightRequests).dec();
         verify(listener.processedRequests).inc();
         // But we should short circuit immediately afterward
-        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verifyNoInteractions(listener.requestSizes, listener.responseSizes);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -696,7 +696,7 @@ public class CodahaleMetricsListenerTest {
         verify(listener.inflightRequests).dec();
         verify(listener.processedRequests).inc();
         // But we should short circuit immediately afterward
-        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verifyNoInteractions(listener.requestSizes, listener.responseSizes);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -715,7 +715,7 @@ public class CodahaleMetricsListenerTest {
         verify(listener.inflightRequests).dec();
         verify(listener.processedRequests).inc();
         // But we should short circuit immediately afterward
-        verifyZeroInteractions(listener.requestSizes, listener.responseSizes);
+        verifyNoInteractions(listener.requestSizes, listener.responseSizes);
         verify(endpointMetricsHandlerMock, never()).handleRequest(
             any(RequestInfo.class), any(ResponseInfo.class), any(HttpProcessingState.class), anyInt(), anyInt(), anyLong()
         );
@@ -745,7 +745,7 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(event, null);
 
         // then
-        verifyZeroInteractions(listener.inflightRequests, listener.responseWriteFailed, listener.processedRequests);
+        verifyNoInteractions(listener.inflightRequests, listener.responseWriteFailed, listener.processedRequests);
         verify(loggerMock).error("Metrics Error: unknown metrics event " + event);
     }
 
@@ -763,7 +763,7 @@ public class CodahaleMetricsListenerTest {
         listener.onEvent(event, state);
 
         // then
-        verifyZeroInteractions(listener.processedRequests); // Should have blown up before the processedRequests stuff.
+        verifyNoInteractions(listener.processedRequests); // Should have blown up before the processedRequests stuff.
         verify(loggerMock).error("Metrics Error: ", ex);
     }
 

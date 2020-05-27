@@ -20,15 +20,15 @@ import io.netty.handler.codec.http.HttpResponse;
 
 import static com.nike.riposte.server.config.distributedtracing.ProxyRouterSpanNamingAndTaggingStrategy.SPAN_NAME_FOR_OUTBOUND_PROXY_CALL_REQ_ATTR_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests the functionality of {@link ProxyRouterSpanNamingAndTaggingStrategy}.
@@ -51,7 +51,7 @@ public class ProxyRouterSpanNamingAndTaggingStrategyTest {
         assertThat(defaultImpl.shouldAddConnFinishAnnotation()).isTrue();
         assertThat(defaultImpl.connFinishAnnotationName()).isEqualTo("conn.finish");
 
-        verifyZeroInteractions(responseMock, errorMock);
+        verifyNoInteractions(responseMock, errorMock);
     }
 
     @Test

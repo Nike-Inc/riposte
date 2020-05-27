@@ -5,6 +5,7 @@ dependencies {
             project(":riposte-core"),
             "io.dropwizard.metrics:metrics-core:$codahaleMetricsVersion",
             "io.dropwizard.metrics:metrics-jvm:$codahaleMetricsVersion",
+            "io.dropwizard.metrics:metrics-jmx:$codahaleMetricsVersion",
             "io.dropwizard.metrics:metrics-graphite:$codahaleMetricsVersion"
     )
     compileOnly(
@@ -16,6 +17,8 @@ dependencies {
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
             "com.tngtech.java:junit-dataprovider:$junitDataproviderVersion",
+            "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
+            "org.junit.vintage:junit-vintage-engine:$junit5Version",
             "junit:junit:$junitVersion",
             "org.mockito:mockito-core:$mockitoVersion",
             "io.rest-assured:rest-assured:$restAssuredVersion",
