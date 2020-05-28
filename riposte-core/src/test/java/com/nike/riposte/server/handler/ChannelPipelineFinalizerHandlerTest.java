@@ -12,6 +12,7 @@ import com.nike.riposte.server.http.ResponseInfo;
 import com.nike.riposte.server.http.ResponseSender;
 import com.nike.riposte.server.logging.AccessLogger;
 import com.nike.riposte.server.metrics.ServerMetricsEvent;
+import com.nike.riposte.testutils.Whitebox;
 import com.nike.wingtips.Span;
 import com.nike.wingtips.Tracer;
 
@@ -24,7 +25,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import com.nike.riposte.testutils.Whitebox;
 import org.slf4j.Logger;
 
 import java.util.Deque;
@@ -48,7 +48,6 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -99,6 +98,7 @@ public class ChannelPipelineFinalizerHandlerTest {
         proxyRouterStateMock = mock(ProxyRouterProcessingState.class);
         responseInfoMock = mock(ResponseInfo.class);
         requestInfoMock = mock(RequestInfo.class);
+        doReturn(true).when(channelMock).isActive();
         doReturn(channelMock).when(ctxMock).channel();
         doReturn(pipelineMock).when(ctxMock).pipeline();
         doReturn(stateAttributeMock).when(channelMock).attr(ChannelAttributes.HTTP_PROCESSING_STATE_ATTRIBUTE_KEY);
@@ -302,6 +302,65 @@ public class ChannelPipelineFinalizerHandlerTest {
         verify(responseSenderMock).sendErrorResponse(ctxMock, requestInfoMock, errorResponseMock);
         verify(metricsListenerMock).onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, stateSpy);
         verify(ctxMock).flush();
+        verify(channelMock, never()).close();
+    }
+
+    @Test
+    public void finalizeChannelPipeline_should_close_channel_when_exception_occurs_while_sending_last_ditch_error_response(
+    ) throws JsonProcessingException {
+        // given
+        state.setResponseWriterFinalChunkChannelFuture(null);
+        HttpProcessingState stateSpy = spy(state);
+        doReturn(stateSpy).when(stateAttributeMock).get();
+        doReturn(false).when(responseInfoMock).isResponseSendingStarted();
+        Object msg = new Object();
+        Throwable cause = new Exception("intentional test exception");
+        RequestInfo<?> requestInfoMock = mock(RequestInfo.class);
+        ResponseInfo<ErrorResponseBody> errorResponseMock = mock(ResponseInfo.class);
+
+        doReturn(requestInfoMock).when(exceptionHandlingHandlerMock).getRequestInfo(stateSpy, msg);
+        doThrow(new RuntimeException("intentional test exception"))
+            .when(exceptionHandlingHandlerMock).processUnhandledError(eq(stateSpy), eq(msg), any(Throwable.class));
+
+        // when
+        handler.finalizeChannelPipeline(ctxMock, msg, stateSpy, cause);
+
+        // then
+        // Response sending shouldn't happen because the exception should have been thrown.
+        verify(exceptionHandlingHandlerMock).processUnhandledError(eq(stateSpy), eq(msg), any(Throwable.class));
+        verify(responseSenderMock, never()).sendErrorResponse(ctxMock, requestInfoMock, errorResponseMock);
+        // The channel should have been closed as a result.
+        verify(channelMock).close();
+        // Metrics and flushing should have occurred as normal.
+        verify(metricsListenerMock).onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, stateSpy);
+        verify(ctxMock).flush();
+    }
+
+    @Test
+    public void finalizeChannelPipeline_should_not_send_error_response_if_state_indicates_no_response_already_sent_but_channel_is_already_closed(
+    ) throws JsonProcessingException {
+        // given
+        doReturn(false).when(channelMock).isActive();
+        state.setResponseWriterFinalChunkChannelFuture(null);
+        HttpProcessingState stateSpy = spy(state);
+        doReturn(stateSpy).when(stateAttributeMock).get();
+        doReturn(false).when(responseInfoMock).isResponseSendingStarted();
+        Object msg = new Object();
+        Throwable cause = new Exception("intentional test exception");
+        RequestInfo<?> requestInfoMock = mock(RequestInfo.class);
+        ResponseInfo<ErrorResponseBody> errorResponseMock = mock(ResponseInfo.class);
+
+        doReturn(requestInfoMock).when(exceptionHandlingHandlerMock).getRequestInfo(stateSpy, msg);
+        doReturn(errorResponseMock).when(exceptionHandlingHandlerMock).processUnhandledError(eq(stateSpy), eq(msg), any(Throwable.class));
+
+        // when
+        handler.finalizeChannelPipeline(ctxMock, msg, stateSpy, cause);
+
+        // then
+        verify(responseSenderMock, never()).sendErrorResponse(any(), any(), any());
+        // Metrics and flush should still happen though.
+        verify(metricsListenerMock).onEvent(ServerMetricsEvent.RESPONSE_WRITE_FAILED, stateSpy);
+        verify(ctxMock).flush();
     }
 
     @Test
@@ -371,6 +430,24 @@ public class ChannelPipelineFinalizerHandlerTest {
             verify(channelMock).close();
         else
             verify(channelMock, never()).close();
+    }
+
+    @Test
+    public void finalizeChannelPipeline_should_not_try_to_close_channel_when_channel_is_already_closed_even_if_it_would_otherwise_want_to(
+    ) throws JsonProcessingException {
+        // given
+        doReturn(false).when(channelMock).isActive();
+
+        Throwable error = new RuntimeException("kaboom");
+        doReturn(true).when(responseInfoMock).isResponseSendingStarted();
+        doReturn(false).when(responseInfoMock).isResponseSendingLastChunkSent();
+        state.setResponseWriterFinalChunkChannelFuture(mock(ChannelFuture.class));
+
+        // when
+        handler.finalizeChannelPipeline(ctxMock, null, state, error);
+
+        // then
+        verify(channelMock, never()).close();
     }
 
     @DataProvider(value = {
