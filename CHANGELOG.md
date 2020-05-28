@@ -8,6 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.19.x` Releases - [0.19.0](#0190)
 - `0.18.x` Releases - [0.18.0](#0180)
 - `0.17.x` Releases - [0.17.0](#0170)
 - `0.16.x` Releases - [0.16.0](#0160)
@@ -19,6 +20,95 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.19.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.0)
+
+Released on 2020-05-28.
+
+### Potentially breaking changes
+
+- Removed the `org.slf4j:*-over-slf4j` libraries from all Riposte libraries. If you were relying on these in your
+application as transitive dependencies, then you may need to re-add them as explicit dependencies.
+- Removed the `org.javassist:javassist` and `com.jcraft:jzlib` dependencies. Netty no longer needs these, but if
+you were relying on them in your application for other reasons, then you may need to re-add them as explicit 
+dependencies.
+- Switched from using the `io.netty:netty-all` dependency for Netty to just `io.netty:netty-codec-http`, since that's
+all that Riposte needs. If you were relying on any of the other Netty libraries in your application for other reasons,
+then you may need to re-add them as explicit dependencies.
+- Numerous version updates were done for third party dependencies. They should be backwards compatible for many 
+(most/all?) applications, but it's recommended that you test your application thoroughly after updating Riposte.
+See the [Updated Dependencies](#0_19_0_updated_dependencies) section below for full details on what was updated and
+what the version changes were. 
+
+### Removed (Dependencies)
+
+- Removed the `org.slf4j:*-over-slf4j` libraries from all Riposte libraries. These are application-level decisions, 
+and having them here prevented some applications from using log4j directly (for example).
+- Removed the `org.javassist:javassist` dependency from `riposte-core` since Netty no longer uses it.
+- Removed the `com.jcraft:jzlib` dependency from `riposte-core` since Netty no longer needs it.
+
+All of these removals were done by [Nic Munroe][contrib_nicmunroe] in pull request [#132](https://github.com/Nike-Inc/riposte/pull/132).
+
+### Changed (Dependencies)
+
+- Moved from using `io.netty:netty-all` to `io.netty:netty-codec-http`, which is all that Riposte needs. 
+This removes several megabytes of unnecessary dependencies from Riposte projects.
+    + Changed by [Nic Munroe][contrib_nicmunroe] in pull request [#132](https://github.com/Nike-Inc/riposte/pull/132).
+
+<a name="0_19_0_updated_dependencies"></a>
+### Updated (Dependencies)
+
+- Updated the following library dependencies:
+    + Netty `4.1.30.Final` -> `4.1.49.Final`
+    + Dropwizard (Codahale) metrics `3.1.1` -> `4.1.6`
+    + SFX Codahale metrics `0.0.28` -> `1.0.3`
+    + Eureka client `1.3.4` -> `1.9.21`
+    + Wingtips `0.20.1` -> `0.22.0`
+    + Backstopper `0.11.5` -> `0.13.0`
+    + Fastbreak `0.10.0` -> `0.10.1`
+    + Jackson `2.9.9` -> `2.11.0`
+    + Async HTTP Client `2.9.0` -> `2.12.1`
+    + Ning Async HTTP Client `1.9.38` -> `1.9.40`
+    + Guice `4.2.2` -> `4.2.3`
+    + Archaius `0.6.5` -> `0.7.7`
+    + Typesafe Config `1.3.0` -> `1.4.0`
+    + SLF4J `1.7.26` -> `1.7.30`
+    + Jetbrains Annotations `17.0.0` -> `19.0.0`
+- Updated the following test dependencies:
+    + JUnit `4.12` -> `4.13`
+    + JUnit Data Provider `1.9.3` -> `1.13.1`
+    + AssertJ `3.12.2` -> `3.15.0`
+    + Mockito `1.10.8` -> `3.3.3`
+    + RestAssured `3.3.0` -> `4.3.0`
+    + SLF4J Test `1.1.0` -> `1.2.0`
+    + Spock `1.2-groovy-2.5` -> `2.0-M2-groovy-3.0`
+    + CGLib `3.1` -> `3.3.0`
+    + Objenesis `2.1` -> `3.1`
+    + Groovy `2.5.7` -> `3.0.3`
+    + Apache Commons Codec `1.10` -> `1.14`
+    + Jacoco `0.8.4` -> `0.8.5`
+- Updated the following build dependencies:
+    + Gradle `5.4.1` -> `6.3`
+    + Gradle Bintray Plugin `1.8.4` -> `1.8.5`
+    
+All dependency updates were done by [Nic Munroe][contrib_nicmunroe] in pull request [#132](https://github.com/Nike-Inc/riposte/pull/132).
+
+### Updated (Riposte)
+
+- Moved all uses of the Codahale `SlidingTimeWindowReservoir` to `SlidingTimeWindowArrayReservoir`. The newer
+`SlidingTimeWindowArrayReservoir` is a drop-in replacement, and is much faster and more memory efficient.
+    + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#132](https://github.com/Nike-Inc/riposte/pull/132).
+- Dropped the requirement of `riposte-core` in `riposte-auth`, `riposte-guice`, and 
+`riposte-service-registration-eureka` since `riposte-spi` is all that is needed in those modules.
+    + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#132](https://github.com/Nike-Inc/riposte/pull/132).
+- Added support for JUnit 4 and 5 at the same time. This enables updating some test dependencies that were otherwise
+causing conflicts, without requiring a complete refactor of all JUnit 4 tests to JUnit 5.
+    + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#132](https://github.com/Nike-Inc/riposte/pull/132).
+- Improved handling of rare corner cases when an exception occurred while trying to send a response. If no response
+data has been sent down the wire yet, then a last-ditch error response will be attempted instead. If the last-ditch
+error response also fails, or if some of the original response data was already sent down the wire, then the connection
+will be closed.
+    + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#133](https://github.com/Nike-Inc/riposte/pull/133).
 
 ## [0.18.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.18.0)
 
