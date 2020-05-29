@@ -137,10 +137,10 @@ public class AsyncHttpClientHelper {
    * Constructor that gives you maximum control over configuration and behavior.
    *
    * @param builder
-   *     The builder that will create the {@link #asyncHttpClient} and execute all the async downstream HTTP
+   *     The builder that will create the {@link #asyncHttpClient} to execute all the async downstream HTTP
    *     requests.
    */
-  private AsyncHttpClientHelper(Builder builder) {
+  public AsyncHttpClientHelper(Builder builder) {
     this.performSubSpanAroundDownstreamCalls = builder.performSubSpanAroundDownstreamCalls;
     this.spanNamingAndTaggingStrategy = builder.spanNamingAndTaggingStrategy;
     this.nameResolver = builder.nameResolver;
