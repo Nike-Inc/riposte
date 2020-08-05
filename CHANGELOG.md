@@ -8,7 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.19.x` Releases - [0.19.0](#0190), [0.19.1](#0191)
+- `0.19.x` Releases - [0.19.2](#0192), [0.19.1](#0191), [0.19.0](#0190)
 - `0.18.x` Releases - [0.18.0](#0180)
 - `0.17.x` Releases - [0.17.0](#0170)
 - `0.16.x` Releases - [0.16.0](#0160)
@@ -20,6 +20,16 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.19.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.2)
+
+Released on 2020-08-05.
+
+### Updated
+
+- Updated Wingtips version from `0.22.0` to `0.23.0`. 
+[Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/master/CHANGELOG.md).
+    + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#137](https://github.com/Nike-Inc/riposte/pull/137).
 
 ## [0.19.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.1)
 
