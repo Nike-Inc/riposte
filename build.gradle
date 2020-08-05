@@ -83,7 +83,7 @@ ext {
     slf4jVersion = '1.7.30'
     jetbrainsAnnotationsVersion = '19.0.0'
     jacksonVersion = '2.11.0'
-    wingtipsVersion = '0.22.0'
+    wingtipsVersion = '0.23.0'
     backstopperVersion = '0.13.0'
     fastbreakVersion = '0.10.1'
 
