@@ -2,10 +2,10 @@
 
 # Riposte
 
-[ ![Download](https://api.bintray.com/packages/nike/maven/riposte/images/download.svg) ](https://bintray.com/nike/maven/riposte/_latestVersion)
-[![][travis img]][travis]
-[![Code Coverage](https://img.shields.io/codecov/c/github/Nike-Inc/riposte/master.svg)](https://codecov.io/github/Nike-Inc/riposte?branch=master)
-[![][license img]][license]
+[![Maven Central][maven_central_img]][maven_central]
+[![Build][gh_action_build_img]][gh_action_build]
+[![Code Coverage][codecov_img]][codecov]
+[![License][license img]][license]
 
 **Riposte is a Netty-based microservice framework for rapid development of production-ready HTTP APIs.** It includes robust features baked in like distributed tracing (provided by the Zipkin-compatible [Wingtips](https://github.com/Nike-Inc/wingtips)), error handling and validation (pluggable implementation with the default provided by [Backstopper](https://github.com/Nike-Inc/backstopper)), and circuit breaking (provided by [Fastbreak](https://github.com/Nike-Inc/fastbreak)). It works equally well as a fully-featured microservice by itself (see the [template microservice project](https://github.com/Nike-Inc/riposte-microservice-template)), or as an embedded HTTP server inside another application. 
 
@@ -293,8 +293,15 @@ These kinds of robust proxy/routing features are not normally available in Java 
 
 Riposte is released under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
 
-[travis]:https://travis-ci.org/Nike-Inc/riposte
-[travis img]:https://api.travis-ci.org/Nike-Inc/riposte.svg?branch=master
+[maven_central]:https://search.maven.org/search?q=g:com.nike.riposte
+[maven_central_img]:https://maven-badges.herokuapp.com/maven-central/com.nike.riposte/riposte-core/badge.svg?style=flat
+
+[gh_action_build]:https://github.com/Nike-Inc/riposte/actions/workflows/build.yml
+[gh_action_build_img]:https://github.com/Nike-Inc/riposte/actions/workflows/build.yml/badge.svg
+
+[codecov]:https://codecov.io/github/Nike-Inc/riposte?branch=main
+[codecov_img]:https://img.shields.io/codecov/c/github/Nike-Inc/riposte/main.svg
+
 
 [license]:LICENSE.txt
 [license img]:https://img.shields.io/badge/License-Apache%202-blue.svg
