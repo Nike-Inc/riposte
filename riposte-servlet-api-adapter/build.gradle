@@ -1,14 +1,14 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-spi"),
             "javax.servlet:javax.servlet-api:$servletApiVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-    testCompile (
+    testImplementation (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
             "org.junit.vintage:junit-vintage-engine:$junit5Version",

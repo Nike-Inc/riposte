@@ -1,18 +1,16 @@
 // ========== GRADLE PLUGINS / REPOSITORIES SETUP
 buildscript {
     repositories {
-        jcenter()
+        mavenCentral()
     }
     dependencies {
-        // STUFF FOR BINTRAY
-        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.5'
     }
 }
 
 allprojects {
     apply plugin: 'idea'
     apply plugin: 'java'
-    apply plugin: 'maven'
+    apply plugin: 'java-library'
     apply plugin: 'groovy'
     apply plugin: 'project-report'
 
@@ -30,12 +28,16 @@ allprojects {
         failOnError = false
     }
 
+    tasks.withType(Javadoc) {
+        options.addStringOption('Xdoclint:none', '-quiet')
+    }
+
     artifacts {
         archives sourcesJar, javadocJar
     }
 
     repositories {
-        jcenter()
+        mavenCentral()
     }
 
     idea {
@@ -55,7 +57,7 @@ allprojects {
         // Minimize console spam while running tests without swallowing critical debugging info.
         testLogging {
             exceptionFormat "FULL"
-            events "passed", "skipped", "failed"
+            events "skipped", "failed"
             displayGranularity = 0
             showExceptions true
             showCauses true
@@ -85,7 +87,7 @@ ext {
     jacksonVersion = '2.11.0'
     wingtipsVersion = '0.23.0'
     backstopperVersion = '0.13.0'
-    fastbreakVersion = '0.10.1'
+    fastbreakVersion = '0.10.3'
 
     // Misc module dependencies
     ningAsyncHttpClientVersion = '1.9.40'
@@ -152,11 +154,6 @@ ext {
         // For this repo we'll include everything that's not a sample.
         return !subProj.name.startsWith("sample")
     }
-
-    // BINTRAY STUFF
-    bintrayUser = project.hasProperty('bintrayUser') ? property('bintrayUser') : 'UNDEFINED'
-    bintrayKey = project.hasProperty('bintrayKey') ? property('bintrayKey') : 'UNDEFINED'
-    bintrayVersion = "$version"
 }
 
 // ========== COMBO TEST REPORT - View the combined/merged report at: [project_root]/build/reports/tests/index.html
@@ -165,11 +162,3 @@ apply from: file(rootProject.projectDir.getAbsolutePath() + '/gradle/junitComboT
 // ========== JACOCO SETUP - View the combined/merged report at: [project_root]/build/reports/jacoco/jacocoRootReport/html/index.html.
 //                           Individual reports for each submodule can be found at: [project_root]/[submodule]/build/reports/jacoco/test/html/index.html
 apply from: file(rootProject.projectDir.getAbsolutePath() + '/gradle/jacoco.gradle')
-
-// ========== BINTRAY PUBLISHING
-apply from: file(rootProject.projectDir.getAbsolutePath() + '/gradle/bintrayPublishing.gradle')
-
-// ========== MISCELLANEOUS BUILD STUFF
-allprojects {
-    group = groupId // Necessary for the maven install task to function correctly
-}

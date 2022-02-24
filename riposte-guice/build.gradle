@@ -1,14 +1,14 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-spi"),
             "com.google.inject:guice:$guiceVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-    testCompile (
+    testImplementation (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
             "org.junit.vintage:junit-vintage-engine:$junit5Version",

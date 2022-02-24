@@ -1,7 +1,7 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-core"),
             "io.dropwizard.metrics:metrics-core:$codahaleMetricsVersion",
             "io.dropwizard.metrics:metrics-jvm:$codahaleMetricsVersion",
@@ -11,7 +11,7 @@ dependencies {
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-    testCompile (
+    testImplementation (
             project(":riposte-guice"),
             project(":riposte-core").sourceSets.test.output,
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",

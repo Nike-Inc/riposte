@@ -1,7 +1,7 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-spi"),
             // We pull in the native epoll transport dependency here so that if you are running on linux x86_64 you'll get the maximum performance possible from Netty.
             // If you're not on linux x86_64 then it will gracefully fall back to the standard java NIO transports.
@@ -12,7 +12,7 @@ dependencies {
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
     )
-    testCompile (
+    testImplementation (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.assertj:assertj-core:$assertJVersion",
             "org.spockframework:spock-core:$spockVersion",

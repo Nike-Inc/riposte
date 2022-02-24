@@ -1,7 +1,7 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             "io.netty:netty-codec-http:$nettyVersion",
             "com.nike.fastbreak:fastbreak:$fastbreakVersion",
             "com.nike.backstopper:backstopper-core:$backstopperVersion",
@@ -11,7 +11,7 @@ dependencies {
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-    testCompile (
+    testImplementation (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
             "org.junit.vintage:junit-vintage-engine:$junit5Version",

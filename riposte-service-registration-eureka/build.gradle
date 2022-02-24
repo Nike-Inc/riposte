@@ -1,14 +1,14 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-spi"),
             "com.netflix.eureka:eureka-client:$eurekaClientVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-    testCompile (
+    testImplementation (
             project(":riposte-guice"),
             project(":riposte-core").sourceSets.test.output,
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
