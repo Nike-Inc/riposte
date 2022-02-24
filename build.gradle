@@ -27,6 +27,10 @@ allprojects {
         failOnError = false
     }
 
+    tasks.withType(Javadoc) {
+        options.addStringOption('Xdoclint:none', '-quiet')
+    }
+
     artifacts {
         archives sourcesJar, javadocJar
     }
