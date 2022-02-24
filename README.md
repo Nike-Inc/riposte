@@ -154,7 +154,7 @@ is based on).
 * [riposte-service-registration-eureka](riposte-service-registration-eureka/) - Contains helper classes for easily integrating Riposte with Netflix's Eureka service registration system.
 * [riposte-servlet-api-adapter](riposte-servlet-api-adapter/) - Contains `HttpServletRequest` and `HttpServletResponse` adapters for reusing Servlet-based utilities in Riposte.
 
-These libraries are all deployed to Maven Central and JCenter and can be pulled into your project by referencing the relevant dependency: `com.nike.riposte:[riposte-lib-artifact-name]:[version]`.
+These libraries are all deployed to Maven Central and can be pulled into your project by referencing the relevant dependency: `com.nike.riposte:[riposte-lib-artifact-name]:[version]`.
 
 ## Full Core Libraries Documentation
 
@@ -301,7 +301,6 @@ Riposte is released under the [Apache License, Version 2.0](http://www.apache.or
 
 [codecov]:https://codecov.io/github/Nike-Inc/riposte?branch=main
 [codecov_img]:https://img.shields.io/codecov/c/github/Nike-Inc/riposte/main.svg
-
 
 [license]:LICENSE.txt
 [license img]:https://img.shields.io/badge/License-Apache%202-blue.svg

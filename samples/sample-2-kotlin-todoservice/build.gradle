@@ -24,7 +24,6 @@ run {
 }
 
 repositories {
-    jcenter()
     mavenCentral()
 }
 
