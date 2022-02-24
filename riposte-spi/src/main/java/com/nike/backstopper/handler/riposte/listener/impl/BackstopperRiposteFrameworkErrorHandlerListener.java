@@ -228,8 +228,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             Unauthorized401Exception theEx = (Unauthorized401Exception) ex;
             List<Pair<String, String>> extraDetails = withBaseExceptionMessage(
                 ex,
-                Pair.of("incoming_request_path", theEx.requestPath),
-                Pair.of("authorization_header", theEx.authorizationHeader)
+                Pair.of("incoming_request_path", theEx.requestPath)
             );
             extraDetails.addAll((theEx).extraDetailsForLogging);
             return ApiExceptionHandlerListenerResult.handleResponse(
@@ -242,8 +241,7 @@ public class BackstopperRiposteFrameworkErrorHandlerListener implements ApiExcep
             Forbidden403Exception theEx = (Forbidden403Exception) ex;
             List<Pair<String, String>> extraDetails = withBaseExceptionMessage(
                 ex,
-                Pair.of("incoming_request_path", theEx.requestPath),
-                Pair.of("authorization_header", theEx.authorizationHeader)
+                Pair.of("incoming_request_path", theEx.requestPath)
             );
             extraDetails.addAll((theEx).extraDetailsForLogging);
             return ApiExceptionHandlerListenerResult.handleResponse(
