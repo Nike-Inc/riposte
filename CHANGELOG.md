@@ -28,7 +28,7 @@ Released on 2020-08-05.
 ### Updated
 
 - Updated Wingtips version from `0.22.0` to `0.23.0`. 
-[Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/master/CHANGELOG.md).
+[Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/main/CHANGELOG.md).
     + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#137](https://github.com/Nike-Inc/riposte/pull/137).
 
 ## [0.19.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.1)
@@ -139,7 +139,7 @@ Released on 2019-07-10.
 - Updated Wingtips from `0.19.1` -> `0.20.1`. WARNING: This includes breaking changes, although most services shouldn't
 be affected. In particular, if you're using the `%X{spanJson}` SLF4J log pattern in your service's logs then you'll 
 need to do some extra work to get that back. This update also includes some performance and feature improvements.
-See the [Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/master/CHANGELOG.md) for full details.
+See the [Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/main/CHANGELOG.md) for full details.
     + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#126](https://github.com/Nike-Inc/riposte/pull/126).
     
 ### Changed
@@ -495,10 +495,10 @@ encountered to be more informative.
 ### Updated
 
 - Updated Wingtips to version `0.14.1` from `0.11.2`. 
-[Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/master/CHANGELOG.md)
+[Wingtips changelog](https://github.com/Nike-Inc/wingtips/blob/main/CHANGELOG.md)
     - Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#90](https://github.com/Nike-Inc/riposte/pull/90).
 - Updated Backstopper to version `0.11.4` from `0.11.1`.
-[Backstopper changelog](https://github.com/Nike-Inc/backstopper/blob/master/CHANGELOG.md)
+[Backstopper changelog](https://github.com/Nike-Inc/backstopper/blob/main/CHANGELOG.md)
     - Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#92](https://github.com/Nike-Inc/riposte/pull/92).
 
 ### Project Build
@@ -685,7 +685,7 @@ Released on 2016-12-12.
 
 ### Updated
 
-- Updated Backstopper dependency version to 0.11.0 ([backstopper changelog](https://github.com/Nike-Inc/backstopper/blob/master/CHANGELOG.md)).
+- Updated Backstopper dependency version to 0.11.0 ([backstopper changelog](https://github.com/Nike-Inc/backstopper/blob/main/CHANGELOG.md)).
 	- Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#13](https://github.com/Nike-Inc/riposte/pull/13).
 
 ## [0.8.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.8.1)

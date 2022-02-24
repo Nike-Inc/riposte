@@ -17,7 +17,12 @@ There are some interesting things to note, however:
     * Trigger a 405 by hitting the Hello World endpoint on an HTTP method it does not support, like `POST`.
     * Note that the error contract is the same for all errors and is suitable for consumption by API callers. Also note that you can copy the error ID from the error response body or response headers and search for it in the application logs to jump directly to a single log message that contains full debugging information on the request.
 * This sample application includes access logging (see the `Main` class for how this is setup), giving you a wealth of summary information about each request. You can pipe these access log messages to a separate file to keep them segregated from the normal application logs by configuring your SLF4J implementation (Logback in the case of this sample application) to send the messages for the `ACCESS_LOG` logger to a file of your choosing. This could be accomplished with some minor changes to the `logback.xml` file in this sample application.
-* Each request will have a distributed trace log message output by [Wingtips](https://github.com/Nike-Inc/wingtips) to a SLF4J logger named `VALID_WINGTIPS_SPANS`, allowing you to have distributed trace information in your logs. Hooking up Zipkin is fairly trivial if you are in a Zipkin environment and would like your distributed traces sent to Zipkin - see [the relevant section of Wingtips documentation](https://github.com/Nike-Inc/wingtips/tree/master/wingtips-zipkin) for details on enabling Zipkin integration.
+* Each request will have a distributed trace log message output by [Wingtips](https://github.com/Nike-Inc/wingtips) 
+  to a SLF4J logger named `VALID_WINGTIPS_SPANS`, allowing you to have distributed trace information in your logs. 
+  Hooking up Zipkin is fairly trivial if you are in a Zipkin environment and would like your distributed traces sent 
+  to Zipkin - see
+  [the relevant section of Wingtips documentation](https://github.com/Nike-Inc/wingtips/tree/main/wingtips-zipkin) 
+  for details on enabling Zipkin integration.
  
 It's recommended that you use a REST client like [Postman](https://www.getpostman.com/) for making the requests so you can easily specify HTTP method, payloads, headers, etc, and fully inspect the response.
 
