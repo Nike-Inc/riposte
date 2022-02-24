@@ -1,14 +1,14 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-core"),
             "org.asynchttpclient:async-http-client:$asyncHttpClientVersion"
     )
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
     )
-    testCompile(
+    testImplementation(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
             "org.junit.vintage:junit-vintage-engine:$junit5Version",

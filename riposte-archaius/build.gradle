@@ -1,7 +1,7 @@
 evaluationDependsOn(':')
 
 dependencies {
-    compile(
+    api(
             project(":riposte-core"),
             "com.netflix.archaius:archaius-core:$archaiusVersion",
             "commons-configuration:commons-configuration:$apacheCommonsConfigurationVersion"
@@ -9,7 +9,7 @@ dependencies {
     compileOnly(
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
     )
-    testCompile (
+    testImplementation (
             "org.jetbrains:annotations:$jetbrainsAnnotationsVersion",
             "org.junit.jupiter:junit-jupiter-engine:$junit5Version",
             "org.junit.vintage:junit-vintage-engine:$junit5Version",
