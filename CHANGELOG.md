@@ -8,7 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.19.x` Releases - [0.19.2](#0192), [0.19.1](#0191), [0.19.0](#0190)
+- `0.19.x` Releases - [0.19.3](#0193), [0.19.2](#0192), [0.19.1](#0191), [0.19.0](#0190)
 - `0.18.x` Releases - [0.18.0](#0180)
 - `0.17.x` Releases - [0.17.0](#0170)
 - `0.16.x` Releases - [0.16.0](#0160)
@@ -20,6 +20,23 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.19.3](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.3)
+
+Released on 2022-02-24.
+
+### Fixed
+
+- Fixed an issue where the authorization header could sometimes appear in logs.
+  + Fixed by [Nic Munroe][contrib_nicmunroe] in pull request [#144](https://github.com/Nike-Inc/riposte/pull/144).
+  
+### Project Build
+
+- Cleaned up bit-rot and generally de-rusted the project. The main changes were bringing the project up to gradle
+  `7.4`, migrating to Github Actions for CI build, and setting things up to publish directly to Maven Central.
+  - Cleaned up by [Nic Munroe][contrib_nicmunroe] in pull requests
+    [#140](https://github.com/Nike-Inc/riposte/pull/140), [#141](https://github.com/Nike-Inc/riposte/pull/141),
+    [#142](https://github.com/Nike-Inc/riposte/pull/142), and [#143](https://github.com/Nike-Inc/riposte/pull/143).
 
 ## [0.19.2](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.2)
 
