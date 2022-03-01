@@ -524,8 +524,15 @@ public class ComponentTestUtils {
     }
 
     public static Map<String, List<String>> headersToMap(HttpHeaders headers) {
+        return headersToMap(headers, false);
+    }
+
+    public static Map<String, List<String>> headersToMap(HttpHeaders headers, boolean lowercaseNormalizeNames) {
         Map<String, List<String>> result = new LinkedHashMap<>();
-        headers.names().forEach(headerKey -> result.put(headerKey, headers.getAll(headerKey)));
+        headers.names().forEach(headerKey -> {
+            String headerKeyToUse = (lowercaseNormalizeNames) ? headerKey.toLowerCase() : headerKey;
+            result.put(headerKeyToUse, headers.getAll(headerKey));
+        });
         return result;
     }
 }

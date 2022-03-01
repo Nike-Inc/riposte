@@ -268,11 +268,8 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
     @DataProvider(value = {
         "STATUS_204_RESPONSE    |   true",
         "STATUS_204_RESPONSE    |   false",
-        // Currently, Netty appears to not handle 205 properly at all when encoding responses where a payload is
-        //      specified, so we'll just disable these 205 scenarios for now until that gets fixed.
-        //      See this Netty issue: https://github.com/netty/netty/issues/7888
-//        "STATUS_205_RESPONSE    |   true",
-//        "STATUS_205_RESPONSE    |   false",
+        "STATUS_205_RESPONSE    |   true",
+        "STATUS_205_RESPONSE    |   false",
         "STATUS_304_RESPONSE    |   true",
         "STATUS_304_RESPONSE    |   false",
         "HEAD_REQUEST           |   true",
@@ -317,7 +314,15 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
 
             // Now we know that downstream and proxy response had matching content-length header, so we can move on
             //      to verifying the value of that header.
-            if (isChunkedResponse || scenario.responseStatusCode == 204) {
+            if (scenario.responseStatusCode == 205) {
+                // Netty treats 205 special - it strips any payload and transfer-encoding header, and sets
+                //      content-length to 0. So even though we ask for a chunked response (which would normally lead to
+                //      null content-length response header), we end up with content-length header equal to zero.
+                //      See this Netty PR and issue: https://github.com/netty/netty/pull/7891
+                //      and https://github.com/netty/netty/issues/7888
+                assertThat(proxyResponseContentLengthHeader).isEqualTo("0");
+            }
+            else if (isChunkedResponse || scenario.responseStatusCode == 204) {
                 // Chunked responses will never have content-length header defined, and
                 //      204 is special - it should never have content-length returned regardless of transfer encoding.
                 assertThat(proxyResponseContentLengthHeader).isNull();
@@ -471,9 +476,9 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         // Verify that the proxy and downstream requests have the same headers (barring the tracing headers and the
         //      host header, which can be different between proxy and downstream and we've already accounted for above).
         Map<String, List<String>> normalizedProxyHeaders =
-            headersToMap(copyWithMutableHeadersRemoved(proxyRequestHeaders));
+            headersToMap(copyWithMutableHeadersRemoved(proxyRequestHeaders), true);
         Map<String, List<String>> normalizedDownstreamHeaders =
-            headersToMap(copyWithMutableHeadersRemoved(downstreamRequestHeaders));
+            headersToMap(copyWithMutableHeadersRemoved(downstreamRequestHeaders), true);
         assertThat(normalizedProxyHeaders).isEqualTo(normalizedDownstreamHeaders);
     }
 
@@ -510,19 +515,19 @@ public class VerifyProxyEndpointsDoNotAlterRequestOrResponseByDefaultComponentTe
         // Verify that the proxy and downstream requests have the same headers (barring the trace ID header, which can
         //      be added by the proxy and we've already accounted for above).
         Map<String, List<String>> normalizedProxyHeaders =
-            headersToMap(copyWithMutableHeadersRemoved(proxyResponseHeaders));
+            headersToMap(copyWithMutableHeadersRemoved(proxyResponseHeaders), true);
         Map<String, List<String>> normalizedDownstreamHeaders =
-            headersToMap(copyWithMutableHeadersRemoved(downstreamResponseHeaders));
+            headersToMap(copyWithMutableHeadersRemoved(downstreamResponseHeaders), true);
 
         if (expectProxyToRemoveTransferEncoding) {
-            List<String> downstreamTransferEncodingValue = normalizedDownstreamHeaders.get(TRANSFER_ENCODING);
+            List<String> downstreamTransferEncodingValue = normalizedDownstreamHeaders.get(TRANSFER_ENCODING.toLowerCase());
 
             if (downstreamTransferEncodingValue != null) {
                 // For the purpose of testing equality we'll set the proxy headers to include whatever downstream had
                 //      for transfer-encoding. This is because the Netty correctly stripped that header on the proxy
                 //      when it received the response. By adding this back to the proxy headers we can then do a normal
                 //      equality check in order to verify the other headers.
-                normalizedProxyHeaders.put(TRANSFER_ENCODING, normalizedDownstreamHeaders.get(TRANSFER_ENCODING));
+                normalizedProxyHeaders.put(TRANSFER_ENCODING.toLowerCase(), downstreamTransferEncodingValue);
             }
         }
 
