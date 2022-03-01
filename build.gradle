@@ -80,30 +80,32 @@ javadocJar.enabled = false
 // ========== PROPERTIES FOR GRADLE BUILD - DEPENDENCY VERSIONS / ETC
 ext {
     // DEPENDENCY VERSIONS
-    // Core and multi-module dependencies
-    nettyVersion = '4.1.49.Final'
-    slf4jVersion = '1.7.30'
-    jetbrainsAnnotationsVersion = '19.0.0'
-    jacksonVersion = '2.11.0'
-    wingtipsVersion = '0.23.0'
-    backstopperVersion = '0.13.0'
+    // ====== Core and multi-module dependencies
+    nettyVersion = '4.1.74.Final'
+    slf4jVersion = '1.7.36'
+    jacksonVersion = '2.13.1'
+    wingtipsVersion = '0.24.2'
+    backstopperVersion = '0.14.1'
     fastbreakVersion = '0.10.3'
 
-    // Misc module dependencies
+    // ====== Misc module dependencies
     ningAsyncHttpClientVersion = '1.9.40'
-    asyncHttpClientVersion = '2.12.1'
+    asyncHttpClientVersion = '2.12.3'
     servletApiVersion = '3.1.0'
     guiceVersion = '4.2.3'
-    codahaleMetricsVersion = '4.1.6'
-    signalFxCodahaleVersion = '1.0.3'
-    eurekaClientVersion = '1.9.21'
+    codahaleMetricsVersion = '4.2.8'
+    signalFxCodahaleVersion = '1.0.14'
+    eurekaClientVersion = '1.10.17'
     archaiusVersion = '0.7.7'
-    apacheCommonsConfigurationVersion = '1.8'
-    typesafeConfigVersion = '1.4.0'
+    apacheCommonsConfigurationVersion = '1.10'
+    typesafeConfigVersion = '1.4.2'
+
+    // ====== Compile-only dependencies
+    jetbrainsAnnotationsVersion = '19.0.0'
 
     // ====== Test dependencies
-    junit5Version = '5.6.2'
-    junitVersion = '4.13'
+    junit5Version = '5.8.2'
+    junitVersion = '4.13.2'
     junitDataproviderVersion = '1.13.1'
     assertJVersion = '3.15.0'
     mockitoVersion = '3.3.3'
