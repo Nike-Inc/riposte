@@ -8,6 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
+- `0.20.x` Releases - [0.20.0](#0200)
 - `0.19.x` Releases - [0.19.3](#0193), [0.19.2](#0192), [0.19.1](#0191), [0.19.0](#0190)
 - `0.18.x` Releases - [0.18.0](#0180)
 - `0.17.x` Releases - [0.17.0](#0170)
@@ -20,6 +21,34 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.20.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.20.0)
+
+Released on 2022-03-01.
+
+### Potentially breaking changes
+
+- Numerous version updates were done for transitively exported third party dependencies. They should be backwards 
+  compatible for many (most/all?) applications, but it's recommended that you test your application thoroughly after 
+  updating Riposte. See the `Updated (Dependencies)` section below for full details on what was updated and what the 
+  version changes were.
+
+### Updated (Dependencies)
+
+- Updated dependency versions to the latest for transitive dependencies exported by Wingtips:
+  + Netty `4.1.49.Final` -> `4.1.74.Final`
+  + SLF4J `1.7.30` -> `1.7.36`
+  + Jackson `2.11.0` -> `2.13.1`
+  + Wingtips `0.23.0` -> `0.24.2`
+  + Backstopper `0.13.0` -> `0.14.1`
+  + Fastbreak `0.10.1` -> `0.10.3`
+  + Async HTTP Client `2.12.1` -> `2.12.3`
+  + Dropwizard (Codahale) metrics `4.1.6` -> `4.2.8`
+  + SFX Codahale metrics `1.0.3` -> `1.0.14`
+  + Eureka client `1.9.21` -> `1.10.17`
+  + Apache Commons Configuration `1.8` -> `1.10`
+  + Typesafe Config `1.4.0` -> `1.4.2`
+  + Updated by [Nic Munroe][contrib_nicmunroe] in pull request [#146](https://github.com/Nike-Inc/riposte/pull/146).
 
 ## [0.19.3](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.19.3)
 
@@ -34,7 +63,7 @@ Released on 2022-02-24.
 
 - Cleaned up bit-rot and generally de-rusted the project. The main changes were bringing the project up to gradle
   `7.4`, migrating to Github Actions for CI build, and setting things up to publish directly to Maven Central.
-  - Cleaned up by [Nic Munroe][contrib_nicmunroe] in pull requests
+  + Cleaned up by [Nic Munroe][contrib_nicmunroe] in pull requests
     [#140](https://github.com/Nike-Inc/riposte/pull/140), [#141](https://github.com/Nike-Inc/riposte/pull/141),
     [#142](https://github.com/Nike-Inc/riposte/pull/142), and [#143](https://github.com/Nike-Inc/riposte/pull/143).
 
