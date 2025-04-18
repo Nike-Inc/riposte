@@ -16,11 +16,11 @@ import java.lang.reflect.Type;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -60,7 +60,7 @@ public class RequestInfoImpl<T> implements RequestInfo<T>, RiposteInternalReques
     protected final @NotNull Set<Cookie> cookies;
     protected @Nullable String pathTemplate;
     protected @NotNull Map<String, String> pathParams = Collections.emptyMap();
-    protected final @NotNull Map<String, Object> attributes = new HashMap<>();
+    protected final @NotNull Map<String, Object> attributes = new ConcurrentHashMap<>();
     protected int rawContentLengthInBytes;
     protected @Nullable byte[] rawContentBytes;
     protected @Nullable String rawContent;
