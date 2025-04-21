@@ -8,7 +8,7 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 
 #### 0.x Releases
 
-- `0.20.x` Releases - [0.20.0](#0200)
+- `0.20.x` Releases - [0.20.1](#0201), [0.20.0](#0200)
 - `0.19.x` Releases - [0.19.3](#0193), [0.19.2](#0192), [0.19.1](#0191), [0.19.0](#0190)
 - `0.18.x` Releases - [0.18.0](#0180)
 - `0.17.x` Releases - [0.17.0](#0170)
@@ -21,6 +21,16 @@ Riposte is used heavily and is stable internally at Nike, however the wider comm
 - `0.10.x` Releases - [0.10.1](#0101), [0.10.0](#0100)
 - `0.9.x` Releases - [0.9.4](#094), [0.9.3](#093), [0.9.2](#092), [0.9.1](#091), [0.9.0](#090)
 - `0.8.x` Releases - [0.8.3](#083), [0.8.2](#082), [0.8.1](#081), [0.8.0](#080)
+
+## [0.20.1](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.20.1)
+
+Released on 2025-04-21.
+
+### Fixed
+
+- Fixed `RequestInfoImpl` to use a `ConcurrentHashMap` instead of plain `HashMap` for request attributes for thread 
+  safety.
+  + Fixed by [Stephen Duncan Jr][contrib_jrduncans] in pull request [#148](https://github.com/Nike-Inc/riposte/pull/148).
 
 ## [0.20.0](https://github.com/Nike-Inc/riposte/releases/tag/riposte-v0.20.0)
 
@@ -764,3 +774,4 @@ Released on 2016-11-03.
 [contrib_jcnorman48]: https://github.com/jcnorman48
 [contrib_scientificmethod]: https://github.com/ScientificMethod
 [contrib_nmyers322]: https://github.com/nmyers322
+[contrib_jrduncans]: https://github.com/jrduncans
